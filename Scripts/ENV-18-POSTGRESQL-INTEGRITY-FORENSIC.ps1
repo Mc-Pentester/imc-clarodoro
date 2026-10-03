@@ -126,24 +126,27 @@ foreach ($e in $columnExpectations) {
   }
 }
 
-$report = @(
-  "# ENV-18 — PostgreSQL Integrity Forensic Validation",
-  "",
-  "Date : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')",
-  "",
-  "## Mode",
-  "",
-  "**READ-ONLY** — uniquement des requêtes SELECT/catalogue PostgreSQL.",
-  "",
-  "## PostgreSQL",
-  "",
-  $version,
-  "",
-  "## Résultats",
-  "",
-  "| Contrôle | Attendu | Réel | Résultat |",
-  "|---|---:|---:|---|"
-)
+$report = @'
+# ENV-18 — PostgreSQL Integrity Forensic Validation
+
+Date : PLACEHOLDER_DATE
+
+## Mode
+
+**READ-ONLY** — uniquement des requêtes SELECT/catalogue PostgreSQL.
+
+## PostgreSQL
+
+PLACEHOLDER_VERSION
+
+## Résultats
+
+| Contrôle | Attendu | Réel | Résultat |
+|---|---:|---:|---|
+'@ -split ([Environment]::NewLine)
+
+$report = $report -replace 'PLACEHOLDER_DATE', (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+$report = $report -replace 'PLACEHOLDER_VERSION', [regex]::Escape($version)
 
 foreach ($r in $results) {
   $report += "| $($r.Check) | $($r.Expected) | $($r.Actual) | $($r.Result) |"
