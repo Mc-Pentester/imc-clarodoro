@@ -1,4 +1,4 @@
-# ENV-18 — PostgreSQL Integrity Forensic Validation
+# ENV-18 - PostgreSQL Integrity Forensic Validation
 [CmdletBinding()]
 param(
   [string]$Host = "localhost",
@@ -31,8 +31,7 @@ function Add-Check {
     [ref]$Failures
   )
 
-  $ok = $Expected -eq $Actual
-  if ($ok) {
+  if ($Expected -eq $Actual) {
     $result = "PASS"
   } else {
     $result = "FAIL"
@@ -47,8 +46,8 @@ function Add-Check {
   }
 }
 
-Write-Host "ENV-18 — PostgreSQL Integrity Forensic Validation"
-Write-Host "READ-ONLY : aucune écriture SQL."
+Write-Host "ENV-18 - PostgreSQL Integrity Forensic Validation"
+Write-Host "READ-ONLY: no SQL write operation."
 $failures = 0
 $results = @()
 
@@ -97,9 +96,7 @@ $columnExpectations = @(
 
 foreach ($e in $columnExpectations) {
   $actual = $columnSet.ContainsKey($e[0])
-  $ok = $actual -eq [bool]$e[1]
-
-  if ($ok) {
+  if ($actual -eq [bool]$e[1]) {
     $result = "PASS"
   } else {
     $result = "FAIL"
@@ -127,45 +124,45 @@ foreach ($e in $columnExpectations) {
 }
 
 $report = @()
-$report += '# ENV-18 — PostgreSQL Integrity Forensic Validation'
-$report += ''
-$report += ('Date : {0}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
-$report += ''
-$report += '## Mode'
-$report += ''
-$report += '**READ-ONLY** — uniquement des requêtes SELECT/catalogue PostgreSQL.'
-$report += ''
-$report += '## PostgreSQL'
-$report += ''
+$report += "# ENV-18 - PostgreSQL Integrity Forensic Validation"
+$report += ""
+$report += ("Date : {0}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))
+$report += ""
+$report += "## Mode"
+$report += ""
+$report += "READ-ONLY - SELECT and PostgreSQL catalogue queries only."
+$report += ""
+$report += "## PostgreSQL"
+$report += ""
 $report += $version
-$report += ''
-$report += '## Résultats'
-$report += ''
-$report += '| Contrôle | Attendu | Réel | Résultat |'
-$report += '|---|---:|---:|---|'
+$report += ""
+$report += "## Results"
+$report += ""
+$report += "| Check | Expected | Actual | Result |"
+$report += "|---|---:|---:|---|"
 
 foreach ($r in $results) {
-  $report += ('| {0} | {1} | {2} | {3} |' -f $r.Check, $r.Expected, $r.Actual, $r.Result)
+  $report += ("| {0} | {1} | {2} | {3} |" -f $r.Check, $r.Expected, $r.Actual, $r.Result)
 }
 
 if ($failures -eq 0) {
-  $verdict = '**ENV-18 PASS**'
+  $verdict = "ENV-18 PASS"
 } else {
-  $verdict = ('**ENV-18 FAIL** — {0} contrôle(s) en échec.' -f $failures)
+  $verdict = ("ENV-18 FAIL - {0} check(s) failed." -f $failures)
 }
 
-$report += ''
-$report += '## Verdict'
-$report += ''
+$report += ""
+$report += "## Verdict"
+$report += ""
 $report += $verdict
-$report += ''
-$report += '## Sécurité d''exécution'
-$report += ''
-$report += ('- DB ciblée : {0}' -f $Database)
-$report += '- INSERT/UPDATE/DELETE : NON'
-$report += '- CREATE/ALTER/DROP : NON'
-$report += '- TRUNCATE : NON'
-$report += '- Base recréée : NON'
+$report += ""
+$report += "## Execution Safety"
+$report += ""
+$report += ("- Database : {0}" -f $Database)
+$report += "- INSERT/UPDATE/DELETE : NO"
+$report += "- CREATE/ALTER/DROP : NO"
+$report += "- TRUNCATE : NO"
+$report += "- Database recreated : NO"
 
 Set-Content -LiteralPath $reportPath -Value ($report -join ([Environment]::NewLine)) -Encoding UTF8
 
@@ -176,4 +173,4 @@ if ($failures -eq 0) {
   Write-Host "ENV-18 FAIL"
   exit 1
 }
-Write-Host "Rapport : $reportPath"
+Write-Host ("Report : {0}" -f $reportPath)
