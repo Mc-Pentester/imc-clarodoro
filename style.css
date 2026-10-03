@@ -1,0 +1,799 @@
+/* =========================================================
+   IMC CLARODARO — STYLE RESULTATS
+   ========================================================= */
+
+/* =========================================================
+   IDENTITÉ CLARODARO — PETIT LOGO + NOM
+   ========================================================= */
+
+.identite-clarodaro {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+
+    width: auto !important;
+    height: 50px !important;
+
+    margin: 0 auto !important;
+    padding: 0 !important;
+}
+
+.identite-clarodaro img {
+    width: 40px !important;
+    height: 40px !important;
+
+    min-width: 40px !important;
+    min-height: 40px !important;
+
+    max-width: 40px !important;
+    max-height: 40px !important;
+
+    object-fit: contain !important;
+
+    display: block !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.identite-clarodaro span {
+    font-size: 24px !important;
+    font-weight: bold !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
+
+
+/* =========================================================
+   CONTENEUR PRINCIPAL
+   ========================================================= */
+
+.container,
+.conteneur,
+.page,
+main {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+
+/* =========================================================
+   MENU PRINCIPAL
+   ========================================================= */
+
+.menu-principal {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px;
+    margin-bottom: 20px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.menu-principal button {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 15px;
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+
+/* =========================================================
+   COULEURS DES BOUTONS DU MENU
+   ========================================================= */
+
+.menu-principal button:nth-child(1) {
+    background: #2563eb;
+}
+
+.menu-principal button:nth-child(2) {
+    background: #16a34a;
+}
+
+.menu-principal button:nth-child(3) {
+    background: #7c3aed;
+}
+
+.menu-principal button:nth-child(4) {
+    background: #ea580c;
+}
+
+.menu-principal button:nth-child(5) {
+    background: #0891b2;
+}
+
+.menu-principal button:nth-child(6) {
+    background: #ca8a04;
+}
+
+.menu-principal button:nth-child(7) {
+    background: #db2777;
+}
+
+.menu-principal button:nth-child(8) {
+    background: #475569;
+}
+
+.menu-principal button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.08);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+}
+
+.menu-principal button.active {
+    outline: 3px solid rgba(37, 99, 235, 0.18);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+}
+
+
+/* =========================================================
+   RECHERCHE / FILTRES
+   ========================================================= */
+
+.search-box,
+.filtres,
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    padding: 15px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.07);
+}
+
+input,
+select {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 14px;
+    outline: none;
+    transition: 0.2s;
+}
+
+input:focus,
+select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+
+/* =========================================================
+   BOUTONS D'ACTION
+   ========================================================= */
+
+button {
+    font-family: inherit;
+}
+
+.btn,
+button.btn,
+.btn-enregistrer,
+.btn-modifier,
+.btn-imprimer,
+.btn-primary {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-enregistrer,
+.btn-primary {
+    background: #16a34a;
+    color: white;
+}
+
+.btn-modifier {
+    background: #2563eb;
+    color: white;
+}
+
+.btn-imprimer {
+    background: #475569;
+    color: white;
+}
+
+.btn:hover,
+button.btn:hover,
+.btn-enregistrer:hover,
+.btn-modifier:hover,
+.btn-imprimer:hover,
+.btn-primary:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.08);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+
+/* =========================================================
+   INFORMATIONS DE L'ÉLÈVE
+   ========================================================= */
+
+.student-info,
+.eleve-info,
+.identite-eleve {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 15px 18px;
+    margin-bottom: 18px;
+    border-left: 5px solid #2563eb;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.07);
+}
+
+.student-info strong,
+.eleve-info strong,
+.identite-eleve strong {
+    color: #1e3a8a;
+}
+
+
+/* =========================================================
+   TABLEAU DES RÉSULTATS
+   ========================================================= */
+
+.table-wrapper,
+.table-container,
+.resultats-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, 0.10);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    font-size: 12px;
+}
+
+
+/* =========================================================
+   EN-TÊTE DU TABLEAU
+   ========================================================= */
+
+thead th {
+    background: #1e3a8a;
+    color: white;
+    border: 1px solid #172554;
+    padding: 9px 6px;
+    text-align: center;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+th {
+    text-align: center;
+    vertical-align: middle;
+}
+
+
+/* =========================================================
+   CELLULES
+   ========================================================= */
+
+td {
+    border: 1px solid #cbd5e1;
+    padding: 7px 5px;
+    text-align: center;
+    vertical-align: middle;
+    background: #ffffff;
+}
+
+tbody tr:hover td {
+    background: #f8fafc;
+}
+
+
+/* =========================================================
+   COEFFICIENT
+   ========================================================= */
+
+.coefficient,
+tr.coefficient td,
+tr.coefficient th {
+    background: #e0f2fe;
+    font-weight: bold;
+    color: #075985;
+}
+
+
+/* =========================================================
+   MOIS
+   ========================================================= */
+
+tr.mois td,
+.mois {
+    background: #f8fafc;
+}
+
+
+/* =========================================================
+   CONTRÔLES
+   ========================================================= */
+
+tr.controle td,
+tr.controle th {
+    background: #fff7ed;
+    font-weight: bold;
+}
+
+tr.controle td:first-child,
+tr.controle th:first-child {
+    background: #fed7aa;
+    color: #9a3412;
+}
+
+
+/* =========================================================
+   CELLULES DE NOTES
+   ========================================================= */
+
+.note-input,
+input[type="number"] {
+    width: 65px;
+    max-width: 100%;
+    padding: 6px;
+    text-align: center;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+.note-input:focus,
+input[type="number"]:focus {
+    border-color: #2563eb;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+
+/* =========================================================
+   TOTAL
+   ========================================================= */
+
+tr.total td,
+tr.total th {
+    background: #dcfce7;
+    color: #166534;
+    font-weight: bold;
+}
+
+
+/* =========================================================
+   MOYENNE
+   ========================================================= */
+
+tr.moyenne td,
+tr.moyenne th {
+    background: #fef9c3;
+    color: #854d0e;
+    font-weight: bold;
+}
+
+
+/* =========================================================
+   PLACE
+   ========================================================= */
+
+tr.place td,
+tr.place th {
+    background: #ede9fe;
+    color: #5b21b6;
+    font-weight: bold;
+}
+
+.place {
+    font-weight: bold;
+}
+
+
+/* =========================================================
+   SIGNATURES
+   ========================================================= */
+
+.signature-control {
+    min-width: 150px;
+    height: 65px;
+    vertical-align: bottom;
+    background: #ffffff;
+}
+
+.signature-control::after {
+    content: "";
+    display: block;
+    margin: 35px auto 0;
+    width: 85%;
+    border-bottom: 1px solid #64748b;
+}
+
+.signature-empty {
+    background: #ffffff;
+    height: 25px;
+}
+
+
+/* =========================================================
+   COLONNES SIGNATURE
+   ========================================================= */
+
+th.signature-directeur,
+th.signature-parents {
+    background: #334155;
+    color: white;
+}
+
+
+/* =========================================================
+   MESSAGE / AUCUN ÉLÈVE
+   ========================================================= */
+
+.message,
+.no-result,
+.aucun-resultat {
+    padding: 20px;
+    text-align: center;
+    background: white;
+    border-radius: 10px;
+    color: #64748b;
+    font-weight: bold;
+}
+
+
+/* =========================================================
+   PETITS ÉCRANS
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+    .container,
+    .conteneur,
+    .page,
+    main {
+        padding: 10px;
+    }
+
+    .menu-principal {
+        gap: 6px;
+    }
+
+    .menu-principal button {
+        padding: 8px 10px;
+        font-size: 12px;
+    }
+
+    table {
+        font-size: 10px;
+    }
+
+    th,
+    td {
+        padding: 5px 3px;
+    }
+
+    input[type="number"] {
+        width: 50px;
+    }
+
+    .identite-clarodaro {
+        height: 45px !important;
+        gap: 5px !important;
+    }
+
+    .identite-clarodaro img {
+        width: 36px !important;
+        height: 36px !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+        max-width: 36px !important;
+        max-height: 36px !important;
+    }
+
+    .identite-clarodaro span {
+        font-size: 21px !important;
+    }
+}
+
+
+/* =========================================================
+   IMPRESSION
+   ========================================================= */
+
+@media print {
+
+    @page {
+        size: Letter portrait;
+        margin: 8mm;
+    }
+
+    body {
+        background: white;
+        color: black;
+    }
+
+    .no-print,
+    .menu-principal,
+    .search-box,
+    .filtres,
+    .filters,
+    button {
+        display: none !important;
+    }
+
+    .container,
+    .conteneur,
+    .page,
+    main {
+        max-width: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .table-wrapper,
+    .table-container,
+    .resultats-table-wrapper {
+        overflow: visible;
+        box-shadow: none;
+        border-radius: 0;
+    }
+
+    table {
+        width: 100%;
+        font-size: 8px;
+    }
+
+    th,
+    td {
+        padding: 4px 2px;
+        border: 1px solid #000;
+    }
+
+    thead th {
+        background: #e5e7eb !important;
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    tr.controle td,
+    tr.controle th {
+        background: #f3f4f6 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    tr.total td,
+    tr.total th {
+        background: #f3f4f6 !important;
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    tr.moyenne td,
+    tr.moyenne th {
+        background: #f3f4f6 !important;
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    tr.place td,
+    tr.place th {
+        background: #f3f4f6 !important;
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .signature-control {
+        height: 60px;
+    }
+
+    .signature-control::after {
+        margin-top: 35px;
+        border-bottom: 1px solid #000;
+    }
+
+    .identite-clarodaro {
+        display: flex !important;
+        height: 45px !important;
+    }
+
+    .identite-clarodaro img {
+        width: 36px !important;
+        height: 36px !important;
+        max-width: 36px !important;
+        max-height: 36px !important;
+    }
+}
+
+
+/* =====================================================
+   KÈK BOUTON MENU — CHAK GEN PWÒP KOULÈ LI
+   ===================================================== */
+
+.menu-principal button[onclick*="index.html"] {
+    background: #2563eb !important;
+    color: white !important;
+}
+
+.menu-principal button[onclick*="matieres.html"] {
+    background: #16a34a !important;
+    color: white !important;
+}
+
+.menu-principal button[onclick*="resultats.html"] {
+    background: #7c3aed !important;
+    color: white !important;
+}
+
+.menu-principal button[onclick*="finances.html"] {
+    background: #ea580c !important;
+    color: white !important;
+}
+
+.menu-principal button[onclick*="personnel.html"] {
+    background: #0891b2 !important;
+    color: white !important;
+}
+
+.menu-principal button[onclick*="annees-scolaires.html"] {
+    background: #ca8a04 !important;
+    color: white !important;
+}
+
+.menu-principal button[onclick*="vacances.html"] {
+    background: #db2777 !important;
+    color: white !important;
+}
+
+.menu-principal button[onclick*="pdg.html"] {
+    background: #475569 !important;
+    color: white !important;
+}
+
+
+/* =====================================================
+   EFFET AU SURVOL
+   ===================================================== */
+
+.menu-principal button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.12);
+    box-shadow: 0 5px 12px rgba(0, 0, 0, 0.20);
+}
+
+
+/* =====================================================
+   BOUTON DE LA PAGE ACTIVE
+   ===================================================== */
+
+.menu-principal button.active {
+    box-shadow:
+        0 0 0 3px rgba(255, 255, 255, 0.7),
+        0 5px 12px rgba(0, 0, 0, 0.20);
+}
+
+
+/* =====================================================
+   BADGE ÉLÈVE
+   ===================================================== */
+
+.badge {
+    display: block;
+    width: 5.4cm;
+    height: 8.56cm;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+
+/* =====================================================
+   ANNÉE ACADÉMIQUE — AU-DESSUS DE LA PHOTO
+   ===================================================== */
+
+.annee-academique {
+    width: 100%;
+    text-align: left;
+    padding-left: 2px;
+    margin-top: 3px;
+    margin-bottom: 3px;
+    font-size: 8pt;
+    font-weight: bold;
+}
+
+.annee-academique span {
+    font-weight: normal;
+}
+
+
+/* =====================================================
+   INFORMATIONS DU BADGE — TEXTE PLUS GRAND
+   ===================================================== */
+
+.badge .ligne {
+    font-size: 9pt !important;
+    line-height: 1.08;
+    margin-bottom: 4px;
+}
+
+.badge .etiquette {
+    font-size: 9pt !important;
+    font-weight: bold;
+}
+
+.badge .valeur {
+    font-size: 9pt !important;
+}
+
+
+/* =====================================================
+   BADGE — CENTRAGE DANS LA PAGE À L'IMPRESSION
+   ===================================================== */
+
+@media print {
+
+    html,
+    body {
+        width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+    }
+
+    .badge {
+        display: block !important;
+        width: 5.4cm !important;
+        height: 8.56cm !important;
+
+        position: relative !important;
+
+        margin-left: auto !important;
+        margin-right: auto !important;
+
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+
+        left: auto !important;
+        right: auto !important;
+
+        transform: none !important;
+
+        float: none !important;
+
+        border: 1.5px solid #111;
+        border-radius: 0;
+        box-shadow: none;
+
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .annee-academique {
+        display: block !important;
+        width: 100% !important;
+        text-align: left !important;
+        font-size: 8pt !important;
+        margin-top: 3px !important;
+        margin-bottom: 3px !important;
+    }
+}

@@ -1,0 +1,2531 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>IMC-Clarodoro</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #222;
+        }
+
+        header {
+            background: #1f4e78;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 30px;
+        }
+
+        header p {
+            margin: 8px 0 0;
+        }
+
+        /* =========================================================
+           EN-TETE : LOGO EN HAUT, NOM DE L'INSTITUTION EN DESSOUS
+        ========================================================= */
+        .identite-clarodaro {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+        }
+
+        .identite-clarodaro img {
+            width: 60px !important;
+            height: 60px !important;
+            max-width: 60px !important;
+            max-height: 60px !important;
+            min-width: 60px !important;
+            min-height: 60px !important;
+            object-fit: contain !important;
+            display: block !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+        }
+
+        .identite-clarodaro .nom-institution {
+            font-size: 24px !important;
+            font-weight: bold !important;
+            line-height: 1.2 !important;
+            margin: 0 !important;
+        }
+
+        .identite-clarodaro .slogan-institution {
+            font-size: 16px !important;
+            margin: 0 !important;
+            line-height: 1.2 !important;
+        }
+
+        /* =========================
+           MENU PRINCIPAL
+        ========================= */
+
+        .menu-principal {
+            background: white;
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .menu-principal button {
+            border: none;
+            background: transparent;
+            color: #1f4e78;
+            font-size: 15px;
+            font-weight: bold;
+            padding: 11px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .menu-principal button:hover {
+            background: #e8f0f7;
+        }
+
+        .menu-principal button.active {
+            background: #1f4e78;
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+
+        h2 {
+            color: #1f4e78;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        input,
+        select {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+
+        .toolbar input {
+            min-width: 240px;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: #1f4e78;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+        }
+
+        .btn-success {
+            background: #198754;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #222;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .form-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
+
+        th {
+            background: #1f4e78;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .student-photo {
+            width: 55px;
+            height: 55px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 1px solid #ccc;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        #photoPreview {
+            width: 120px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            display: none;
+            margin-bottom: 10px;
+        }
+
+        #cameraContainer {
+            display: none;
+            margin-top: 15px;
+        }
+
+        #cameraVideo {
+            width: 300px;
+            max-width: 100%;
+            background: black;
+            border-radius: 8px;
+        }
+
+        .message {
+            display: none;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+        }
+
+        .message.success {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .dossier {
+            display: none;
+        }
+
+        .dossier-header {
+            text-align: center;
+        }
+
+        .dossier-photo {
+            width: 140px;
+            height: 140px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+
+        .dossier-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .dossier-item {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px;
+        }
+
+        .dossier-item strong {
+            color: #1f4e78;
+        }
+
+        footer {
+            background: #1f4e78;
+            color: white;
+            text-align: center;
+            padding: 15px;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 700px) {
+
+            .form-grid,
+            .dossier-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .menu-principal {
+                justify-content: stretch;
+            }
+
+            .menu-principal button {
+                flex: 1 1 45%;
+            }
+        }
+
+        @media print {
+
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                background: white;
+            }
+
+            .card {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+
+<header class="entete-ecole">
+
+    <div class="identite-clarodaro">
+        <!-- LOGO DE L'INSTITUTION : EN HAUT -->
+        <img src="logo-clarodaro.png"
+             alt="Logo Institution Mixte Clarodaro">
+
+        <!-- NOM DE L'INSTITUTION : EN DESSOUS DU LOGO -->
+        <div class="nom-institution">Institution Mixte Clarodaro</div>
+
+        <!-- SLOGAN -->
+        <div class="slogan-institution">Clarodaro, la clarté du savoir!</div>
+    </div>
+
+</header>
+
+
+<!-- ==================================================
+     MENU PRINCIPAL
+================================================== -->
+
+<nav class="menu-principal no-print">
+
+    <button type="button" class="active">
+        Élèves
+    </button>
+
+    <button
+        type="button"
+        onclick="window.location.href='badge.html'">
+        Badge
+    </button>
+
+    <button
+        type="button"
+        onclick="window.location.href='matieres.html'">
+        Matières
+    </button>
+
+</nav>
+
+
+<div class="container">
+
+    <div
+        id="message"
+        class="message success">
+    </div>
+
+
+    <!-- ==================================================
+         GESTION DES ÉLÈVES
+    ================================================== -->
+
+    <div class="card no-print">
+
+        <h2>Gestion des élèves</h2>
+
+        <div class="toolbar">
+
+            <select id="anneeScolaire"></select>
+
+            <input
+                type="text"
+                id="searchStudent"
+                placeholder="Rechercher par nom ou prénom">
+
+            <button
+                type="button"
+                class="btn-primary"
+                onclick="nouvelEleve()">
+                Nouveau
+            </button>
+
+            <button
+                type="button"
+                class="btn-secondary"
+                onclick="window.print()">
+                Imprimer
+            </button>
+
+            <button
+                type="button"
+                class="btn-success"
+                onclick="exporterWord()">
+                Exporter Word
+            </button>
+
+        </div>
+
+
+        <div class="table-container">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+                        <th>#</th>
+                        <th>Photo</th>
+                        <th>Nom</th>
+                        <th>Prénom</th>
+                        <th>Sexe</th>
+                        <th>Date de naissance</th>
+                        <th>Classe</th>
+                        <th>NISU</th>
+                        <th>Contact</th>
+                        <th>Actions</th>
+                    </tr>
+
+                </thead>
+
+                <tbody id="studentsTableBody">
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+    <!-- ==================================================
+         FORMULAIRE ÉLÈVE
+    ================================================== -->
+
+    <div
+        class="card no-print"
+        id="studentFormCard">
+
+        <h2 id="formTitle">
+            Ajouter un élève
+        </h2>
+
+
+        <form id="studentForm">
+
+            <input
+                type="hidden"
+                id="studentId">
+
+
+            <div class="form-grid">
+
+
+                <div class="form-group">
+
+                    <label for="nom">
+                        Nom
+                    </label>
+
+                    <input
+                        type="text"
+                        id="nom"
+                        required>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="prenom">
+                        Prénom
+                    </label>
+
+                    <input
+                        type="text"
+                        id="prenom"
+                        required>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="sexe">
+                        Sexe
+                    </label>
+
+                    <select
+                        id="sexe"
+                        required>
+
+                        <option value="">
+                            -- Choisir --
+                        </option>
+
+                        <option value="M">
+                            M — Mâle
+                        </option>
+
+                        <option value="F">
+                            F — Fille
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="dateNaissance">
+                        Date de naissance
+                    </label>
+
+                    <input
+                        type="date"
+                        id="dateNaissance"
+                        required>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="lieuNaissance">
+                        Lieu de naissance
+                    </label>
+
+                    <input
+                        type="text"
+                        id="lieuNaissance">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="departement">
+                        Département
+                    </label>
+
+                    <input
+                        type="text"
+                        id="departement">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="commune">
+                        Commune
+                    </label>
+
+                    <input
+                        type="text"
+                        id="commune">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="sectionCommunale">
+                        Section communale
+                    </label>
+
+                    <input
+                        type="text"
+                        id="sectionCommunale">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="classe">
+                        Classe
+                    </label>
+
+                    <select
+                        id="classe"
+                        required>
+
+                        <option value="">
+                            -- Choisir une classe --
+                        </option>
+
+                        <option>1ère Kind</option>
+                        <option>2ème Kind</option>
+                        <option>3ème Kind</option>
+                        <option>1ère A.F.</option>
+                        <option>2ème A.F.</option>
+                        <option>3ème A.F.</option>
+                        <option>4ème A.F.</option>
+                        <option>5ème A.F.</option>
+                        <option>6ème A.F.</option>
+                        <option>7ème A.F.</option>
+                        <option>8ème A.F.</option>
+                        <option>9ème A.F.</option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="nisu">
+                        NISU
+                    </label>
+
+                    <input
+                        type="text"
+                        id="nisu"
+                        maxlength="20"
+                        placeholder="Facultatif">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="contact">
+                        Contact
+                    </label>
+
+                    <input
+                        type="tel"
+                        id="contact">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="ninuParent">
+                        NINU du parent
+                    </label>
+
+                    <input
+                        type="text"
+                        id="ninuParent"
+                        maxlength="10"
+                        inputmode="numeric"
+                        placeholder="10 chiffres">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="documentInscription">
+                        Document d'inscription
+                    </label>
+
+                    <select
+                        id="documentInscription">
+
+                        <option value="">
+                            -- Choisir --
+                        </option>
+
+                        <option value="Original">
+                            Original
+                        </option>
+
+                        <option value="Copie">
+                            Copie
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- PHOTO -->
+
+                <div class="form-group full">
+
+                    <label>
+                        Photo de l'élève
+                    </label>
+
+
+                    <img
+                        id="photoPreview"
+                        alt="Photo de l'élève">
+
+
+                    <div>
+
+                        <button
+                            type="button"
+                            class="btn-primary"
+                            onclick="ouvrirCamera()">
+                            📷 Caméra
+                        </button>
+
+
+                        <label
+                            for="photoGallery"
+                            class="btn-secondary"
+                            style="
+                                display:inline-block;
+                                padding:10px 15px;
+                                border-radius:6px;
+                                cursor:pointer;
+                            ">
+                            🖼️ Galerie
+                        </label>
+
+
+                        <input
+                            type="file"
+                            id="photoGallery"
+                            accept="image/*"
+                            style="display:none;">
+
+                    </div>
+
+
+                    <div id="cameraContainer">
+
+                        <video
+                            id="cameraVideo"
+                            autoplay
+                            playsinline>
+                        </video>
+
+                        <br><br>
+
+                        <button
+                            type="button"
+                            class="btn-success"
+                            onclick="prendrePhoto()">
+                            Prendre la photo
+                        </button>
+
+                        <button
+                            type="button"
+                            class="btn-danger"
+                            onclick="fermerCamera()">
+                            Fermer caméra
+                        </button>
+
+                        <canvas
+                            id="cameraCanvas"
+                            style="display:none;">
+                        </canvas>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="form-actions">
+
+                <button
+                    type="submit"
+                    class="btn-success">
+                    Enregistrer
+                </button>
+
+                <button
+                    type="button"
+                    class="btn-secondary"
+                    onclick="annulerFormulaire()">
+                    Annuler
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+
+    <!-- ==================================================
+         DOSSIER
+    ================================================== -->
+
+    <div
+        class="card dossier"
+        id="dossier">
+
+        <div class="dossier-header">
+
+            <h2>
+                Dossier de l'élève
+            </h2>
+
+            <img
+                id="dossierPhoto"
+                class="dossier-photo"
+                alt="Photo">
+
+            <h3
+                id="dossierNomComplet">
+            </h3>
+
+        </div>
+
+
+        <div class="dossier-grid">
+
+            <div class="dossier-item">
+                <strong>Nom :</strong>
+                <span id="dossierNom"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Prénom :</strong>
+                <span id="dossierPrenom"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Sexe :</strong>
+                <span id="dossierSexe"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Date de naissance :</strong>
+                <span id="dossierDateNaissance"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Lieu de naissance :</strong>
+                <span id="dossierLieuNaissance"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Département :</strong>
+                <span id="dossierDepartement"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Commune :</strong>
+                <span id="dossierCommune"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Section communale :</strong>
+                <span id="dossierSectionCommunale"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Classe :</strong>
+                <span id="dossierClasse"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>NISU :</strong>
+                <span id="dossierNisu"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Contact :</strong>
+                <span id="dossierContact"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>NINU du parent :</strong>
+                <span id="dossierNinuParent"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Document :</strong>
+                <span id="dossierDocument"></span>
+            </div>
+
+            <div class="dossier-item">
+                <strong>Année scolaire :</strong>
+                <span id="dossierAnnee"></span>
+            </div>
+
+        </div>
+
+
+        <br>
+
+        <button
+            type="button"
+            class="btn-secondary no-print"
+            onclick="fermerDossier()">
+            Fermer
+        </button>
+
+        <button
+            type="button"
+            class="btn-primary no-print"
+            onclick="imprimerDossier()">
+            Imprimer
+        </button>
+
+    </div>
+
+</div>
+
+
+<footer>
+    Clarodaro, la clarté du savoir!
+</footer>
+
+
+<script src="secure-storage.js"></script>
+<script src="auth.js"></script>
+<script>
+
+// Guard d'authentification
+document.addEventListener("DOMContentLoaded", function() {
+  IMCAuth.requireAuth("personnel.html");
+});
+
+const STORAGE_KEY = "imc_students";
+const ACTIVE_YEAR_KEY = "imc_active_year";
+
+    let students = [];
+    let photoActuelle = "";
+    let cameraStream = null;
+
+
+    /* ==================================================
+       NAVIGATION
+    ================================================== */
+
+    function ouvrirPage(page) {
+
+        window.location.href = page;
+
+    }
+
+
+    /* ==================================================
+       INITIALISATION
+    ================================================== */
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        function () {
+
+            IMCSecureStorage.ready.then(function (ok) {
+
+            if (!ok) return;
+
+            chargerEleves();
+
+            creerAnnees();
+
+            document
+                .getElementById("searchStudent")
+                .addEventListener(
+                    "input",
+                    afficherEleves
+                );
+
+
+            document
+                .getElementById("anneeScolaire")
+                .addEventListener(
+                    "change",
+                    function () {
+
+                        localStorage.setItem(
+                            ACTIVE_YEAR_KEY,
+                            this.value
+                        );
+
+                        afficherEleves();
+
+                    }
+                );
+
+
+            document
+                .getElementById("photoGallery")
+                .addEventListener(
+                    "change",
+                    chargerPhotoGalerie
+                );
+
+
+            document
+                .getElementById("studentForm")
+                .addEventListener(
+                    "submit",
+                    enregistrerEleve
+                );
+
+
+            afficherEleves();
+
+            });
+
+        }
+    );
+
+
+    /* ==================================================
+       ANNÉES
+    ================================================== */
+
+    function creerAnnees() {
+
+        const select =
+            document.getElementById(
+                "anneeScolaire"
+            );
+
+        select.innerHTML = "";
+
+
+        const anneeSauvegardee =
+            localStorage.getItem(
+                ACTIVE_YEAR_KEY
+            );
+
+
+        for (
+            let annee = 2026;
+            annee <= 2040;
+            annee++
+        ) {
+
+            const valeur =
+                annee +
+                " - " +
+                (annee + 1);
+
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+
+            option.value = valeur;
+
+            option.textContent = valeur;
+
+
+            if (
+                anneeSauvegardee === valeur ||
+                (
+                    !anneeSauvegardee &&
+                    annee === 2026
+                )
+            ) {
+
+                option.selected = true;
+
+            }
+
+
+            select.appendChild(option);
+
+        }
+
+    }
+
+
+    function anneeActuelle() {
+
+        return document
+            .getElementById(
+                "anneeScolaire"
+            )
+            .value;
+
+    }
+
+
+    /* ==================================================
+       STORAGE
+    ================================================== */
+
+    function chargerEleves() {
+
+        try {
+
+            students =
+                JSON.parse(
+                    localStorage.getItem(
+                        STORAGE_KEY
+                    )
+                ) || [];
+
+        } catch (error) {
+
+            students = [];
+
+        }
+
+    }
+
+
+    function sauvegarderEleves() {
+
+        localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(students)
+        );
+
+    }
+
+
+    /* ==================================================
+       AFFICHER ÉLÈVES
+    ================================================== */
+
+    function afficherEleves() {
+
+        const tbody =
+            document.getElementById(
+                "studentsTableBody"
+            );
+
+
+        tbody.innerHTML = "";
+
+
+        const recherche =
+            document
+                .getElementById(
+                    "searchStudent"
+                )
+                .value
+                .trim()
+                .toLowerCase();
+
+
+        const annee =
+            anneeActuelle();
+
+
+        const elevesFiltres =
+            students.filter(
+                function (student) {
+
+                    const anneeEleve =
+                        student.anneeScolaire ||
+                        annee;
+
+
+                    if (
+                        anneeEleve !== annee
+                    ) {
+                        return false;
+                    }
+
+
+                    const nom =
+                        String(
+                            student.nom || ""
+                        )
+                        .trim()
+                        .toLowerCase();
+
+
+                    const prenom =
+                        String(
+                            student.prenom || ""
+                        )
+                        .trim()
+                        .toLowerCase();
+
+
+                    if (
+                        recherche !== "" &&
+                        !nom.includes(recherche) &&
+                        !prenom.includes(recherche)
+                    ) {
+
+                        return false;
+
+                    }
+
+
+                    return true;
+
+                }
+            );
+
+
+        if (
+            elevesFiltres.length === 0
+        ) {
+
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+
+            row.innerHTML = `
+
+                <td
+                    colspan="10"
+                    style="text-align:center;">
+                    Aucun élève trouvé pour l'année
+                    ${echapper(annee)}.
+                </td>
+
+            `;
+
+
+            tbody.appendChild(row);
+
+            return;
+
+        }
+
+
+        elevesFiltres.forEach(
+            function (student, index) {
+
+                const row =
+                    document.createElement(
+                        "tr"
+                    );
+
+
+                const photo =
+                    student.photo
+                        ? `
+                            <img
+                                src="${student.photo}"
+                                class="student-photo"
+                                alt="Photo">
+                          `
+                        : "—";
+
+
+                const sexe =
+                    student.sexe === "M"
+                        ? "M — Mâle"
+                        : student.sexe === "F"
+                            ? "F — Fille"
+                            : "";
+
+
+                row.innerHTML = `
+
+                    <td>
+                        ${index + 1}
+                    </td>
+
+                    <td>
+                        ${photo}
+                    </td>
+
+                    <td>
+                        ${echapper(student.nom)}
+                    </td>
+
+                    <td>
+                        ${echapper(student.prenom)}
+                    </td>
+
+                    <td>
+                        ${sexe}
+                    </td>
+
+                    <td>
+                        ${echapper(
+                            student.dateNaissance || ""
+                        )}
+                    </td>
+
+                    <td>
+                        ${echapper(
+                            student.classe || ""
+                        )}
+                    </td>
+
+                    <td>
+                        ${echapper(
+                            student.nisu || ""
+                        )}
+                    </td>
+
+                    <td>
+                        ${echapper(
+                            student.contact || ""
+                        )}
+                    </td>
+
+                    <td>
+
+                        <div class="actions">
+
+                            <button
+                                type="button"
+                                class="btn-primary"
+                                onclick="voirDossier('${student.id}')">
+                                Dossier
+                            </button>
+
+                            <button
+                                type="button"
+                                class="btn-warning"
+                                onclick="modifierEleve('${student.id}')">
+                                Modifier
+                            </button>
+
+                            <button
+                                type="button"
+                                class="btn-danger"
+                                onclick="supprimerEleve('${student.id}')">
+                                Supprimer
+                            </button>
+
+                        </div>
+
+                    </td>
+
+                `;
+
+
+                tbody.appendChild(row);
+
+            }
+        );
+
+    }
+
+
+    /* ==================================================
+       ENREGISTRER
+    ================================================== */
+
+    function enregistrerEleve(event) {
+
+        event.preventDefault();
+
+        const id =
+            document.getElementById(
+                "studentId"
+            ).value;
+
+        // Vérifier la permission appropriée selon l'action
+        if (id) {
+            if (!IMCAuth.requirePermission("eleves.update")) {
+                afficherMessage("Permission refusée pour la modification.");
+                return;
+            }
+        } else {
+            if (!IMCAuth.requirePermission("eleves.create")) {
+                afficherMessage("Permission refusée pour la création.");
+                return;
+            }
+        }
+
+
+        const eleve = {
+
+            id:
+                id ||
+                Date.now().toString(),
+
+            nom:
+                document
+                    .getElementById("nom")
+                    .value
+                    .trim(),
+
+            prenom:
+                document
+                    .getElementById("prenom")
+                    .value
+                    .trim(),
+
+            sexe:
+                document
+                    .getElementById("sexe")
+                    .value,
+
+            dateNaissance:
+                document
+                    .getElementById(
+                        "dateNaissance"
+                    )
+                    .value,
+
+            lieuNaissance:
+                document
+                    .getElementById(
+                        "lieuNaissance"
+                    )
+                    .value
+                    .trim(),
+
+            departement:
+                document
+                    .getElementById(
+                        "departement"
+                    )
+                    .value
+                    .trim(),
+
+            commune:
+                document
+                    .getElementById(
+                        "commune"
+                    )
+                    .value
+                    .trim(),
+
+            sectionCommunale:
+                document
+                    .getElementById(
+                        "sectionCommunale"
+                    )
+                    .value
+                    .trim(),
+
+            classe:
+                document
+                    .getElementById(
+                        "classe"
+                    )
+                    .value,
+
+            nisu:
+                document
+                    .getElementById(
+                        "nisu"
+                    )
+                    .value
+                    .trim(),
+
+            contact:
+                document
+                    .getElementById(
+                        "contact"
+                    )
+                    .value
+                    .trim(),
+
+            ninuParent:
+                document
+                    .getElementById(
+                        "ninuParent"
+                    )
+                    .value
+                    .trim(),
+
+            documentInscription:
+                document
+                    .getElementById(
+                        "documentInscription"
+                    )
+                    .value,
+
+            photo:
+                photoActuelle,
+
+            anneeScolaire:
+                anneeActuelle()
+
+        };
+
+
+        if (id) {
+
+            const index =
+                students.findIndex(
+                    function (student) {
+                        return student.id === id;
+                    }
+                );
+
+
+            if (index !== -1) {
+
+                students[index] =
+                    eleve;
+
+            }
+
+        } else {
+
+            students.push(eleve);
+
+        }
+
+
+        sauvegarderEleves();
+
+        afficherEleves();
+
+        afficherMessage(
+            "Les informations de l'élève ont été enregistrées avec succès."
+        );
+
+        annulerFormulaire();
+
+    }
+
+
+    /* ==================================================
+       MODIFIER
+    ================================================== */
+
+    function modifierEleve(id) {
+
+        const student =
+            students.find(
+                function (student) {
+                    return student.id === id;
+                }
+            );
+
+
+        if (!student) {
+            return;
+        }
+
+
+        document.getElementById(
+            "studentId"
+        ).value = student.id;
+
+
+        document.getElementById(
+            "nom"
+        ).value =
+            student.nom || "";
+
+
+        document.getElementById(
+            "prenom"
+        ).value =
+            student.prenom || "";
+
+
+        document.getElementById(
+            "sexe"
+        ).value =
+            student.sexe || "";
+
+
+        document.getElementById(
+            "dateNaissance"
+        ).value =
+            student.dateNaissance || "";
+
+
+        document.getElementById(
+            "lieuNaissance"
+        ).value =
+            student.lieuNaissance || "";
+
+
+        document.getElementById(
+            "departement"
+        ).value =
+            student.departement || "";
+
+
+        document.getElementById(
+            "commune"
+        ).value =
+            student.commune || "";
+
+
+        document.getElementById(
+            "sectionCommunale"
+        ).value =
+            student.sectionCommunale || "";
+
+
+        document.getElementById(
+            "classe"
+        ).value =
+            student.classe || "";
+
+
+        document.getElementById(
+            "nisu"
+        ).value =
+            student.nisu || "";
+
+
+        document.getElementById(
+            "contact"
+        ).value =
+            student.contact || "";
+
+
+        document.getElementById(
+            "ninuParent"
+        ).value =
+            student.ninuParent || "";
+
+
+        document.getElementById(
+            "documentInscription"
+        ).value =
+            student.documentInscription || "";
+
+
+        photoActuelle =
+            student.photo || "";
+
+
+        const preview =
+            document.getElementById(
+                "photoPreview"
+            );
+
+
+        if (photoActuelle) {
+
+            preview.src =
+                photoActuelle;
+
+            preview.style.display =
+                "block";
+
+        } else {
+
+            preview.style.display =
+                "none";
+
+        }
+
+
+        document.getElementById(
+            "formTitle"
+        ).textContent =
+            "Modifier l'élève";
+
+
+        document.getElementById(
+            "studentFormCard"
+        ).scrollIntoView({
+            behavior: "smooth"
+        });
+
+    }
+
+
+    /* ==================================================
+       SUPPRIMER
+    ================================================== */
+
+    function supprimerEleve(id) {
+
+        if (!IMCAuth.requirePermission("eleves.delete")) {
+            alert("Permission refusée.");
+            return;
+        }
+
+        const student =
+            students.find(
+                function (student) {
+                    return student.id === id;
+                }
+            );
+
+
+        if (!student) {
+            return;
+        }
+
+
+        if (
+            !confirm(
+                "Voulez-vous vraiment supprimer " +
+                student.nom +
+                " " +
+                student.prenom +
+                " ?"
+            )
+        ) {
+            return;
+        }
+
+
+        students =
+            students.filter(
+                function (student) {
+                    return student.id !== id;
+                }
+            );
+
+
+        sauvegarderEleves();
+
+        afficherEleves();
+
+
+        afficherMessage(
+            "L'élève a été supprimé."
+        );
+
+    }
+
+
+    /* ==================================================
+       NOUVEAU
+    ================================================== */
+
+    function nouvelEleve() {
+
+        annulerFormulaire();
+
+
+        document.getElementById(
+            "studentFormCard"
+        ).scrollIntoView({
+            behavior: "smooth"
+        });
+
+    }
+
+
+    /* ==================================================
+       ANNULER
+    ================================================== */
+
+    function annulerFormulaire() {
+
+        document
+            .getElementById(
+                "studentForm"
+            )
+            .reset();
+
+
+        document.getElementById(
+            "studentId"
+        ).value = "";
+
+
+        document.getElementById(
+            "formTitle"
+        ).textContent =
+            "Ajouter un élève";
+
+
+        photoActuelle = "";
+
+
+        document.getElementById(
+            "photoPreview"
+        ).style.display =
+            "none";
+
+
+        fermerCamera();
+
+    }
+
+
+    /* ==================================================
+       GALERIE
+    ================================================== */
+
+    function chargerPhotoGalerie(event) {
+
+        const file =
+            event.target.files[0];
+
+
+        if (!file) {
+            return;
+        }
+
+
+        const reader =
+            new FileReader();
+
+
+        reader.onload =
+            function (e) {
+
+                photoActuelle =
+                    e.target.result;
+
+
+                const preview =
+                    document.getElementById(
+                        "photoPreview"
+                    );
+
+
+                preview.src =
+                    photoActuelle;
+
+
+                preview.style.display =
+                    "block";
+
+            };
+
+
+        reader.readAsDataURL(file);
+
+    }
+
+
+    /* ==================================================
+       CAMÉRA
+    ================================================== */
+
+    async function ouvrirCamera() {
+
+        try {
+
+            cameraStream =
+                await navigator
+                    .mediaDevices
+                    .getUserMedia({
+                        video: true,
+                        audio: false
+                    });
+
+
+            const video =
+                document.getElementById(
+                    "cameraVideo"
+                );
+
+
+            video.srcObject =
+                cameraStream;
+
+
+            document.getElementById(
+                "cameraContainer"
+            ).style.display =
+                "block";
+
+        } catch (error) {
+
+            alert(
+                "Impossible d'ouvrir la caméra."
+            );
+
+        }
+
+    }
+
+
+    function prendrePhoto() {
+
+        const video =
+            document.getElementById(
+                "cameraVideo"
+            );
+
+
+        const canvas =
+            document.getElementById(
+                "cameraCanvas"
+            );
+
+
+        canvas.width =
+            video.videoWidth;
+
+
+        canvas.height =
+            video.videoHeight;
+
+
+        const context =
+            canvas.getContext(
+                "2d"
+            );
+
+
+        context.drawImage(
+            video,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+
+        photoActuelle =
+            canvas.toDataURL(
+                "image/jpeg",
+                0.8
+            );
+
+
+        const preview =
+            document.getElementById(
+                "photoPreview"
+            );
+
+
+        preview.src =
+            photoActuelle;
+
+
+        preview.style.display =
+            "block";
+
+
+        fermerCamera();
+
+    }
+
+
+    function fermerCamera() {
+
+        if (cameraStream) {
+
+            cameraStream
+                .getTracks()
+                .forEach(
+                    function (track) {
+                        track.stop();
+                    }
+                );
+
+
+            cameraStream = null;
+
+        }
+
+
+        document.getElementById(
+            "cameraContainer"
+        ).style.display =
+            "none";
+
+    }
+
+
+    /* ==================================================
+       DOSSIER
+    ================================================== */
+
+    function voirDossier(id) {
+
+        const student =
+            students.find(
+                function (student) {
+                    return student.id === id;
+                }
+            );
+
+
+        if (!student) {
+            return;
+        }
+
+
+        const photo =
+            document.getElementById(
+                "dossierPhoto"
+            );
+
+
+        if (student.photo) {
+
+            photo.src =
+                student.photo;
+
+            photo.style.display =
+                "inline-block";
+
+        } else {
+
+            photo.removeAttribute(
+                "src"
+            );
+
+            photo.style.display =
+                "none";
+
+        }
+
+
+        document.getElementById(
+            "dossierNomComplet"
+        ).textContent =
+            (
+                student.nom +
+                " " +
+                student.prenom
+            ).trim();
+
+
+        document.getElementById(
+            "dossierNom"
+        ).textContent =
+            student.nom || "";
+
+
+        document.getElementById(
+            "dossierPrenom"
+        ).textContent =
+            student.prenom || "";
+
+
+        document.getElementById(
+            "dossierSexe"
+        ).textContent =
+            student.sexe === "M"
+                ? "M — Mâle"
+                : student.sexe === "F"
+                    ? "F — Fille"
+                    : "";
+
+
+        document.getElementById(
+            "dossierDateNaissance"
+        ).textContent =
+            student.dateNaissance || "";
+
+
+        document.getElementById(
+            "dossierLieuNaissance"
+        ).textContent =
+            student.lieuNaissance || "";
+
+
+        document.getElementById(
+            "dossierDepartement"
+        ).textContent =
+            student.departement || "";
+
+
+        document.getElementById(
+            "dossierCommune"
+        ).textContent =
+            student.commune || "";
+
+
+        document.getElementById(
+            "dossierSectionCommunale"
+        ).textContent =
+            student.sectionCommunale || "";
+
+
+        document.getElementById(
+            "dossierClasse"
+        ).textContent =
+            student.classe || "";
+
+
+        document.getElementById(
+            "dossierNisu"
+        ).textContent =
+            student.nisu || "";
+
+
+        document.getElementById(
+            "dossierContact"
+        ).textContent =
+            student.contact || "";
+
+
+        document.getElementById(
+            "dossierNinuParent"
+        ).textContent =
+            student.ninuParent || "";
+
+
+        document.getElementById(
+            "dossierDocument"
+        ).textContent =
+            student.documentInscription || "";
+
+
+        document.getElementById(
+            "dossierAnnee"
+        ).textContent =
+            student.anneeScolaire ||
+            anneeActuelle();
+
+
+        document.getElementById(
+            "dossier"
+        ).style.display =
+            "block";
+
+
+        document.getElementById(
+            "dossier"
+        ).scrollIntoView({
+            behavior: "smooth"
+        });
+
+    }
+
+
+    function fermerDossier() {
+
+        document.getElementById(
+            "dossier"
+        ).style.display =
+            "none";
+
+    }
+
+
+    function imprimerDossier() {
+
+        window.print();
+
+    }
+
+
+    /* ==================================================
+       EXPORT WORD
+    ================================================== */
+
+    function exporterWord() {
+
+        const annee =
+            anneeActuelle();
+
+
+        const recherche =
+            document
+                .getElementById(
+                    "searchStudent"
+                )
+                .value
+                .trim()
+                .toLowerCase();
+
+
+        const eleves =
+            students.filter(
+                function (student) {
+
+                    const anneeEleve =
+                        student.anneeScolaire ||
+                        annee;
+
+
+                    if (
+                        anneeEleve !== annee
+                    ) {
+                        return false;
+                    }
+
+
+                    const nom =
+                        String(
+                            student.nom || ""
+                        ).toLowerCase();
+
+
+                    const prenom =
+                        String(
+                            student.prenom || ""
+                        ).toLowerCase();
+
+
+                    if (
+                        recherche !== "" &&
+                        !nom.includes(recherche) &&
+                        !prenom.includes(recherche)
+                    ) {
+                        return false;
+                    }
+
+
+                    return true;
+
+                }
+            );
+
+
+        let html = `
+
+<!DOCTYPE html>
+
+<html lang="fr">
+
+<head>
+
+<meta charset="UTF-8">
+
+<style>
+
+@page {
+    size: Letter portrait;
+    margin: 0.6in;
+}
+
+body {
+    font-family: Arial, sans-serif;
+}
+
+h1,
+h2 {
+    text-align: center;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    border: 1px solid #000;
+    padding: 6px;
+}
+
+th {
+    background: #ddd;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>
+IMC-Clarodoro
+</h1>
+
+<h2>
+Liste des élèves
+</h2>
+
+<p>
+Année scolaire :
+<strong>
+${echapper(annee)}
+</strong>
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>#</th>
+<th>Nom</th>
+<th>Prénom</th>
+<th>Sexe</th>
+<th>Date de naissance</th>
+<th>Classe</th>
+<th>NISU</th>
+<th>Contact</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+`;
+
+
+        eleves.forEach(
+            function (student, index) {
+
+                html += `
+
+<tr>
+
+<td>
+${index + 1}
+</td>
+
+<td>
+${echapper(student.nom || "")}
+</td>
+
+<td>
+${echapper(student.prenom || "")}
+</td>
+
+<td>
+${
+    student.sexe === "M"
+        ? "M — Mâle"
+        : student.sexe === "F"
+            ? "F — Fille"
+            : ""
+}
+</td>
+
+<td>
+${echapper(
+    student.dateNaissance || ""
+)}
+</td>
+
+<td>
+${echapper(
+    student.classe || ""
+)}
+</td>
+
+<td>
+${echapper(
+    student.nisu || ""
+)}
+</td>
+
+<td>
+${echapper(
+    student.contact || ""
+)}
+</td>
+
+</tr>
+
+`;
+
+            }
+        );
+
+
+        html += `
+
+</tbody>
+
+</table>
+
+<br>
+
+<p style="text-align:center;">
+Clarodaro, la clarté du savoir!
+</p>
+
+</body>
+
+</html>
+
+`;
+
+
+        const blob =
+            new Blob(
+                [html],
+                {
+                    type:
+                        "application/msword"
+                }
+            );
+
+
+        const url =
+            URL.createObjectURL(
+                blob
+            );
+
+
+        const lien =
+            document.createElement(
+                "a"
+            );
+
+
+        lien.href = url;
+
+
+        lien.download =
+            "Liste-eleves-" +
+            annee.replace(
+                / /g,
+                "-"
+            ) +
+            ".doc";
+
+
+        document.body.appendChild(
+            lien
+        );
+
+
+        lien.click();
+
+
+        document.body.removeChild(
+            lien
+        );
+
+
+        URL.revokeObjectURL(
+            url
+        );
+
+    }
+
+
+    /* ==================================================
+       MESSAGE
+    ================================================== */
+
+    function afficherMessage(
+        texte
+    ) {
+
+        const message =
+            document.getElementById(
+                "message"
+            );
+
+
+        message.textContent =
+            texte;
+
+
+        message.style.display =
+            "block";
+
+
+        setTimeout(
+            function () {
+
+                message.style.display =
+                    "none";
+
+            },
+            3000
+        );
+
+    }
+
+
+    /* ==================================================
+       PROTECTION HTML
+    ================================================== */
+
+    function echapper(texte) {
+
+        return String(
+            texte || ""
+        )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+    }
+
+</script>
+
+</body>
+</html>
+```
+
+Le seul ajout est le bouton **Badge**, qui ouvre `badge.html`. Tout le reste de ton code est conservé.

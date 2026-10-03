@@ -1,0 +1,3695 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>PDG - IMC Clarodaro</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: "Times New Roman", serif;
+            font-size: 12pt;
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+
+        header {
+            background: #12355b;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 25px;
+        }
+
+        header p {
+            margin: 5px 0 0;
+            font-size: 16px;
+        }
+
+        nav {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            background: white;
+            box-shadow: 0 2px 6px #0002;
+        }
+
+        nav button {
+            border: none;
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        nav button:hover {
+            opacity: 0.8;
+            transform: scale(1.03);
+        }
+
+        .eleves {
+            background: #2563eb;
+        }
+
+        .matieres {
+            background: #7c3aed;
+        }
+
+        .resultats {
+            background: #0891b2;
+        }
+
+        .finances {
+            background: #16a34a;
+        }
+
+        .personnel {
+            background: #ea580c;
+        }
+
+        .annees {
+            background: #9333ea;
+        }
+
+        .vacances {
+            background: #0d9488;
+        }
+
+        .pdg {
+            background: #dc2626;
+        }
+
+        .conteneur {
+            max-width: 1400px;
+            margin: 25px auto;
+            padding: 0 15px;
+        }
+
+        .carte {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 10px #0001;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #12355b;
+            border-bottom: 2px solid #12355b;
+            padding-bottom: 8px;
+        }
+
+        h3 {
+            color: #12355b;
+        }
+
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: bold;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 12pt;
+        }
+
+        button {
+            font-family: inherit;
+            font-size: 12pt;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 6px;
+            padding: 10px 16px;
+            margin-top: 15px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            opacity: 0.85;
+        }
+
+        .formulaire {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .formulaire > div {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .btn-bleu {
+            background: #2563eb;
+        }
+
+        .btn-vert {
+            background: #16a34a;
+        }
+
+        .btn-rouge {
+            background: #dc2626;
+        }
+
+        .btn-orange {
+            background: #ea580c;
+        }
+
+        .btn-violet {
+            background: #7c3aed;
+        }
+
+        .connexion {
+            max-width: 450px;
+            margin: 45px auto;
+        }
+
+        .erreur {
+            color: #dc2626;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .message {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .message.succes {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .message.erreur {
+            background: #fadbd8;
+            color: #842029;
+        }
+
+        .cache {
+            display: none;
+        }
+
+        .statistiques {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 15px;
+        }
+
+        .statistique {
+            border-radius: 8px;
+            padding: 20px;
+            color: white;
+            text-align: center;
+        }
+
+        .statistique h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: white;
+        }
+
+        .statistique p {
+            margin: 0;
+            font-size: 25px;
+            font-weight: bold;
+        }
+
+        .bleu {
+            background: #2563eb;
+        }
+
+        .vert {
+            background: #16a34a;
+        }
+
+        .orange {
+            background: #ea580c;
+        }
+
+        .rouge {
+            background: #dc2626;
+        }
+
+        .violet {
+            background: #7c3aed;
+        }
+
+        .tableau-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th,
+        td {
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background: #12355b;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        .solde-positif {
+            color: #15803d;
+            font-weight: bold;
+        }
+
+        .solde-negatif {
+            color: #dc2626;
+            font-weight: bold;
+        }
+
+        .tableau-wrapper {
+            overflow-x: auto;
+        }
+
+        .message {
+            margin-top: 10px;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .message.succes {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .message.erreur {
+            background: #fadbd8;
+            color: #842029;
+        }
+
+        .statut-paye {
+            color: #15803d;
+            font-weight: bold;
+        }
+
+        .statut-partiel {
+            color: #ea580c;
+            font-weight: bold;
+        }
+
+        .statut-non-paye {
+            color: #dc2626;
+            font-weight: bold;
+        }
+
+        /* =====================================================
+           PAIE DU PERSONNEL
+        ===================================================== */
+
+        .paie-controles {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            align-items: end;
+        }
+
+        .paie-controles .champ {
+            width: 100%;
+        }
+
+        .paie-input {
+            width: 130px;
+            min-width: 110px;
+            padding: 7px;
+            margin: 0;
+            text-align: right;
+        }
+
+        .paie-select {
+            width: 130px;
+            min-width: 120px;
+            padding: 7px;
+            margin: 0;
+        }
+
+        .net-paie {
+            font-weight: bold;
+            color: #12355b;
+            white-space: nowrap;
+        }
+
+        .total-paie {
+            background: #e2e8f0 !important;
+            font-weight: bold;
+        }
+
+        .info-paie {
+            background: #eff6ff;
+            border-left: 5px solid #2563eb;
+            padding: 12px;
+            margin-top: 15px;
+            border-radius: 5px;
+        }
+
+        .aucun-personnel {
+            padding: 20px;
+            text-align: center;
+            color: #64748b;
+            font-weight: bold;
+        }
+
+        .petit-texte {
+            font-size: 10.5pt;
+            color: #475569;
+        }
+
+        @media print {
+
+            nav,
+            .connexion,
+            .no-print,
+            .btn {
+                display: none !important;
+            }
+
+            body {
+                background: white;
+            }
+
+            .carte {
+                box-shadow: none;
+                border: 1px solid #999;
+            }
+
+            header {
+                background: white;
+                color: black;
+                border-bottom: 2px solid #12355b;
+            }
+
+            table {
+                font-size: 10pt;
+            }
+
+            .paie-input,
+            .paie-select {
+                border: none;
+                padding: 0;
+            }
+        }
+
+    </style>
+</head>
+
+<body>
+
+<header class="entete-ecole">
+
+    <div class="informations-ecole">
+
+        <h1>Institution Mixte Clarodaro</h1>
+
+        <p>Clarodaro, la clarté du savoir !</p>
+
+    </div>
+
+</header>
+
+
+<nav class="no-print">
+
+    <button class="eleves"
+        onclick="ouvrirPage('index.html')">
+        Élèves
+    </button>
+
+    <button class="matieres"
+        onclick="ouvrirPage('matieres.html')">
+        Matières
+    </button>
+
+    <button class="resultats"
+        onclick="ouvrirPage('resultats.html')">
+        Résultats
+    </button>
+
+    <button class="finances"
+        onclick="ouvrirPage('finances.html')">
+        Finances
+    </button>
+
+    <button class="personnel"
+        onclick="ouvrirPage('personnel.html')">
+        Personnel
+    </button>
+
+    <button class="annees"
+        onclick="ouvrirPage('annees-scolaires.html')">
+        Année scolaire
+    </button>
+
+    <button class="vacances"
+        onclick="ouvrirPage('vacances.html')">
+        Vacances
+    </button>
+
+    <button class="pdg"
+        onclick="ouvrirPage('pdg.html')">
+        PDG
+    </button>
+
+</nav>
+
+
+<!-- ============================================================
+     CONNEXION
+============================================================ -->
+
+<div id="zoneConnexion"
+     class="connexion carte no-print">
+
+    <h2>Accès réservé au PDG</h2>
+
+    <label for="motDePasse">
+        Mot de passe
+    </label>
+
+    <input
+        type="password"
+        id="motDePasse"
+        placeholder="Entrez le mot de passe"
+    >
+
+    <button
+        class="btn btn-bleu"
+        onclick="connecterPDGWrapper()"
+    >
+        Se connecter
+    </button>
+
+    <button
+        class="btn btn-vert"
+        onclick="configurerMotDePasseWrapper()"
+        style="margin-top: 10px;"
+    >
+        Configurer le mot de passe
+    </button>
+
+    <div id="messageErreur" style="color: red; margin-top: 10px; font-weight: bold;"></div>
+
+    <p id="messageErreur"
+       class="erreur">
+    </p>
+
+</div>
+
+
+<!-- ============================================================
+     ZONE PDG
+============================================================ -->
+
+<main id="zonePDG"
+      class="conteneur cache">
+
+
+    <!-- ========================================================
+         TABLEAU DE BORD
+    ========================================================= -->
+
+    <section class="carte no-print">
+
+        <h2>Tableau de bord du PDG</h2>
+
+        <label for="anneeAcademique">
+            Année académique
+        </label>
+
+        <select
+            id="anneeAcademique"
+            onchange="chargerTableauDeBord()">
+        </select>
+
+        <button
+            class="btn btn-orange"
+            onclick="deconnecterPDG()">
+            Se déconnecter
+        </button>
+
+        <button
+            class="btn btn-bleu"
+            onclick="window.print()">
+            Imprimer le rapport
+        </button>
+
+        <button
+            class="btn btn-violet"
+            onclick="afficherGestionPersonnel()">
+            Gérer le personnel
+        </button>
+
+        <button
+            class="btn btn-orange"
+            onclick="afficherSecuriteVault()">
+            Sécurité du coffre-fort
+        </button>
+
+    </section>
+
+    <!-- ========================================================
+         GESTION DU PERSONNEL
+    ========================================================= -->
+
+    <section class="carte no-print" id="sectionGestionPersonnel" style="display: none;">
+
+        <h2>Gestion des comptes du personnel</h2>
+
+        <div class="formulaire">
+            <div>
+                <label for="adminNom">Nom et prénom</label>
+                <input type="text" id="adminNom">
+            </div>
+
+            <div>
+                <label for="adminFonction">Fonction</label>
+                <select id="adminFonction">
+                    <option value="Directeur">Directeur</option>
+                    <option value="Enseignant">Enseignant</option>
+                    <option value="Secrétaire">Secrétaire</option>
+                    <option value="Comptable">Comptable</option>
+                    <option value="Autre">Autre</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="adminClasse">Classe (optionnel)</label>
+                <input type="text" id="adminClasse" placeholder="Ex: 1ère A.F.">
+            </div>
+
+            <div>
+                <label for="adminIdentifiant">Identifiant</label>
+                <input type="text" id="adminIdentifiant">
+            </div>
+
+            <div>
+                <label for="adminMotDePasse">Mot de passe</label>
+                <input type="password" id="adminMotDePasse">
+            </div>
+
+            <div>
+                <button class="btn btn-vert" onclick="ajouterPersonnelAdminWrapper()">
+                    Ajouter
+                </button>
+                <button class="btn btn-rouge" onclick="masquerGestionPersonnel()">
+                    Fermer
+                </button>
+            </div>
+        </div>
+
+        <div id="messageAdmin" class="message"></div>
+
+        <h3>Liste du personnel</h3>
+        <div class="tableau-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nom</th>
+                        <th>Fonction</th>
+                        <th>Identifiant</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableauPersonnelAdmin"></tbody>
+            </table>
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         RÉSUMÉ FINANCIER
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>Résumé financier</h2>
+
+        <div class="statistiques">
+
+            <div class="statistique bleu">
+
+                <h3>Total prévu</h3>
+
+                <p id="totalPrevu">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+
+            <div class="statistique vert">
+
+                <h3>Total reçu</h3>
+
+                <p id="totalRecu">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+
+            <div class="statistique orange">
+
+                <h3>Total salaires</h3>
+
+                <p id="totalSalaires">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+
+            <div class="statistique rouge">
+
+                <h3>Total dépenses</h3>
+
+                <p id="totalDepenses">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+
+            <div class="statistique violet">
+
+                <h3>Solde annuel</h3>
+
+                <p id="soldeAnnuel">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         PAIE DU PERSONNEL
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>Paie du personnel</h2>
+
+        <p class="petit-texte">
+            Les membres du personnel affichés ici sont récupérés
+            automatiquement depuis la page <strong>Personnel</strong>.
+            Les informations de salaire sont enregistrées séparément
+            pour chaque année académique et chaque mois.
+        </p>
+
+
+        <div class="paie-controles no-print">
+
+            <div class="champ">
+
+                <label for="moisPaie">
+                    Mois de paie
+                </label>
+
+                <select
+                    id="moisPaie"
+                    onchange="afficherPaie()">
+
+                    <option value="01">
+                        Janvier
+                    </option>
+
+                    <option value="02">
+                        Février
+                    </option>
+
+                    <option value="03">
+                        Mars
+                    </option>
+
+                    <option value="04">
+                        Avril
+                    </option>
+
+                    <option value="05">
+                        Mai
+                    </option>
+
+                    <option value="06">
+                        Juin
+                    </option>
+
+                    <option value="07">
+                        Juillet
+                    </option>
+
+                    <option value="08">
+                        Août
+                    </option>
+
+                    <option value="09">
+                        Septembre
+                    </option>
+
+                    <option value="10">
+                        Octobre
+                    </option>
+
+                    <option value="11">
+                        Novembre
+                    </option>
+
+                    <option value="12">
+                        Décembre
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+
+        <div class="info-paie">
+
+            <strong>
+                Année académique :
+            </strong>
+
+            <span id="anneePaieAffichee">
+                2026-2027
+            </span>
+
+            <br>
+
+            <strong>
+                Mois :
+            </strong>
+
+            <span id="moisPaieAffiche">
+                —
+            </span>
+
+        </div>
+
+
+        <div class="tableau-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            #
+                        </th>
+
+                        <th>
+                            Nom et prénom
+                        </th>
+
+                        <th>
+                            Fonction
+                        </th>
+
+                        <th>
+                            Classe
+                        </th>
+
+                        <th>
+                            Salaire de base
+                        </th>
+
+                        <th>
+                            Primes / Indemnités
+                        </th>
+
+                        <th>
+                            Déductions
+                        </th>
+
+                        <th>
+                            Salaire net
+                        </th>
+
+                        <th>
+                            Statut
+                        </th>
+
+                        <th class="no-print">
+                            Action
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="tableauPaie">
+
+                </tbody>
+
+
+                <tfoot>
+
+                    <tr class="total-paie">
+
+                        <td colspan="7">
+                            TOTAL DES SALAIRES NETS
+                        </td>
+
+                        <td id="totalPaieTableau">
+                            0,00 $ HT
+                        </td>
+
+                        <td colspan="2">
+                        </td>
+
+                    </tr>
+
+                </tfoot>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         AJOUTER UNE DÉPENSE
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>
+            Ajouter une dépense imprévue
+        </h2>
+
+        <label for="descriptionDepense">
+            Description de la dépense
+        </label>
+
+        <input
+            type="text"
+            id="descriptionDepense"
+            placeholder="Exemple : réparation, matériel..."
+        >
+
+
+        <label for="montantDepense">
+            Montant
+        </label>
+
+        <input
+            type="number"
+            id="montantDepense"
+            min="0"
+            step="0.01"
+            placeholder="Montant de la dépense"
+        >
+
+
+        <label for="dateDepense">
+            Date
+        </label>
+
+        <input
+            type="date"
+            id="dateDepense"
+        >
+
+
+        <button
+            class="btn btn-rouge"
+            onclick="ajouterDepense()">
+
+            Enregistrer la dépense
+
+        </button>
+
+
+        <p
+            id="messageDepense"
+            class="message">
+        </p>
+
+    </section>
+
+
+    <!-- ========================================================
+         LISTE DES DÉPENSES
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>
+            Liste des dépenses
+        </h2>
+
+        <div class="tableau-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            #
+                        </th>
+
+                        <th>
+                            Description
+                        </th>
+
+                        <th>
+                            Date
+                        </th>
+
+                        <th>
+                            Montant
+                        </th>
+
+                        <th class="no-print">
+                            Action
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="listeDepenses">
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         SITUATION FINANCIÈRE DES ÉLÈVES
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>
+            Situation financière des élèves
+        </h2>
+
+        <div class="tableau-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Élève
+                        </th>
+
+                        <th>
+                            Classe
+                        </th>
+
+                        <th>
+                            Total à payer
+                        </th>
+
+                        <th>
+                            Total payé
+                        </th>
+
+                        <th>
+                            Reste
+                        </th>
+
+                        <th>
+                            Statut
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="listeSituations">
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         RÉSUMÉ PAR CLASSE
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>
+            Résumé par classe
+        </h2>
+
+        <div class="tableau-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Classe
+                        </th>
+
+                        <th>
+                            Total prévu
+                        </th>
+
+                        <th>
+                            Total reçu
+                        </th>
+
+                        <th>
+                            Reste
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="resumeClasses">
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         SÉCURITÉ DU COFFRE-FORT
+    ========================================================= -->
+
+    <section class="carte no-print" id="sectionSecuriteVault" style="display: none;">
+
+        <h2>Sécurité du coffre-fort</h2>
+
+        <div class="formulaire">
+            <div>
+                <label for="ancienCodeVault">Ancien code du coffre-fort</label>
+                <input type="password" id="ancienCodeVault">
+            </div>
+
+            <div>
+                <label for="nouveauCodeVault">Nouveau code du coffre-fort (12 caractères minimum)</label>
+                <input type="password" id="nouveauCodeVault">
+            </div>
+
+            <div>
+                <label for="confirmationCodeVault">Confirmer le nouveau code</label>
+                <input type="password" id="confirmationCodeVault">
+            </div>
+
+            <div>
+                <button class="btn btn-vert" onclick="changerCodeVault()">
+                    Changer le code du coffre-fort
+                </button>
+                <button class="btn btn-rouge" onclick="annulerChangementCode()">
+                    Annuler
+                </button>
+            </div>
+        </div>
+
+        <div id="messageVault" class="message"></div>
+
+    </section>
+
+
+</main>
+
+
+<script src="secure-storage.js"></script>
+<script src="auth.js"></script>
+<script>
+
+// Guard d'authentification - vérifier la session au chargement
+document.addEventListener("DOMContentLoaded", function() {
+  if (IMCAuth.isAuthenticated()) {
+    const user = IMCAuth.currentUser();
+    if (user && user.role === "PDG") {
+      // Session PDG valide - afficher directement l'interface
+      document.getElementById("zoneConnexion").classList.add("cache");
+      document.getElementById("zonePDG").classList.remove("cache");
+      chargerAnnees();
+      initialiserMoisPaie();
+      chargerTableauDeBord();
+    } else {
+      // Session mais pas PDG - détruire et afficher login
+      IMCAuth.logout();
+    }
+  }
+  // Sinon, afficher le formulaire de connexion par défaut
+});
+
+/* ============================================================
+   CONFIGURATION
+============================================================ */
+
+// Le mot de passe doit être configuré via localStorage
+// Utiliser: localStorage.setItem('imc_pdg_password_hash', 'hash_du_mot_de_passe')
+const MOT_DE_PASSE_PDG = null;
+
+const CLE_ELEVES =
+    "imc_students";
+
+const CLE_FINANCES =
+    "imc_finances";
+
+const CLE_TARIFS =
+    "imc_tarifs";
+
+const CLE_DEPENSES =
+    "imc_depenses";
+
+const CLE_ANNEE_ACTIVE =
+    "imc_active_year";
+
+/*
+   Même clé que personnel.html
+*/
+const CLE_PERSONNEL =
+    "imc_personnel";
+
+/*
+   Nouvelle clé pour les paies.
+*/
+const CLE_PAIES_PERSONNEL =
+    "imc_paies_personnel";
+
+
+const classesDisponibles = [
+
+    "1ère Kind",
+    "2ème Kind",
+    "3ème Kind",
+    "1ère A.F.",
+    "2ème A.F.",
+    "3ème A.F.",
+    "4ème A.F.",
+    "5ème A.F.",
+    "6ème A.F.",
+    "7ème A.F.",
+    "8ème A.F.",
+    "9ème A.F."
+
+];
+
+
+const moisNoms = {
+
+    "01": "Janvier",
+    "02": "Février",
+    "03": "Mars",
+    "04": "Avril",
+    "05": "Mai",
+    "06": "Juin",
+    "07": "Juillet",
+    "08": "Août",
+    "09": "Septembre",
+    "10": "Octobre",
+    "11": "Novembre",
+    "12": "Décembre"
+
+};
+
+
+let anneeConnectee = "";
+
+
+/* ============================================================
+   NAVIGATION
+============================================================ */
+
+function ouvrirPage(page) {
+
+    window.location.href = page;
+
+}
+
+
+/* ============================================================
+   LECTURE LOCALSTORAGE
+============================================================ */
+
+function lireJSON(cle, valeurParDefaut) {
+
+    try {
+
+        const valeur =
+            localStorage.getItem(cle);
+
+        if (!valeur) {
+
+            return valeurParDefaut;
+
+        }
+
+        const donnees =
+            JSON.parse(valeur);
+
+        return donnees ?? valeurParDefaut;
+
+    } catch (erreur) {
+
+        console.error(
+            "Erreur lecture localStorage :",
+            cle,
+            erreur
+        );
+
+        return valeurParDefaut;
+
+    }
+
+}
+
+
+/* ============================================================
+   FORMAT MONTANT
+============================================================ */
+
+function formatMontant(montant) {
+
+    const nombre =
+        Number(montant) || 0;
+
+    return nombre.toLocaleString(
+        "fr-FR",
+        {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }
+    ) + " $ HT";
+
+}
+
+
+/* ============================================================
+   CONVERSION MONTANT
+============================================================ */
+
+function nombreMontant(valeur) {
+
+    if (
+        valeur === null ||
+        valeur === undefined ||
+        valeur === ""
+    ) {
+
+        return 0;
+
+    }
+
+    if (typeof valeur === "number") {
+
+        return Number.isFinite(valeur)
+            ? valeur
+            : 0;
+
+    }
+
+    let texte =
+        String(valeur)
+            .trim()
+            .replace(/\s/g, "")
+            .replace(/\$/g, "")
+            .replace(/HT/gi, "");
+
+
+    if (
+        texte.includes(".") &&
+        texte.includes(",")
+    ) {
+
+        texte =
+            texte
+                .replace(/\./g, "")
+                .replace(",", ".");
+
+    } else if (
+        texte.includes(",")
+    ) {
+
+        texte =
+            texte.replace(",", ".");
+
+    }
+
+
+    const nombre =
+        Number(texte);
+
+    return Number.isFinite(nombre)
+        ? nombre
+        : 0;
+
+}
+
+
+/* ============================================================
+   ANNÉES ACADÉMIQUES
+============================================================ */
+
+function chargerAnnees() {
+
+    const select =
+        document.getElementById(
+            "anneeAcademique"
+        );
+
+    select.innerHTML = "";
+
+    for (
+        let annee = 2026;
+        annee <= 2040;
+        annee++
+    ) {
+
+        const valeur =
+            annee + "-" + (annee + 1);
+
+        const option =
+            document.createElement(
+                "option"
+            );
+
+        option.value =
+            valeur;
+
+        option.textContent =
+            valeur;
+
+        select.appendChild(
+            option
+        );
+
+    }
+
+
+    const anneeActive =
+        localStorage.getItem(
+            CLE_ANNEE_ACTIVE
+        ) || "2026-2027";
+
+
+    select.value =
+        anneeActive;
+
+    anneeConnectee =
+        select.value;
+
+}
+
+
+/* ============================================================
+   CONNEXION PDG
+============================================================ */
+
+// Fonction de hashage sécurisée avec Web Crypto API (SHA-256)
+async function secureHash(str) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+}
+
+// Fonction de hashage simple (fallback pour compatibilité)
+function simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(16);
+}
+
+async function connecterPDGWrapper() {
+    await connecterPDG();
+}
+
+async function connecterPDG() {
+
+    const motDePasse =
+        document.getElementById(
+            "motDePasse"
+        ).value;
+
+    // Vérifier si un mot de passe est configuré
+    const passwordHash = localStorage.getItem('imc_pdg_password_hash');
+    
+    if (!passwordHash) {
+        document.getElementById(
+            "messageErreur"
+        ).textContent =
+            "Aucun mot de passe configuré. Contactez l'administrateur.";
+
+        return;
+    }
+
+    // Vérification sécurisée du hash avec Web Crypto API
+    const inputHash = await secureHash(motDePasse);
+    
+    if (inputHash !== passwordHash) {
+        document.getElementById(
+            "messageErreur"
+        ).textContent =
+            "Mot de passe incorrect.";
+
+        return;
+    }
+
+    // Créer la session d'authentification
+    IMCAuth.login({
+        userId: "PDG",
+        username: "PDG",
+        role: "PDG"
+    });
+
+    document
+        .getElementById(
+            "zoneConnexion"
+        )
+        .classList.add("cache");
+
+
+    document
+        .getElementById(
+            "zonePDG"
+        )
+        .classList.remove("cache");
+
+
+    chargerAnnees();
+
+    initialiserMoisPaie();
+
+    chargerTableauDeBord();
+
+}
+
+
+/* ============================================================
+   DÉCONNEXION
+============================================================ */
+
+function deconnecterPDG() {
+
+    document
+        .getElementById(
+            "zonePDG"
+        )
+        .classList.add("cache");
+
+    document
+        .getElementById(
+            "zoneConnexion"
+        )
+        .classList.remove("cache");
+
+
+    document.getElementById(
+        "motDePasse"
+    ).value = "";
+
+}
+
+/* ============================================================
+   CONFIGURATION DU MOT DE PASSE (Première installation)
+============================================================ */
+
+async function configurerMotDePasseWrapper() {
+    await configurerMotDePasse();
+}
+
+async function configurerMotDePasse() {
+    const nouveauMotDePasse = prompt(
+        "Configuration initiale - Entrez le mot de passe PDG:"
+    );
+    
+    if (!nouveauMotDePasse || nouveauMotDePasse.length < 4) {
+        alert("Le mot de passe doit contenir au moins 4 caractères.");
+        return false;
+    }
+    
+    const confirmation = prompt("Confirmez le mot de passe:");
+    
+    if (nouveauMotDePasse !== confirmation) {
+        alert("Les mots de passe ne correspondent pas.");
+        return false;
+    }
+    
+    // Stocker le hash sécurisé du mot de passe
+    const hash = await secureHash(nouveauMotDePasse);
+    localStorage.setItem('imc_pdg_password_hash', hash);
+    
+    alert("Mot de passe configuré avec succès!");
+    return true;
+}
+
+/* ============================================================
+   VÉRIFICATION DE CONFIGURATION
+============================================================ */
+
+ async function verifierConfiguration() {
+    const passwordHash = localStorage.getItem('imc_pdg_password_hash');
+    
+    if (!passwordHash) {
+        // Premier démarrage - demander de configurer un mot de passe
+        const configurer = confirm(
+            "Aucun mot de passe PDG n'est configuré. Voulez-vous le configurer maintenant?"
+        );
+        
+        if (configurer) {
+            return await configurerMotDePasse();
+        } else {
+            alert("Impossible d'accéder à l'interface PDG sans mot de passe configuré.");
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+/* ============================================================
+   GESTION DU PERSONNEL (Admin)
+============================================================ */
+
+function afficherGestionPersonnel() {
+    document.getElementById('sectionGestionPersonnel').style.display = 'block';
+    chargerListePersonnelAdmin();
+}
+
+function masquerGestionPersonnel() {
+    document.getElementById('sectionGestionPersonnel').style.display = 'none';
+}
+
+function chargerListePersonnelAdmin() {
+    const personnel = JSON.parse(localStorage.getItem(CLE_PERSONNEL) || '[]');
+    const tbody = document.getElementById('tableauPersonnelAdmin');
+    tbody.innerHTML = '';
+
+    personnel.forEach((p, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${p.nom || ''}</td>
+            <td>${p.fonction || ''}</td>
+            <td>${p.identifiant || ''}</td>
+            <td>
+                <button class="btn btn-rouge" onclick="supprimerPersonnelAdmin(${index})">
+                    Supprimer
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+/* ============================================================
+   SÉCURITÉ DU COFFRE-FORT
+============================================================ */
+
+function afficherSecuriteVault() {
+    if (!IMCAuth.hasPermission('vault.update')) {
+        afficherMessageVault('Permission refusée.', 'erreur');
+        return;
+    }
+
+    document.getElementById('sectionSecuriteVault').style.display = 'block';
+    viderFormulaireVault();
+}
+
+function annulerChangementCode() {
+    document.getElementById('sectionSecuriteVault').style.display = 'none';
+    viderFormulaireVault();
+}
+
+function viderFormulaireVault() {
+    document.getElementById('ancienCodeVault').value = '';
+    document.getElementById('nouveauCodeVault').value = '';
+    document.getElementById('confirmationCodeVault').value = '';
+    afficherMessageVault('', '');
+}
+
+function afficherMessageVault(message, type) {
+    const messageDiv = document.getElementById('messageVault');
+    if (message) {
+        messageDiv.textContent = message;
+        messageDiv.className = 'message ' + type;
+        messageDiv.style.display = 'block';
+    } else {
+        messageDiv.style.display = 'none';
+    }
+}
+
+async function changerCodeVault() {
+    const ancienCode = document.getElementById('ancienCodeVault').value;
+    const nouveauCode = document.getElementById('nouveauCodeVault').value;
+    const confirmation = document.getElementById('confirmationCodeVault').value;
+
+    try {
+        await IMCSecureStorage.changePassword(ancienCode, nouveauCode, confirmation);
+        afficherMessageVault('Le code du coffre-fort a été modifié avec succès. Le coffre-fort sera verrouillé.', 'ok');
+        
+        setTimeout(function() {
+            IMCSecureStorage.lock();
+        }, 2000);
+        
+    } catch (error) {
+        afficherMessageVault(error.message || 'Impossible de modifier le code du coffre-fort.', 'erreur');
+    }
+}
+
+async function ajouterPersonnelAdminWrapper() {
+    await ajouterPersonnelAdmin();
+}
+
+async function ajouterPersonnelAdmin() {
+    const nom = document.getElementById('adminNom').value.trim();
+    const fonction = document.getElementById('adminFonction').value;
+    const classe = document.getElementById('adminClasse').value.trim();
+    const identifiant = document.getElementById('adminIdentifiant').value.trim();
+    const motDePasse = document.getElementById('adminMotDePasse').value;
+
+    if (!nom || !fonction || !identifiant || !motDePasse) {
+        afficherMessageAdmin('Veuillez remplir tous les champs obligatoires.', 'erreur');
+        return;
+    }
+
+    let personnel = JSON.parse(localStorage.getItem(CLE_PERSONNEL) || '[]');
+
+    // Vérifier si l'identifiant existe déjà
+    if (personnel.some(p => String(p.identifiant || '') === identifiant)) {
+        afficherMessageAdmin('Cet identifiant existe déjà.', 'erreur');
+        return;
+    }
+
+    personnel.push({
+        id: Date.now(),
+        nom: nom,
+        fonction: fonction,
+        classe: classe,
+        identifiant: identifiant,
+        motDePasseHash: await secureHash(motDePasse)
+    });
+
+    localStorage.setItem(CLE_PERSONNEL, JSON.stringify(personnel));
+
+    // Vider le formulaire
+    document.getElementById('adminNom').value = '';
+    document.getElementById('adminClasse').value = '';
+    document.getElementById('adminIdentifiant').value = '';
+    document.getElementById('adminMotDePasse').value = '';
+
+    afficherMessageAdmin('Personnel ajouté avec succès.', 'succes');
+    chargerListePersonnelAdmin();
+}
+
+function supprimerPersonnelAdmin(index) {
+    if (!IMCAuth.requirePermission("personnel.delete")) {
+        afficherMessageAdmin('Permission refusée.', 'erreur');
+        return;
+    }
+
+    if (!confirm('Êtes-vous sûr de vouloir supprimer ce personnel?')) {
+        return;
+    }
+
+    let personnel = JSON.parse(localStorage.getItem(CLE_PERSONNEL) || '[]');
+    personnel.splice(index, 1);
+    localStorage.setItem(CLE_PERSONNEL, JSON.stringify(personnel));
+
+    afficherMessageAdmin('Personnel supprimé avec succès.', 'succes');
+    chargerListePersonnelAdmin();
+}
+
+function afficherMessageAdmin(texte, type) {
+    const message = document.getElementById('messageAdmin');
+    message.textContent = texte;
+    message.className = 'message ' + type;
+    message.style.display = 'block';
+
+    setTimeout(() => {
+        message.style.display = 'none';
+    }, 3000);
+}
+
+function deconnecterPDG() {
+
+    // Détruire la session d'authentification
+    IMCAuth.logout();
+
+    document
+        .getElementById(
+            "zonePDG"
+        )
+        .classList.add("cache");
+
+    document
+        .getElementById(
+            "zoneConnexion"
+        )
+        .classList.remove("cache");
+
+
+    document.getElementById(
+        "motDePasse"
+    ).value = "";
+
+}
+
+
+/* ============================================================
+   TARIF PAR CLASSE
+============================================================ */
+
+function obtenirTarifClasse(
+    classe,
+    annee
+) {
+
+    const tarifs =
+        lireJSON(
+            CLE_TARIFS,
+            {}
+        );
+
+
+    const cle =
+        annee + "|" + classe;
+
+
+    const tarif =
+        tarifs[cle];
+
+
+    if (
+        !tarif ||
+        typeof tarif !== "object"
+    ) {
+
+        return 0;
+
+    }
+
+
+    if (
+        tarif.total !== undefined
+    ) {
+
+        return nombreMontant(
+            tarif.total
+        );
+
+    }
+
+
+    return (
+        nombreMontant(
+            tarif.montant1
+        ) +
+
+        nombreMontant(
+            tarif.montant2
+        ) +
+
+        nombreMontant(
+            tarif.montant3
+        )
+    );
+
+}
+
+
+/* ============================================================
+   FINANCE D'UN ÉLÈVE
+============================================================ */
+
+function obtenirFinanceEleve(
+    idEleve,
+    annee
+) {
+
+    const finances =
+        lireJSON(
+            CLE_FINANCES,
+            {}
+        );
+
+
+    const cle =
+        annee +
+        "|" +
+        String(idEleve);
+
+
+    const finance =
+        finances[cle];
+
+
+    if (
+        finance &&
+        typeof finance === "object"
+    ) {
+
+        if (
+            !Array.isArray(
+                finance.versements
+            )
+        ) {
+
+            finance.versements = [];
+
+        }
+
+        return finance;
+
+    }
+
+
+    return {
+
+        studentId:
+            idEleve,
+
+        annee:
+            annee,
+
+        tarifNormal:
+            0,
+
+        reduction:
+            0,
+
+        motifReduction:
+            "",
+
+        versements:
+            []
+
+    };
+
+}
+
+
+/* ============================================================
+   CALCUL FINANCIER
+============================================================ */
+
+function calculerFinanceEleve(
+    eleve,
+    annee
+) {
+
+    const finance =
+        obtenirFinanceEleve(
+            eleve.id,
+            annee
+        );
+
+
+    let tarifNormal =
+        nombreMontant(
+            finance.tarifNormal
+        );
+
+
+    if (
+        tarifNormal <= 0
+    ) {
+
+        tarifNormal =
+            obtenirTarifClasse(
+                eleve.classe,
+                annee
+            );
+
+    }
+
+
+    const reduction =
+        Math.min(
+            nombreMontant(
+                finance.reduction
+            ),
+            tarifNormal
+        );
+
+
+    const montantAPayer =
+        Math.max(
+            0,
+            tarifNormal -
+            reduction
+        );
+
+
+    let totalPaye = 0;
+
+
+    if (
+        Array.isArray(
+            finance.versements
+        )
+    ) {
+
+        finance.versements.forEach(
+            versement => {
+
+                totalPaye +=
+                    nombreMontant(
+                        versement.montant
+                    );
+
+            }
+        );
+
+    }
+
+
+    const reste =
+        Math.max(
+            0,
+            montantAPayer -
+            totalPaye
+        );
+
+
+    return {
+
+        finance:
+            finance,
+
+        tarifNormal:
+            tarifNormal,
+
+        reduction:
+            reduction,
+
+        montantAPayer:
+            montantAPayer,
+
+        totalPaye:
+            totalPaye,
+
+        reste:
+            reste
+
+    };
+
+}
+
+
+/* ============================================================
+   PERSONNEL
+============================================================ */
+
+function obtenirPersonnel() {
+
+    const personnel =
+        lireJSON(
+            CLE_PERSONNEL,
+            []
+        );
+
+
+    if (
+        !Array.isArray(personnel)
+    ) {
+
+        return [];
+
+    }
+
+
+    return personnel;
+
+}
+
+
+/* ============================================================
+   PAIES
+============================================================ */
+
+function obtenirPaies() {
+
+    const paies =
+        lireJSON(
+            CLE_PAIES_PERSONNEL,
+            {}
+        );
+
+
+    if (
+        !paies ||
+        typeof paies !== "object" ||
+        Array.isArray(paies)
+    ) {
+
+        return {};
+
+    }
+
+
+    return paies;
+
+}
+
+
+/* ============================================================
+   CLÉ D'UNE PAIE
+============================================================ */
+
+function clePaie(
+    annee,
+    idPersonnel,
+    mois
+) {
+
+    return (
+        annee +
+        "|" +
+        String(idPersonnel) +
+        "|" +
+        mois
+    );
+
+}
+
+
+/* ============================================================
+   MOIS ACTUEL
+============================================================ */
+
+function moisActuel() {
+
+    return String(
+        new Date().getMonth() + 1
+    ).padStart(2, "0");
+
+}
+
+
+/* ============================================================
+   INITIALISER LE MOIS
+============================================================ */
+
+function initialiserMoisPaie() {
+
+    const select =
+        document.getElementById(
+            "moisPaie"
+        );
+
+
+    if (!select) {
+
+        return;
+
+    }
+
+
+    select.value =
+        moisActuel();
+
+
+    afficherNomMoisPaie();
+
+}
+
+
+/* ============================================================
+   NOM DU MOIS
+============================================================ */
+
+function obtenirMoisSelectionne() {
+
+    const select =
+        document.getElementById(
+            "moisPaie"
+        );
+
+
+    if (!select) {
+
+        return moisActuel();
+
+    }
+
+
+    return select.value;
+
+}
+
+
+/* ============================================================
+   AFFICHER MOIS
+============================================================ */
+
+function afficherNomMoisPaie() {
+
+    const mois =
+        obtenirMoisSelectionne();
+
+
+    const affichage =
+        document.getElementById(
+            "moisPaieAffiche"
+        );
+
+
+    if (affichage) {
+
+        affichage.textContent =
+            moisNoms[mois] ||
+            mois;
+
+    }
+
+
+    const annee =
+        document.getElementById(
+            "anneePaieAffichee"
+        );
+
+
+    if (annee) {
+
+        annee.textContent =
+            anneeConnectee;
+
+    }
+
+}
+
+
+/* ============================================================
+   CALCUL SALAIRE NET
+============================================================ */
+
+function calculerSalaireNet(
+    paie
+) {
+
+    const base =
+        nombreMontant(
+            paie.base
+        );
+
+
+    const primes =
+        nombreMontant(
+            paie.primes
+        );
+
+
+    const deductions =
+        nombreMontant(
+            paie.deductions
+        );
+
+
+    return Math.max(
+        0,
+        base +
+        primes -
+        deductions
+    );
+
+}
+
+
+/* ============================================================
+   AFFICHER PAIE DU PERSONNEL
+============================================================ */
+
+function afficherPaie() {
+
+    afficherNomMoisPaie();
+
+
+    const tbody =
+        document.getElementById(
+            "tableauPaie"
+        );
+
+
+    if (!tbody) {
+
+        return;
+
+    }
+
+
+    tbody.innerHTML = "";
+
+
+    const personnel =
+        obtenirPersonnel();
+
+
+    const paies =
+        obtenirPaies();
+
+
+    const mois =
+        obtenirMoisSelectionne();
+
+
+    let total =
+        0;
+
+
+    if (
+        personnel.length === 0
+    ) {
+
+        tbody.innerHTML =
+            `
+            <tr>
+                <td
+                    colspan="10"
+                    class="aucun-personnel">
+                    Aucun personnel enregistré dans personnel.html.
+                </td>
+            </tr>
+            `;
+
+
+        document.getElementById(
+            "totalPaieTableau"
+        ).textContent =
+            formatMontant(0);
+
+
+        return;
+
+    }
+
+
+    personnel.forEach(
+        (personne, index) => {
+
+            const idPersonnel =
+                personne.id ||
+                personne.identifiant ||
+                index;
+
+
+            const cle =
+                clePaie(
+                    anneeConnectee,
+                    idPersonnel,
+                    mois
+                );
+
+
+            const paie =
+                paies[cle] || {
+
+                    base:
+                        nombreMontant(
+                            personne.salaire
+                        ) ||
+                        nombreMontant(
+                            personne.salaireMensuel
+                        ) ||
+                        0,
+
+                    primes:
+                        0,
+
+                    deductions:
+                        0,
+
+                    statut:
+                        "Non payé"
+
+                };
+
+
+            const net =
+                calculerSalaireNet(
+                    paie
+                );
+
+
+            total +=
+                net;
+
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.innerHTML =
+                `
+
+                <td>
+                    ${index + 1}
+                </td>
+
+
+                <td>
+                    ${echapperHTML(
+                        personne.nom ||
+                        ""
+                    )}
+                </td>
+
+
+                <td>
+                    ${echapperHTML(
+                        personne.fonction ||
+                        ""
+                    )}
+                </td>
+
+
+                <td>
+                    ${echapperHTML(
+                        personne.classe ||
+                        ""
+                    )}
+                </td>
+
+
+                <td>
+
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        class="paie-input"
+                        id="base_${idPersonnel}"
+                        value="${nombreMontant(
+                            paie.base
+                        )}"
+                    >
+
+                </td>
+
+
+                <td>
+
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        class="paie-input"
+                        id="prime_${idPersonnel}"
+                        value="${nombreMontant(
+                            paie.primes
+                        )}"
+                    >
+
+                </td>
+
+
+                <td>
+
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        class="paie-input"
+                        id="deduction_${idPersonnel}"
+                        value="${nombreMontant(
+                            paie.deductions
+                        )}"
+                    >
+
+                </td>
+
+
+                <td
+                    class="net-paie"
+                    id="net_${idPersonnel}">
+
+                    ${formatMontant(
+                        net
+                    )}
+
+                </td>
+
+
+                <td>
+
+                    <select
+                        class="paie-select"
+                        id="statut_${idPersonnel}">
+
+                        <option
+                            value="Non payé"
+                            ${
+                                paie.statut ===
+                                "Non payé"
+                                    ? "selected"
+                                    : ""
+                            }>
+                            Non payé
+                        </option>
+
+                        <option
+                            value="Partiel"
+                            ${
+                                paie.statut ===
+                                "Partiel"
+                                    ? "selected"
+                                    : ""
+                            }>
+                            Partiel
+                        </option>
+
+                        <option
+                            value="Payé"
+                            ${
+                                paie.statut ===
+                                "Payé"
+                                    ? "selected"
+                                    : ""
+                            }>
+                            Payé
+                        </option>
+
+                    </select>
+
+                </td>
+
+
+                <td class="no-print">
+
+                    <button
+                        type="button"
+                        class="btn btn-vert"
+                        onclick="enregistrerPaie('${String(
+                            idPersonnel
+                        ).replace(/'/g, "\\'")}')">
+
+                        Enregistrer
+
+                    </button>
+
+                </td>
+
+                `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+
+    document.getElementById(
+        "totalPaieTableau"
+    ).textContent =
+        formatMontant(
+            total
+        );
+
+}
+
+
+/* ============================================================
+   ENREGISTRER UNE PAIE
+============================================================ */
+
+function enregistrerPaie(
+    idPersonnel
+) {
+
+    if (!IMCAuth.requirePermission("paies.create")) {
+        alert("Permission refusée.");
+        return;
+    }
+
+    const mois =
+        obtenirMoisSelectionne();
+
+
+    const id =
+        String(idPersonnel);
+
+
+    const baseElement =
+        document.getElementById(
+            "base_" + id
+        );
+
+
+    const primeElement =
+        document.getElementById(
+            "prime_" + id
+        );
+
+
+    const deductionElement =
+        document.getElementById(
+            "deduction_" + id
+        );
+
+
+    const statutElement =
+        document.getElementById(
+            "statut_" + id
+        );
+
+
+    if (
+        !baseElement ||
+        !primeElement ||
+        !deductionElement ||
+        !statutElement
+    ) {
+
+        return;
+
+    }
+
+
+    const base =
+        nombreMontant(
+            baseElement.value
+        );
+
+
+    const primes =
+        nombreMontant(
+            primeElement.value
+        );
+
+
+    const deductions =
+        nombreMontant(
+            deductionElement.value
+        );
+
+
+    const statut =
+        statutElement.value;
+
+
+    const paies =
+        obtenirPaies();
+
+
+    const cle =
+        clePaie(
+            anneeConnectee,
+            idPersonnel,
+            mois
+        );
+
+
+    paies[cle] = {
+
+        personnelId:
+            idPersonnel,
+
+        annee:
+            anneeConnectee,
+
+        mois:
+            mois,
+
+        base:
+            base,
+
+        primes:
+            primes,
+
+        deductions:
+            deductions,
+
+        net:
+            Math.max(
+                0,
+                base +
+                primes -
+                deductions
+            ),
+
+        statut:
+            statut,
+
+        dateEnregistrement:
+            new Date().toISOString()
+
+    };
+
+
+    localStorage.setItem(
+        CLE_PAIES_PERSONNEL,
+        JSON.stringify(
+            paies
+        )
+    );
+
+
+    afficherPaie();
+
+
+    chargerTableauDeBord();
+
+
+    const bouton =
+        event &&
+        event.currentTarget;
+
+
+    if (bouton) {
+
+        const ancien =
+            bouton.textContent;
+
+        bouton.textContent =
+            "✓ Enregistré";
+
+        setTimeout(
+            function() {
+
+                bouton.textContent =
+                    ancien;
+
+            },
+            1500
+        );
+
+    }
+
+}
+
+
+/* ============================================================
+   TOTAL DES SALAIRES POUR L'ANNÉE
+============================================================ */
+
+function totalSalairesAnnee() {
+
+    const paies =
+        obtenirPaies();
+
+
+    let total =
+        0;
+
+
+    Object.keys(
+        paies
+    ).forEach(
+        cle => {
+
+            if (
+                cle.startsWith(
+                    anneeConnectee +
+                    "|"
+                )
+            ) {
+
+                total +=
+                    calculerSalaireNet(
+                        paies[cle]
+                    );
+
+            }
+
+        }
+    );
+
+
+    return total;
+
+}
+
+
+/* ============================================================
+   TABLEAU DE BORD
+============================================================ */
+
+function chargerTableauDeBord() {
+
+    const select =
+        document.getElementById(
+            "anneeAcademique"
+        );
+
+
+    if (!select) {
+
+        return;
+
+    }
+
+
+    anneeConnectee =
+        select.value;
+
+
+    localStorage.setItem(
+        CLE_ANNEE_ACTIVE,
+        anneeConnectee
+    );
+
+
+    const eleves =
+        lireJSON(
+            CLE_ELEVES,
+            []
+        );
+
+
+    const depenses =
+        lireJSON(
+            CLE_DEPENSES,
+            {}
+        );
+
+
+    let totalPrevu =
+        0;
+
+
+    let totalRecu =
+        0;
+
+
+    let totalDepenses =
+        0;
+
+
+    const depensesAnnee =
+        Array.isArray(
+            depenses[
+                anneeConnectee
+            ]
+        )
+            ? depenses[
+                anneeConnectee
+            ]
+            : [];
+
+
+    depensesAnnee.forEach(
+        depense => {
+
+            totalDepenses +=
+                nombreMontant(
+                    depense.montant
+                );
+
+        }
+    );
+
+
+    const elevesAnnee =
+        eleves.filter(
+            eleve => {
+
+                return (
+                    !eleve.annee ||
+                    String(
+                        eleve.annee
+                    ) ===
+                    String(
+                        anneeConnectee
+                    )
+                );
+
+            }
+        );
+
+
+    elevesAnnee.forEach(
+        eleve => {
+
+            const finance =
+                calculerFinanceEleve(
+                    eleve,
+                    anneeConnectee
+                );
+
+
+            totalPrevu +=
+                finance.montantAPayer;
+
+
+            totalRecu +=
+                finance.totalPaye;
+
+        }
+    );
+
+
+    const totalSalaires =
+        totalSalairesAnnee();
+
+
+    const soldeAnnuel =
+        totalRecu -
+        totalSalaires -
+        totalDepenses;
+
+
+    document.getElementById(
+        "totalPrevu"
+    ).textContent =
+        formatMontant(
+            totalPrevu
+        );
+
+
+    document.getElementById(
+        "totalRecu"
+    ).textContent =
+        formatMontant(
+            totalRecu
+        );
+
+
+    document.getElementById(
+        "totalSalaires"
+    ).textContent =
+        formatMontant(
+            totalSalaires
+        );
+
+
+    document.getElementById(
+        "totalDepenses"
+    ).textContent =
+        formatMontant(
+            totalDepenses
+        );
+
+
+    const elementSolde =
+        document.getElementById(
+            "soldeAnnuel"
+        );
+
+
+    elementSolde.textContent =
+        formatMontant(
+            soldeAnnuel
+        );
+
+
+    elementSolde.className =
+        soldeAnnuel >= 0
+            ? "solde-positif"
+            : "solde-negatif";
+
+
+    afficherPaie();
+
+
+    afficherDepenses(
+        depensesAnnee
+    );
+
+
+    afficherSituations(
+        eleves,
+        anneeConnectee
+    );
+
+
+    afficherResumeClasses(
+        eleves,
+        anneeConnectee
+    );
+
+}
+
+
+/* ============================================================
+   DÉPENSES
+============================================================ */
+
+function ajouterDepense() {
+
+    if (!IMCAuth.requirePermission("depenses.create")) {
+        document.getElementById("messageDepense").textContent = "Permission refusée.";
+        return;
+    }
+
+    const description =
+        document
+            .getElementById(
+                "descriptionDepense"
+            )
+            .value
+            .trim();
+
+
+    const montant =
+        nombreMontant(
+            document.getElementById(
+                "montantDepense"
+            ).value
+        );
+
+
+    const date =
+        document.getElementById(
+            "dateDepense"
+        ).value;
+
+
+    if (
+        !description ||
+        montant <= 0 ||
+        !date
+    ) {
+
+        document.getElementById(
+            "messageDepense"
+        ).textContent =
+            "Veuillez remplir correctement tous les champs.";
+
+        return;
+
+    }
+
+
+    const depenses =
+        lireJSON(
+            CLE_DEPENSES,
+            {}
+        );
+
+
+    if (
+        !Array.isArray(
+            depenses[
+                anneeConnectee
+            ]
+        )
+    ) {
+
+        depenses[
+            anneeConnectee
+        ] = [];
+
+    }
+
+
+    depenses[
+        anneeConnectee
+    ].push({
+
+        id:
+            Date.now(),
+
+        description:
+            description,
+
+        montant:
+            montant,
+
+        date:
+            date
+
+    });
+
+
+    localStorage.setItem(
+        CLE_DEPENSES,
+        JSON.stringify(
+            depenses
+        )
+    );
+
+
+    document.getElementById(
+        "descriptionDepense"
+    ).value = "";
+
+
+    document.getElementById(
+        "montantDepense"
+    ).value = "";
+
+
+    document.getElementById(
+        "dateDepense"
+    ).value = "";
+
+
+    document.getElementById(
+        "messageDepense"
+    ).textContent =
+        "Dépense enregistrée avec succès.";
+
+
+    chargerTableauDeBord();
+
+}
+
+
+/* ============================================================
+   AFFICHER DÉPENSES
+============================================================ */
+
+function afficherDepenses(
+    depenses
+) {
+
+    const tbody =
+        document.getElementById(
+            "listeDepenses"
+        );
+
+
+    tbody.innerHTML = "";
+
+
+    if (
+        !Array.isArray(
+            depenses
+        ) ||
+        depenses.length === 0
+    ) {
+
+        tbody.innerHTML =
+            `
+            <tr>
+                <td colspan="5">
+                    Aucune dépense enregistrée.
+                </td>
+            </tr>
+            `;
+
+        return;
+
+    }
+
+
+    depenses.forEach(
+        (depense, index) => {
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.innerHTML =
+                `
+
+                <td>
+                    ${index + 1}
+                </td>
+
+                <td>
+                    ${echapperHTML(
+                        depense.description
+                    )}
+                </td>
+
+                <td>
+                    ${depense.date || ""}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        depense.montant
+                    )}
+                </td>
+
+                <td class="no-print">
+
+                    <button
+                        class="btn btn-rouge"
+                        onclick="supprimerDepense(${depense.id})">
+
+                        Supprimer
+
+                    </button>
+
+                </td>
+
+                `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   SUPPRIMER DÉPENSE
+============================================================ */
+
+function supprimerDepense(
+    id
+) {
+
+    if (!IMCAuth.requirePermission("depenses.delete")) {
+        alert("Permission refusée.");
+        return;
+    }
+
+    if (
+        !confirm(
+            "Voulez-vous supprimer cette dépense ?"
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    const depenses =
+        lireJSON(
+            CLE_DEPENSES,
+            {}
+        );
+
+
+    depenses[
+        anneeConnectee
+    ] =
+        (
+            depenses[
+                anneeConnectee
+            ] ||
+            []
+        ).filter(
+            depense =>
+                depense.id !== id
+        );
+
+
+    localStorage.setItem(
+        CLE_DEPENSES,
+        JSON.stringify(
+            depenses
+        )
+    );
+
+
+    chargerTableauDeBord();
+
+}
+
+
+/* ============================================================
+   SITUATION FINANCIÈRE DES ÉLÈVES
+============================================================ */
+
+function afficherSituations(
+    eleves,
+    annee
+) {
+
+    const tbody =
+        document.getElementById(
+            "listeSituations"
+        );
+
+
+    tbody.innerHTML = "";
+
+
+    const elevesAnnee =
+        eleves.filter(
+            eleve => {
+
+                return (
+                    !eleve.annee ||
+                    String(
+                        eleve.annee
+                    ) ===
+                    String(
+                        annee
+                    )
+                );
+
+            }
+        );
+
+
+    if (
+        elevesAnnee.length === 0
+    ) {
+
+        tbody.innerHTML =
+            `
+            <tr>
+                <td colspan="6">
+                    Aucun élève trouvé.
+                </td>
+            </tr>
+            `;
+
+        return;
+
+    }
+
+
+    elevesAnnee.forEach(
+        eleve => {
+
+            const calcul =
+                calculerFinanceEleve(
+                    eleve,
+                    annee
+                );
+
+
+            const nomComplet =
+                (
+                    eleve.nom ||
+                    ""
+                ) +
+                " " +
+                (
+                    eleve.prenom ||
+                    ""
+                );
+
+
+            let statut =
+                "Non payé";
+
+
+            let classeStatut =
+                "statut-non-paye";
+
+
+            if (
+                calcul.montantAPayer > 0 &&
+                calcul.reste === 0
+            ) {
+
+                statut =
+                    "Payé";
+
+                classeStatut =
+                    "statut-paye";
+
+            } else if (
+                calcul.totalPaye > 0
+            ) {
+
+                statut =
+                    "Partiellement payé";
+
+                classeStatut =
+                    "statut-partiel";
+
+            }
+
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.innerHTML =
+                `
+
+                <td>
+                    ${echapperHTML(
+                        nomComplet.trim()
+                    )}
+                </td>
+
+                <td>
+                    ${echapperHTML(
+                        eleve.classe || ""
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        calcul.montantAPayer
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        calcul.totalPaye
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        calcul.reste
+                    )}
+                </td>
+
+                <td
+                    class="${classeStatut}">
+
+                    ${statut}
+
+                </td>
+
+                `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   RÉSUMÉ PAR CLASSE
+============================================================ */
+
+function afficherResumeClasses(
+    eleves,
+    annee
+) {
+
+    const tbody =
+        document.getElementById(
+            "resumeClasses"
+        );
+
+
+    tbody.innerHTML = "";
+
+
+    classesDisponibles.forEach(
+        classe => {
+
+            const elevesClasse =
+                eleves.filter(
+                    eleve => {
+
+                        return (
+                            eleve.classe ===
+                            classe &&
+
+                            (
+                                !eleve.annee ||
+                                String(
+                                    eleve.annee
+                                ) ===
+                                String(
+                                    annee
+                                )
+                            )
+                        );
+
+                    }
+                );
+
+
+            if (
+                elevesClasse.length === 0
+            ) {
+
+                return;
+
+            }
+
+
+            let totalPrevu =
+                0;
+
+
+            let totalRecu =
+                0;
+
+
+            elevesClasse.forEach(
+                eleve => {
+
+                    const calcul =
+                        calculerFinanceEleve(
+                            eleve,
+                            annee
+                        );
+
+
+                    totalPrevu +=
+                        calcul.montantAPayer;
+
+
+                    totalRecu +=
+                        calcul.totalPaye;
+
+                }
+            );
+
+
+            const reste =
+                Math.max(
+                    0,
+                    totalPrevu -
+                    totalRecu
+                );
+
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.innerHTML =
+                `
+
+                <td>
+                    ${echapperHTML(
+                        classe
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        totalPrevu
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        totalRecu
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        reste
+                    )}
+                </td>
+
+                `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+
+    if (
+        tbody.innerHTML === ""
+    ) {
+
+        tbody.innerHTML =
+            `
+            <tr>
+                <td colspan="4">
+                    Aucune donnée disponible.
+                </td>
+            </tr>
+            `;
+
+    }
+
+}
+
+
+/* ============================================================
+   PROTECTION HTML
+============================================================ */
+
+function echapperHTML(
+    texte
+) {
+
+    return String(
+        texte ?? ""
+    )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+}
+
+
+/* ============================================================
+   TOUCHE ENTRÉE POUR LE MOT DE PASSE
+============================================================ */
+
+document
+    .getElementById(
+        "motDePasse"
+    )
+    .addEventListener(
+        "keydown",
+        function(event) {
+
+            if (
+                event.key === "Enter"
+            ) {
+
+                connecterPDG();
+
+            }
+
+        }
+    );
+
+
+/* ============================================================
+   ACTUALISATION AUTOMATIQUE SI personnel.html EST MODIFIÉ
+============================================================ */
+
+window.addEventListener(
+    "storage",
+    function(event) {
+
+        if (
+            event.key ===
+            CLE_PERSONNEL
+        ) {
+
+            afficherPaie();
+
+        }
+
+
+        if (
+            event.key ===
+            CLE_PAIES_PERSONNEL
+        ) {
+
+            chargerTableauDeBord();
+
+        }
+
+
+        if (
+            event.key ===
+            CLE_FINANCES ||
+            event.key ===
+            CLE_TARIFS
+        ) {
+
+            chargerTableauDeBord();
+
+        }
+
+    }
+);
+
+</script>
+
+</body>
+</html>

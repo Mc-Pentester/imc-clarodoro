@@ -1,0 +1,2576 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Vacances - IMC Clarodaro</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f4f6f9;
+    color: #222;
+}
+
+/* =========================
+   EN-TÊTE
+========================= */
+
+header {
+    background: #0b4f8a;
+    color: white;
+    text-align: center;
+    padding: 18px 10px;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 25px;
+}
+
+header p {
+    margin: 7px 0 0;
+    font-size: 16px;
+}
+
+/* =========================
+   MENU
+========================= */
+
+.menu-principal {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    background: white;
+    border-bottom: 1px solid #ddd;
+}
+
+.menu-principal button {
+    border: none;
+    border-radius: 6px;
+    padding: 10px 13px;
+    background: #e8eef5;
+    color: #123;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.menu-principal button:hover {
+    background: #d3dfec;
+}
+
+.menu-principal .actif {
+    background: #0b4f8a;
+    color: white;
+}
+
+/* =========================
+   CONTENEUR
+========================= */
+
+.conteneur {
+    max-width: 1250px;
+    margin: 20px auto;
+    padding: 0 15px;
+}
+
+.carte {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+h2 {
+    color: #0b4f8a;
+    margin-top: 0;
+}
+
+/* =========================
+   ANNÉE
+========================= */
+
+.annee-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.annee-box label {
+    font-weight: bold;
+    font-size: 17px;
+}
+
+select,
+input,
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #bbb;
+    border-radius: 6px;
+    font-size: 15px;
+}
+
+#anneeAcademique {
+    max-width: 220px;
+}
+
+/* =========================
+   FORMULAIRE
+========================= */
+
+.formulaire {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.champ {
+    display: flex;
+    flex-direction: column;
+}
+
+.champ label {
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+.champ.large {
+    grid-column: 1 / -1;
+}
+
+textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+/* =========================
+   BOUTONS
+========================= */
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.btn {
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-ajouter {
+    background: #198754;
+    color: white;
+}
+
+.btn-modifier {
+    background: #ffc107;
+    color: #222;
+}
+
+.btn-supprimer {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-annuler {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-imprimer {
+    background: #0b4f8a;
+    color: white;
+}
+
+/* =========================
+   FILTRE
+========================= */
+
+.filtres {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+/* =========================
+   MESSAGE
+========================= */
+
+#message {
+    display: none;
+    padding: 12px;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    font-weight: bold;
+}
+
+#message.succes {
+    display: block;
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+#message.erreur {
+    display: block;
+    background: #f8d7da;
+    color: #842029;
+}
+
+/* =========================
+   BADGES
+========================= */
+
+.badge {
+    display: inline-block;
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.badge-vacances {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.badge-ferie {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.badge-fete {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.badge-commemoration {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.badge-ecole {
+    background: #dcfce7;
+    color: #166534;
+}
+
+/* =========================
+   TABLEAU
+========================= */
+
+.tableau-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    min-width: 950px;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    border: 1px solid #ccc;
+    padding: 9px;
+    text-align: center;
+}
+
+th {
+    background: #0b4f8a;
+    color: white;
+}
+
+tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.vide {
+    padding: 25px;
+    text-align: center;
+    color: #777;
+}
+
+/* =========================
+   CALENDRIER MENSUEL
+========================= */
+
+.calendrier-mois {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+}
+
+.mois {
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+}
+
+.titre-mois {
+    background: #0b4f8a;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    font-weight: bold;
+}
+
+.jours-semaine {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: #eef2f6;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.jours-semaine div {
+    padding: 6px 2px;
+    text-align: center;
+}
+
+.grille-jours {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+}
+
+.jour {
+    min-height: 65px;
+    border-top: 1px solid #ddd;
+    border-right: 1px solid #ddd;
+    padding: 3px;
+    position: relative;
+    background: white;
+}
+
+.jour.vide {
+    background: #fafafa;
+}
+
+.numero-jour {
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.jour.ferie {
+    background: #fee2e2;
+}
+
+.jour.vacances {
+    background: #dbeafe;
+}
+
+.jour.fete {
+    background: #fef3c7;
+}
+
+.jour.commemoration {
+    background: #ede9fe;
+}
+
+.jour.sans-cours {
+    border: 2px solid #dc2626;
+}
+
+.evenement-mini {
+    display: block;
+    margin-top: 3px;
+    font-size: 8px;
+    line-height: 1.1;
+    border-radius: 3px;
+    padding: 2px;
+    overflow: hidden;
+}
+
+/* =========================
+   LÉGENDE
+========================= */
+
+.legende {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 15px;
+}
+
+.legende-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+}
+
+.carre-legende {
+    width: 18px;
+    height: 18px;
+    border: 1px solid #aaa;
+    border-radius: 3px;
+}
+
+.couleur-vacances {
+    background: #dbeafe;
+}
+
+.couleur-ferie {
+    background: #fee2e2;
+}
+
+.couleur-fete {
+    background: #fef3c7;
+}
+
+.couleur-commemoration {
+    background: #ede9fe;
+}
+
+.couleur-sans-cours {
+    border: 2px solid #dc2626;
+}
+
+/* =========================
+   TABLEAUX RÉCAPITULATIFS
+========================= */
+
+.tableaux-recapitulatifs {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 22px;
+}
+
+.tableau-recap {
+    width: 100%;
+    min-width: 0;
+    border-collapse: collapse;
+    background: white;
+}
+
+.tableau-recap caption {
+    caption-side: top;
+    background: #0b4f8a;
+    color: white;
+    font-weight: bold;
+    text-align: left;
+    padding: 10px;
+    border-radius: 6px 6px 0 0;
+}
+
+.tableau-recap th,
+.tableau-recap td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.tableau-recap th {
+    background: #eef2f6;
+    color: #123;
+    width: 32%;
+}
+
+.tableau-recap td {
+    background: #fff;
+}
+
+.ligne-legende {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 3px 12px 3px 0;
+}
+
+@media print {
+    .tableaux-recapitulatifs {
+        break-inside: avoid;
+    }
+}
+
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 900px) {
+    .calendrier-mois {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 650px) {
+
+    .formulaire,
+    .filtres {
+        grid-template-columns: 1fr;
+    }
+
+    .champ.large {
+        grid-column: auto;
+    }
+
+    .calendrier-mois {
+        grid-template-columns: 1fr;
+    }
+
+    .annee-box {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #anneeAcademique {
+        max-width: none;
+    }
+
+    .menu-principal button {
+        flex: 1 1 45%;
+    }
+}
+
+/* =========================
+   IMPRESSION
+========================= */
+
+@media print {
+
+    body {
+        background: white;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+
+    .conteneur {
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    .carte {
+        box-shadow: none;
+        border: none;
+    }
+
+    header {
+        background: white;
+        color: black;
+    }
+
+    .calendrier-mois {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>CALENDRIER SCOLAIRE</h1>
+    <p>
+        Année académique :
+        <strong id="anneeAffichee">2026-2027</strong>
+    </p>
+</header>
+<header class="entete-ecole">
+
+    <div class="informations-ecole">
+        <h1>Institution Mixte Clarodaro</h1>
+        <p>Clarodaro, la clarté du savoir !</p>
+    </div>
+
+</header>
+
+
+<!-- =========================
+     MENU
+========================= -->
+
+<nav class="menu-principal no-print">
+
+    <button onclick="ouvrirPage('index.html')">
+        Élèves
+    </button>
+
+    <button onclick="ouvrirPage('matieres.html')">
+        Matières
+    </button>
+
+    <button onclick="ouvrirPage('resultats.html')">
+        Résultats
+    </button>
+
+    <button onclick="ouvrirPage('finances.html')">
+        Finances
+    </button>
+
+    <button onclick="ouvrirPage('personnel.html')">
+        Personnel
+    </button>
+
+    <button onclick="ouvrirPage('annees-scolaires.html')">
+        Année scolaire
+    </button>
+
+    <button class="actif">
+        Vacances
+    </button>
+
+    <button onclick="ouvrirPage('pdg.html')">
+        PDG
+    </button>
+
+</nav>
+
+
+<div class="conteneur">
+
+    <div id="message"></div>
+
+
+    <!-- =========================
+         ANNÉE ACADÉMIQUE
+    ========================= -->
+
+    <div class="carte no-print">
+
+        <div class="annee-box">
+
+            <label for="anneeAcademique">
+                Année académique
+            </label>
+
+            <select
+                id="anneeAcademique"
+                onchange="changerAnnee()">
+            </select>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         AJOUTER UN ÉVÉNEMENT
+    ========================= -->
+
+    <div class="carte no-print">
+
+        <h2 id="titreFormulaire">
+            Ajouter une période ou une fête
+        </h2>
+
+        <div class="formulaire">
+
+            <div class="champ">
+
+                <label for="nom">
+                    Nom
+                </label>
+
+                <input
+                    type="text"
+                    id="nom"
+                    placeholder="Ex : Fête du Drapeau">
+
+            </div>
+
+
+            <div class="champ">
+
+                <label for="categorie">
+                    Catégorie
+                </label>
+
+                <select id="categorie">
+
+                    <option value="vacances">
+                        🏖️ Vacances scolaires
+                    </option>
+
+                    <option value="ferie">
+                        🇭🇹 Jour férié
+                    </option>
+
+                    <option value="fete">
+                        🎉 Fête
+                    </option>
+
+                    <option value="commemoration">
+                        🏛️ Commémoration
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="champ">
+
+                <label for="dateDebut">
+                    Date de début
+                </label>
+
+                <input
+                    type="date"
+                    id="dateDebut">
+
+            </div>
+
+
+            <div class="champ">
+
+                <label for="dateFin">
+                    Date de fin
+                </label>
+
+                <input
+                    type="date"
+                    id="dateFin">
+
+            </div>
+
+
+            <div class="champ">
+
+                <label for="cours">
+                    Cours suspendus ?
+                </label>
+
+                <select id="cours">
+
+                    <option value="oui">
+                        Oui
+                    </option>
+
+                    <option value="non">
+                        Non
+                    </option>
+
+                    <option value="confirmer">
+                        À confirmer
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="champ">
+
+                <label for="couleur">
+                    Affichage
+                </label>
+
+                <select id="couleur">
+
+                    <option value="normal">
+                        Normal
+                    </option>
+
+                    <option value="important">
+                        Important
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="champ large">
+
+                <label for="observation">
+                    Observation
+                </label>
+
+                <textarea
+                    id="observation"
+                    placeholder="Ex : Reprise des cours le lundi suivant..."></textarea>
+
+            </div>
+
+        </div>
+
+
+        <div class="actions">
+
+            <button
+                class="btn btn-ajouter"
+                id="btnEnregistrer"
+                onclick="enregistrerEvenement()">
+
+                ➕ Enregistrer
+
+            </button>
+
+
+            <button
+                class="btn btn-annuler"
+                id="btnAnnuler"
+                onclick="annulerModification()"
+                style="display:none;">
+
+                Annuler
+
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         FILTRES
+    ========================= -->
+
+    <div class="carte no-print">
+
+        <h2>Rechercher dans le calendrier</h2>
+
+        <div class="filtres">
+
+            <div>
+
+                <label>
+                    Recherche
+                </label>
+
+                <input
+                    type="text"
+                    id="recherche"
+                    placeholder="Rechercher une fête, vacances..."
+                    oninput="afficherListe()">
+
+            </div>
+
+
+            <div>
+
+                <label>
+                    Catégorie
+                </label>
+
+                <select
+                    id="filtreCategorie"
+                    onchange="afficherListe()">
+
+                    <option value="toutes">
+                        Toutes les catégories
+                    </option>
+
+                    <option value="vacances">
+                        Vacances scolaires
+                    </option>
+
+                    <option value="ferie">
+                        Jours fériés
+                    </option>
+
+                    <option value="fete">
+                        Fêtes
+                    </option>
+
+                    <option value="commemoration">
+                        Commémorations
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         LISTE
+    ========================= -->
+
+    <div class="carte">
+
+        <h2>
+            Événements —
+            <span id="titreAnnee">2026-2027</span>
+        </h2>
+
+        <div class="tableau-container">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>#</th>
+                        <th>Événement</th>
+                        <th>Catégorie</th>
+                        <th>Début</th>
+                        <th>Fin</th>
+                        <th>Cours</th>
+                        <th>Observation</th>
+                        <th class="no-print">
+                            Actions
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="tableauEvenements">
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         CALENDRIER MENSUEL
+    ========================= -->
+
+    <div class="carte">
+
+        <h2>
+            Calendrier mensuel —
+            <span id="anneeCalendrier">
+                2026-2027
+            </span>
+        </h2>
+
+
+        <div class="legende">
+
+            <div class="legende-item">
+                <span class="carre-legende couleur-vacances"></span>
+                Vacances
+            </div>
+
+            <div class="legende-item">
+                <span class="carre-legende couleur-ferie"></span>
+                Jour férié
+            </div>
+
+            <div class="legende-item">
+                <span class="carre-legende couleur-fete"></span>
+                Fête
+            </div>
+
+            <div class="legende-item">
+                <span class="carre-legende couleur-commemoration"></span>
+                Commémoration
+            </div>
+
+            <div class="legende-item">
+                <span class="carre-legende couleur-sans-cours"></span>
+                Cours suspendus
+            </div>
+
+        </div>
+
+
+        <div
+            id="calendrierMensuel"
+            class="calendrier-mois">
+        </div>
+
+
+        <!-- =========================
+             TABLEAUX RÉCAPITULATIFS
+        ========================= -->
+
+        <div class="tableaux-recapitulatifs">
+
+            <table class="tableau-recap">
+                <caption>1. Organisation de l'année scolaire</caption>
+                <tbody>
+                    <tr>
+                        <th>Jours d'ouverture / jours d'arrêt</th>
+                        <td>
+                            Jours d'ouverture : selon le calendrier officiel de l'établissement.<br>
+                            Jours d'arrêt : périodes pendant lesquelles les cours sont suspendus.
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Jours de congé</th>
+                        <td>
+                            Vacances scolaires, congés de fin d'année, congés de Carnaval,
+                            congés de Pâques et grandes vacances.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table class="tableau-recap">
+                <caption>2. Évaluations et examens</caption>
+                <tbody>
+                    <tr>
+                        <th>Périodes de contrôle</th>
+                        <td>
+                            1er contrôle : ______________________________<br>
+                            2e contrôle : ______________________________<br>
+                            3e contrôle : ______________________________
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Examens officiels</th>
+                        <td>
+                            Examens officiels : __________________________<br>
+                            Dates à confirmer selon les communications officielles.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table class="tableau-recap">
+                <caption>3. Informations complémentaires</caption>
+                <tbody>
+                    <tr>
+                        <th>Dates importantes</th>
+                        <td>
+                            Ouverture des classes : _______________________<br>
+                            Reprise des cours : __________________________<br>
+                            Fin de l'année scolaire : _____________________
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Légendes</th>
+                        <td>
+                            <span class="ligne-legende">
+                                <span class="carre-legende couleur-vacances"></span>
+                                Vacances
+                            </span>
+                            <span class="ligne-legende">
+                                <span class="carre-legende couleur-ferie"></span>
+                                Jour férié
+                            </span>
+                            <span class="ligne-legende">
+                                <span class="carre-legende couleur-fete"></span>
+                                Fête
+                            </span>
+                            <span class="ligne-legende">
+                                <span class="carre-legende couleur-commemoration"></span>
+                                Commémoration
+                            </span>
+                            <span class="ligne-legende">
+                                <span class="carre-legende couleur-sans-cours"></span>
+                                Cours suspendus
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+
+
+
+        <div class="actions no-print">
+
+            <button
+                class="btn btn-imprimer"
+                onclick="window.print()">
+
+                🖨️ Imprimer le calendrier
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<script src="secure-storage.js"></script>
+<script src="auth.js"></script>
+<script>
+
+// Guard d'authentification
+document.addEventListener("DOMContentLoaded", function() {
+  IMCAuth.requireAuth("personnel.html");
+});
+
+/* =====================================================
+   CONFIGURATION
+===================================================== */
+
+const CLE_VACANCES = "imc_vacances";
+const CLE_ANNEE = "imc_active_year";
+
+let donnees = {};
+let anneeSelectionnee = "2026-2027";
+let indexModification = null;
+
+
+/* =====================================================
+   MOIS
+===================================================== */
+
+const moisNoms = [
+    "Janvier",
+    "Février",
+    "Mars",
+    "Avril",
+    "Mai",
+    "Juin",
+    "Juillet",
+    "Août",
+    "Septembre",
+    "Octobre",
+    "Novembre",
+    "Décembre"
+];
+
+const joursNoms = [
+    "Lun",
+    "Mar",
+    "Mer",
+    "Jeu",
+    "Ven",
+    "Sam",
+    "Dim"
+];
+
+
+/* =====================================================
+   NAVIGATION
+===================================================== */
+
+function ouvrirPage(page) {
+    window.location.href = page;
+}
+
+
+/* =====================================================
+   CHARGEMENT
+===================================================== */
+
+function chargerDonnees() {
+
+    try {
+
+        donnees =
+            JSON.parse(
+                localStorage.getItem(CLE_VACANCES)
+            ) || {};
+
+    } catch (erreur) {
+
+        donnees = {};
+
+    }
+
+
+    const anneeActive =
+        localStorage.getItem(CLE_ANNEE);
+
+    if (anneeActive) {
+
+        anneeSelectionnee =
+            anneeActive;
+
+    }
+
+
+    chargerAnnees();
+
+    initialiserDonnees2026();
+
+    afficherListe();
+
+    afficherCalendrier();
+
+    afficherAnnee();
+
+}
+
+
+/* =====================================================
+   ANNÉES
+===================================================== */
+
+function chargerAnnees() {
+
+    const select =
+        document.getElementById(
+            "anneeAcademique"
+        );
+
+    select.innerHTML = "";
+
+    for (
+        let annee = 2026;
+        annee <= 2040;
+        annee++
+    ) {
+
+        const valeur =
+            annee + "-" + (annee + 1);
+
+        const option =
+            document.createElement("option");
+
+        option.value = valeur;
+
+        option.textContent = valeur;
+
+        if (
+            valeur ===
+            anneeSelectionnee
+        ) {
+
+            option.selected = true;
+
+        }
+
+        select.appendChild(option);
+
+    }
+
+}
+
+
+/* =====================================================
+   CHANGER D'ANNÉE
+===================================================== */
+
+function changerAnnee() {
+
+    anneeSelectionnee =
+        document.getElementById(
+            "anneeAcademique"
+        ).value;
+
+
+    localStorage.setItem(
+        CLE_ANNEE,
+        anneeSelectionnee
+    );
+
+
+    indexModification = null;
+
+    nettoyerFormulaire();
+
+    afficherAnnee();
+
+    afficherListe();
+
+    afficherCalendrier();
+
+}
+
+
+/* =====================================================
+   AFFICHER ANNÉE
+===================================================== */
+
+function afficherAnnee() {
+
+    document.getElementById(
+        "anneeAffichee"
+    ).textContent =
+        anneeSelectionnee;
+
+
+    document.getElementById(
+        "titreAnnee"
+    ).textContent =
+        anneeSelectionnee;
+
+
+    document.getElementById(
+        "anneeCalendrier"
+    ).textContent =
+        anneeSelectionnee;
+
+}
+
+
+/* =====================================================
+   DONNÉES 2026-2027
+===================================================== */
+
+function initialiserDonnees2026() {
+
+    if (
+        donnees["2026-2027"] &&
+        donnees["2026-2027"].length > 0
+    ) {
+
+        return;
+
+    }
+
+
+    donnees["2026-2027"] = [
+
+        /* =========================
+           SEPTEMBRE 2026
+        ========================= */
+
+        {
+            nom: "Ouverture des classes",
+            categorie: "fete",
+            debut: "2026-09-07",
+            fin: "2026-09-07",
+            cours: "non",
+            couleur: "normal",
+            observation:
+                "Rentrée scolaire 2026-2027."
+        },
+
+
+        /* =========================
+           OCTOBRE 2026
+        ========================= */
+
+        {
+            nom: "Anniversaire de la mort de Dessalines",
+            categorie: "commemoration",
+            debut: "2026-10-17",
+            fin: "2026-10-17",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Commémoration nationale."
+        },
+
+
+        /* =========================
+           NOVEMBRE 2026
+        ========================= */
+
+        {
+            nom: "La Toussaint",
+            categorie: "ferie",
+            debut: "2026-11-01",
+            fin: "2026-11-01",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Jour férié."
+        },
+
+        {
+            nom: "Jour des Morts",
+            categorie: "ferie",
+            debut: "2026-11-02",
+            fin: "2026-11-02",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Date importante du calendrier scolaire."
+        },
+
+        {
+            nom: "Bataille de Vertières",
+            categorie: "ferie",
+            debut: "2026-11-18",
+            fin: "2026-11-18",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Commémoration de la Bataille de Vertières."
+        },
+
+
+        /* =========================
+           DÉCEMBRE 2026
+        ========================= */
+
+        {
+            nom: "Vacances de fin d'année",
+            categorie: "vacances",
+            debut: "2026-12-21",
+            fin: "2027-01-03",
+            cours: "oui",
+            couleur: "normal",
+            observation:
+                "Fermeture des classes le 21 décembre 2026. Reprise le 4 janvier 2027."
+        },
+
+        {
+            nom: "Noël",
+            categorie: "ferie",
+            debut: "2026-12-25",
+            fin: "2026-12-25",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Fête de Noël."
+        },
+
+
+        /* =========================
+           JANVIER 2027
+        ========================= */
+
+        {
+            nom: "Jour de l'Indépendance / Jour de l'An",
+            categorie: "ferie",
+            debut: "2027-01-01",
+            fin: "2027-01-01",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "1er janvier."
+        },
+
+        {
+            nom: "Jour des Aïeux",
+            categorie: "ferie",
+            debut: "2027-01-02",
+            fin: "2027-01-02",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "2 janvier."
+        },
+
+        {
+            nom: "Reprise des classes",
+            categorie: "fete",
+            debut: "2027-01-04",
+            fin: "2027-01-04",
+            cours: "non",
+            couleur: "normal",
+            observation:
+                "Reprise des cours après les vacances de fin d'année."
+        },
+
+        {
+            nom: "Épiphanie / Jour des Rois",
+            categorie: "fete",
+            debut: "2027-01-06",
+            fin: "2027-01-06",
+            cours: "non",
+            couleur: "normal",
+            observation:
+                "Fête religieuse."
+        },
+
+
+        /* =========================
+           FÉVRIER 2027
+        ========================= */
+
+        {
+            nom: "Fermeture des classes — Carnaval",
+            categorie: "vacances",
+            debut: "2027-02-05",
+            fin: "2027-02-05",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Fermeture des classes avant le Carnaval."
+        },
+
+        {
+            nom: "Carnaval",
+            categorie: "ferie",
+            debut: "2027-02-08",
+            fin: "2027-02-09",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Lundi Gras et Mardi Gras."
+        },
+
+        {
+            nom: "Saint-Valentin",
+            categorie: "fete",
+            debut: "2027-02-14",
+            fin: "2027-02-14",
+            cours: "non",
+            couleur: "normal",
+            observation:
+                "Fête / observance. Pas automatiquement un jour sans cours."
+        },
+
+
+        /* =========================
+           MARS 2027
+        ========================= */
+
+        {
+            nom: "Jeudi Saint",
+            categorie: "ferie",
+            debut: "2027-03-25",
+            fin: "2027-03-25",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Vacances de Pâques."
+        },
+
+        {
+            nom: "Vendredi Saint",
+            categorie: "ferie",
+            debut: "2027-03-26",
+            fin: "2027-03-26",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Vacances de Pâques."
+        },
+
+        {
+            nom: "Pâques",
+            categorie: "fete",
+            debut: "2027-03-28",
+            fin: "2027-03-28",
+            cours: "non",
+            couleur: "normal",
+            observation:
+                "Fête de Pâques."
+        },
+
+
+        /* =========================
+           MAI 2027
+        ========================= */
+
+        {
+            nom: "Fête du Travail",
+            categorie: "ferie",
+            debut: "2027-05-01",
+            fin: "2027-05-01",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Fête du Travail et des Travailleurs."
+        },
+
+        {
+            nom: "Ascension",
+            categorie: "ferie",
+            debut: "2027-05-06",
+            fin: "2027-05-06",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Fête religieuse."
+        },
+
+        {
+            nom: "Jour des Éducateurs",
+            categorie: "commemoration",
+            debut: "2027-05-17",
+            fin: "2027-05-17",
+            cours: "non",
+            couleur: "important",
+            observation:
+                "Journée indiquée dans le calendrier scolaire du MENFP."
+        },
+
+        {
+            nom: "Fête du Drapeau et de l'Université",
+            categorie: "ferie",
+            debut: "2027-05-18",
+            fin: "2027-05-18",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Fête du Drapeau et de l'Université."
+        },
+
+        {
+            nom: "Fête-Dieu",
+            categorie: "ferie",
+            debut: "2027-05-27",
+            fin: "2027-05-27",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Fête-Dieu."
+        },
+
+        {
+            nom: "Fête des Mères",
+            categorie: "fete",
+            debut: "2027-05-30",
+            fin: "2027-05-30",
+            cours: "non",
+            couleur: "normal",
+            observation:
+                "Fête des Mères. Ce n'est pas automatiquement une fermeture scolaire."
+        },
+
+
+        /* =========================
+           JUIN 2027
+        ========================= */
+
+        {
+            nom: "Fête des Pères",
+            categorie: "fete",
+            debut: "2027-06-20",
+            fin: "2027-06-20",
+            cours: "non",
+            couleur: "normal",
+            observation:
+                "Fête des Pères."
+        },
+
+
+        /* =========================
+           JUILLET 2027
+        ========================= */
+
+        {
+            nom: "Début des grandes vacances",
+            categorie: "vacances",
+            debut: "2027-07-02",
+            fin: "2027-08-31",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Fin de l'année scolaire et début des vacances d'été."
+        },
+
+
+        /* =========================
+           AOÛT 2027
+        ========================= */
+
+        {
+            nom: "Assomption",
+            categorie: "ferie",
+            debut: "2027-08-15",
+            fin: "2027-08-15",
+            cours: "oui",
+            couleur: "important",
+            observation:
+                "Jour férié."
+        }
+
+    ];
+
+
+    sauvegarder();
+
+}
+
+
+/* =====================================================
+   SAUVEGARDE
+===================================================== */
+
+function sauvegarder() {
+
+    localStorage.setItem(
+        CLE_VACANCES,
+        JSON.stringify(donnees)
+    );
+
+}
+
+
+/* =====================================================
+   ENREGISTRER
+===================================================== */
+
+function enregistrerEvenement() {
+
+    // Vérifier la permission appropriée selon l'action
+    if (indexModification === null) {
+        if (!IMCAuth.requirePermission("vacances.create")) {
+            afficherMessage("Permission refusée pour la création.", "erreur");
+            return;
+        }
+    } else {
+        if (!IMCAuth.requirePermission("vacances.update")) {
+            afficherMessage("Permission refusée pour la modification.", "erreur");
+            return;
+        }
+    }
+
+    const nom =
+        document.getElementById("nom")
+        .value.trim();
+
+    const categorie =
+        document.getElementById("categorie")
+        .value;
+
+    const debut =
+        document.getElementById("dateDebut")
+        .value;
+
+    const fin =
+        document.getElementById("dateFin")
+        .value;
+
+    const cours =
+        document.getElementById("cours")
+        .value;
+
+    const couleur =
+        document.getElementById("couleur")
+        .value;
+
+    const observation =
+        document.getElementById("observation")
+        .value.trim();
+
+
+    if (!nom) {
+
+        afficherMessage(
+            "Veuillez saisir le nom de l'événement.",
+            "erreur"
+        );
+
+        return;
+
+    }
+
+
+    if (!debut || !fin) {
+
+        afficherMessage(
+            "Veuillez saisir les dates.",
+            "erreur"
+        );
+
+        return;
+
+    }
+
+
+    if (debut > fin) {
+
+        afficherMessage(
+            "La date de début ne peut pas être après la date de fin.",
+            "erreur"
+        );
+
+        return;
+
+    }
+
+
+    if (!donnees[anneeSelectionnee]) {
+
+        donnees[anneeSelectionnee] = [];
+
+    }
+
+
+    const evenement = {
+
+        nom,
+        categorie,
+        debut,
+        fin,
+        cours,
+        couleur,
+        observation
+
+    };
+
+
+    if (indexModification === null) {
+
+        donnees[anneeSelectionnee]
+            .push(evenement);
+
+        afficherMessage(
+            "Événement enregistré.",
+            "succes"
+        );
+
+    } else {
+
+        donnees[anneeSelectionnee]
+            [indexModification] = evenement;
+
+        afficherMessage(
+            "Événement modifié.",
+            "succes"
+        );
+
+    }
+
+
+    sauvegarder();
+
+    indexModification = null;
+
+    nettoyerFormulaire();
+
+    afficherListe();
+
+    afficherCalendrier();
+
+}
+
+
+/* =====================================================
+   MODIFIER
+===================================================== */
+
+function modifierEvenement(index) {
+
+    const liste =
+        donnees[anneeSelectionnee] || [];
+
+    const evenement =
+        liste[index];
+
+    if (!evenement) {
+        return;
+    }
+
+
+    document.getElementById("nom")
+        .value = evenement.nom;
+
+    document.getElementById("categorie")
+        .value = evenement.categorie;
+
+    document.getElementById("dateDebut")
+        .value = evenement.debut;
+
+    document.getElementById("dateFin")
+        .value = evenement.fin;
+
+    document.getElementById("cours")
+        .value = evenement.cours;
+
+    document.getElementById("couleur")
+        .value = evenement.couleur || "normal";
+
+    document.getElementById("observation")
+        .value = evenement.observation || "";
+
+
+    indexModification = index;
+
+
+    document.getElementById(
+        "titreFormulaire"
+    ).textContent =
+        "Modifier l'événement";
+
+
+    document.getElementById(
+        "btnEnregistrer"
+    ).textContent =
+        "💾 Enregistrer la modification";
+
+
+    document.getElementById(
+        "btnAnnuler"
+    ).style.display =
+        "inline-block";
+
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+
+}
+
+
+/* =====================================================
+   SUPPRIMER
+===================================================== */
+
+function supprimerEvenement(index) {
+
+    if (!IMCAuth.requirePermission("vacances.delete")) {
+        alert("Permission refusée.");
+        return;
+    }
+
+    const liste =
+        donnees[anneeSelectionnee] || [];
+
+    if (!liste[index]) {
+        return;
+    }
+
+
+    if (
+        !confirm(
+            "Voulez-vous vraiment supprimer cet événement ?"
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    liste.splice(index, 1);
+
+    sauvegarder();
+
+    afficherListe();
+
+    afficherCalendrier();
+
+    afficherMessage(
+        "Événement supprimé.",
+        "succes"
+    );
+
+}
+
+
+/* =====================================================
+   ANNULER
+===================================================== */
+
+function annulerModification() {
+
+    indexModification = null;
+
+    nettoyerFormulaire();
+
+}
+
+
+/* =====================================================
+   NETTOYER
+===================================================== */
+
+function nettoyerFormulaire() {
+
+    document.getElementById("nom")
+        .value = "";
+
+    document.getElementById("categorie")
+        .value = "vacances";
+
+    document.getElementById("dateDebut")
+        .value = "";
+
+    document.getElementById("dateFin")
+        .value = "";
+
+    document.getElementById("cours")
+        .value = "oui";
+
+    document.getElementById("couleur")
+        .value = "normal";
+
+    document.getElementById("observation")
+        .value = "";
+
+
+    document.getElementById(
+        "titreFormulaire"
+    ).textContent =
+        "Ajouter une période ou une fête";
+
+
+    document.getElementById(
+        "btnEnregistrer"
+    ).textContent =
+        "➕ Enregistrer";
+
+
+    document.getElementById(
+        "btnAnnuler"
+    ).style.display =
+        "none";
+
+}
+
+
+/* =====================================================
+   AFFICHER LISTE
+===================================================== */
+
+function afficherListe() {
+
+    const tbody =
+        document.getElementById(
+            "tableauEvenements"
+        );
+
+    tbody.innerHTML = "";
+
+
+    const recherche =
+        document.getElementById(
+            "recherche"
+        ).value
+        .trim()
+        .toLowerCase();
+
+
+    const filtre =
+        document.getElementById(
+            "filtreCategorie"
+        ).value;
+
+
+    let liste =
+        donnees[anneeSelectionnee] || [];
+
+
+    liste = liste.filter(function(evenement) {
+
+        const correspondRecherche =
+            !recherche ||
+            evenement.nom
+                .toLowerCase()
+                .includes(recherche) ||
+            (evenement.observation || "")
+                .toLowerCase()
+                .includes(recherche);
+
+
+        const correspondCategorie =
+            filtre === "toutes" ||
+            evenement.categorie === filtre;
+
+
+        return (
+            correspondRecherche &&
+            correspondCategorie
+        );
+
+    });
+
+
+    liste.sort(function(a, b) {
+
+        return a.debut.localeCompare(b.debut);
+
+    });
+
+
+    if (liste.length === 0) {
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="vide">
+                    Aucun événement trouvé.
+                </td>
+            </tr>
+        `;
+
+        return;
+
+    }
+
+
+    liste.forEach(function(evenement) {
+
+        const indexOriginal =
+            donnees[anneeSelectionnee]
+            .indexOf(evenement);
+
+
+        const tr =
+            document.createElement("tr");
+
+
+        tr.innerHTML = `
+
+            <td>
+                ${indexOriginal + 1}
+            </td>
+
+            <td>
+                <strong>
+                    ${echapper(evenement.nom)}
+                </strong>
+            </td>
+
+            <td>
+                ${badgeCategorie(evenement.categorie)}
+            </td>
+
+            <td>
+                ${formaterDate(evenement.debut)}
+            </td>
+
+            <td>
+                ${formaterDate(evenement.fin)}
+            </td>
+
+            <td>
+                ${
+                    evenement.cours === "oui"
+                    ? '<span class="badge badge-ferie">Oui</span>'
+                    : evenement.cours === "non"
+                    ? '<span class="badge badge-ecole">Non</span>'
+                    : '<span class="badge badge-fete">À confirmer</span>'
+                }
+            </td>
+
+            <td>
+                ${echapper(evenement.observation || "")}
+            </td>
+
+            <td class="no-print">
+
+                <button
+                    class="btn btn-modifier"
+                    onclick="modifierEvenement(${indexOriginal})">
+                    ✏️
+                </button>
+
+                <button
+                    class="btn btn-supprimer"
+                    onclick="supprimerEvenement(${indexOriginal})">
+                    🗑️
+                </button>
+
+            </td>
+
+        `;
+
+
+        tbody.appendChild(tr);
+
+    });
+
+}
+
+
+/* =====================================================
+   BADGE
+===================================================== */
+
+function badgeCategorie(categorie) {
+
+    if (categorie === "vacances") {
+
+        return `
+            <span class="badge badge-vacances">
+                🏖️ Vacances
+            </span>
+        `;
+
+    }
+
+
+    if (categorie === "ferie") {
+
+        return `
+            <span class="badge badge-ferie">
+                🇭🇹 Jour férié
+            </span>
+        `;
+
+    }
+
+
+    if (categorie === "fete") {
+
+        return `
+            <span class="badge badge-fete">
+                🎉 Fête
+            </span>
+        `;
+
+    }
+
+
+    return `
+        <span class="badge badge-commemoration">
+            🏛️ Commémoration
+        </span>
+    `;
+
+}
+
+
+/* =====================================================
+   CALENDRIER MENSUEL
+===================================================== */
+
+function afficherCalendrier() {
+
+    const conteneur =
+        document.getElementById(
+            "calendrierMensuel"
+        );
+
+    conteneur.innerHTML = "";
+
+
+    const parties =
+        anneeSelectionnee.split("-");
+
+    const anneeDebut =
+        parseInt(parties[0]);
+
+    const anneeFin =
+        anneeDebut + 1;
+
+
+    /*
+       Septembre -> Décembre
+       de la première année
+    */
+
+    for (
+        let mois = 8;
+        mois <= 11;
+        mois++
+    ) {
+
+        creerMois(
+            conteneur,
+            anneeDebut,
+            mois
+        );
+
+    }
+
+
+    /*
+       Janvier -> Août
+       de la deuxième année
+    */
+
+    for (
+        let mois = 0;
+        mois <= 7;
+        mois++
+    ) {
+
+        creerMois(
+            conteneur,
+            anneeFin,
+            mois
+        );
+
+    }
+
+}
+
+
+/* =====================================================
+   CRÉER UN MOIS
+===================================================== */
+
+function creerMois(
+    conteneur,
+    annee,
+    mois
+) {
+
+    const bloc =
+        document.createElement("div");
+
+    bloc.className = "mois";
+
+
+    const titre =
+        document.createElement("div");
+
+    titre.className = "titre-mois";
+
+    titre.textContent =
+        moisNoms[mois] + " " + annee;
+
+
+    bloc.appendChild(titre);
+
+
+    const semaine =
+        document.createElement("div");
+
+    semaine.className =
+        "jours-semaine";
+
+
+    joursNoms.forEach(function(jour) {
+
+        const div =
+            document.createElement("div");
+
+        div.textContent = jour;
+
+        semaine.appendChild(div);
+
+    });
+
+
+    bloc.appendChild(semaine);
+
+
+    const grille =
+        document.createElement("div");
+
+    grille.className =
+        "grille-jours";
+
+
+    /*
+       Premier jour du mois.
+       JS : dimanche = 0
+       Nous voulons lundi = 0.
+    */
+
+    let premierJour =
+        new Date(
+            annee,
+            mois,
+            1
+        ).getDay();
+
+
+    premierJour =
+        premierJour === 0
+        ? 6
+        : premierJour - 1;
+
+
+    for (
+        let i = 0;
+        i < premierJour;
+        i++
+    ) {
+
+        const vide =
+            document.createElement("div");
+
+        vide.className =
+            "jour vide";
+
+        grille.appendChild(vide);
+
+    }
+
+
+    const nombreJours =
+        new Date(
+            annee,
+            mois + 1,
+            0
+        ).getDate();
+
+
+    for (
+        let jour = 1;
+        jour <= nombreJours;
+        jour++
+    ) {
+
+        const cellule =
+            document.createElement("div");
+
+        cellule.className =
+            "jour";
+
+
+        const date =
+            annee +
+            "-" +
+            String(mois + 1).padStart(2, "0") +
+            "-" +
+            String(jour).padStart(2, "0");
+
+
+        const numero =
+            document.createElement("div");
+
+        numero.className =
+            "numero-jour";
+
+        numero.textContent =
+            jour;
+
+
+        cellule.appendChild(numero);
+
+
+        const evenements =
+            trouverEvenementsDate(date);
+
+
+        evenements.forEach(function(evenement) {
+
+            cellule.classList.add(
+                evenement.categorie
+            );
+
+
+            if (
+                evenement.cours === "oui"
+            ) {
+
+                cellule.classList.add(
+                    "sans-cours"
+                );
+
+            }
+
+
+            const mini =
+                document.createElement("span");
+
+            mini.className =
+                "evenement-mini";
+
+
+            mini.textContent =
+                evenement.nom;
+
+
+            cellule.appendChild(mini);
+
+        });
+
+
+        grille.appendChild(cellule);
+
+    }
+
+
+    bloc.appendChild(grille);
+
+    conteneur.appendChild(bloc);
+
+}
+
+
+/* =====================================================
+   TROUVER ÉVÉNEMENTS D'UNE DATE
+===================================================== */
+
+function trouverEvenementsDate(date) {
+
+    const liste =
+        donnees[anneeSelectionnee] || [];
+
+
+    return liste.filter(function(evenement) {
+
+        return (
+            date >= evenement.debut &&
+            date <= evenement.fin
+        );
+
+    });
+
+}
+
+
+/* =====================================================
+   FORMATER DATE
+===================================================== */
+
+function formaterDate(date) {
+
+    if (!date) {
+        return "";
+    }
+
+
+    const morceaux =
+        date.split("-");
+
+
+    if (morceaux.length !== 3) {
+        return date;
+    }
+
+
+    return (
+        morceaux[2] +
+        "/" +
+        morceaux[1] +
+        "/" +
+        morceaux[0]
+    );
+
+}
+
+
+/* =====================================================
+   PROTECTION HTML
+===================================================== */
+
+function echapper(texte) {
+
+    return String(texte)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+}
+
+
+/* =====================================================
+   MESSAGE
+===================================================== */
+
+function afficherMessage(
+    texte,
+    type
+) {
+
+    const message =
+        document.getElementById(
+            "message"
+        );
+
+
+    message.textContent =
+        texte;
+
+
+    message.className =
+        type;
+
+
+    setTimeout(function() {
+
+        message.className = "";
+
+        message.textContent = "";
+
+    }, 3500);
+
+}
+
+
+/* =====================================================
+   DÉMARRAGE
+===================================================== */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        chargerDonnees();
+
+    }
+);
+
+</script>
+
+</body>
+</html>

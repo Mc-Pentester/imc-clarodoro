@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Année scolaire - IMC Clarodaro</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Times New Roman", serif;
+            font-size: 12pt;
+            background: #f2f6fa;
+            color: #222;
+        }
+
+        header {
+            background: #123b63;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 25px;
+        }
+
+        header p {
+            margin: 6px 0 0;
+            font-size: 16px;
+        }
+
+        .menu-principal {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            padding: 15px;
+            background: white;
+            box-shadow: 0 2px 6px #bbb;
+        }
+
+        .menu-principal button {
+            border: none;
+            border-radius: 7px;
+            padding: 11px 16px;
+            color: white;
+            font-family: "Times New Roman", serif;
+            font-size: 12pt;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .menu-principal button:hover {
+            transform: translateY(-2px);
+            opacity: 0.85;
+        }
+
+        .menu-principal button.active {
+            outline: 3px solid #222;
+        }
+
+        .btn-eleves { background: #007bff; }
+        .btn-matieres { background: #6f42c1; }
+        .btn-resultats { background: #198754; }
+        .btn-finances { background: #fd7e14; }
+        .btn-personnel { background: #dc3545; }
+        .btn-annees { background: #20c997; }
+        .btn-vacances { background: #6610f2; }
+        .btn-pdg { background: #343a40; }
+
+        .conteneur {
+            width: 95%;
+            max-width: 1000px;
+            margin: 25px auto;
+        }
+
+        .carte {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px #ccc;
+            margin-bottom: 25px;
+        }
+
+        h2 {
+            color: #123b63;
+            margin-top: 0;
+        }
+
+        .formulaire {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input,
+        select {
+            padding: 10px;
+            border: 1px solid #aaa;
+            border-radius: 6px;
+            font-family: "Times New Roman", serif;
+            font-size: 12pt;
+        }
+
+        input {
+            min-width: 220px;
+        }
+
+        button {
+            font-family: "Times New Roman", serif;
+            font-size: 12pt;
+            cursor: pointer;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 6px;
+            padding: 10px 15px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .btn-ajouter {
+            background: #198754;
+        }
+
+        .btn-modifier {
+            background: #fd7e14;
+        }
+
+        .btn-supprimer {
+            background: #dc3545;
+        }
+
+        .btn-selectionner {
+            background: #007bff;
+        }
+
+        .btn-annuler {
+            background: #6c757d;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th,
+        td {
+            border: 1px solid #aaa;
+            padding: 12px;
+            text-align: center;
+        }
+
+        th {
+            background: #123b63;
+            color: white;
+        }
+
+        tr.active-year {
+            background: #d1f7df;
+            font-weight: bold;
+        }
+
+        .message {
+            margin-top: 12px;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .succes {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .erreur {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+        @media (max-width: 700px) {
+            .formulaire {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            input,
+            select,
+            .btn {
+                width: 100%;
+            }
+
+            table {
+                font-size: 11pt;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+
+<header class="entete-ecole">
+
+    <c:\Users\Jean Rony\Desktop\logo-clarodaro.png.png
+         alt="Logo Institution Mixte Clarodaro"
+         class="logo-ecole">
+
+    <div class="informations-ecole">
+        <h1>Institution Mixte Clarodaro</h1>
+        <p>Clarodaro, la clarté du savoir !</p>
+    </div>
+
+</header>
+
+<nav class="menu-principal">
+    <button class="btn-eleves" onclick="ouvrirPage('index.html')">
+        Élèves
+    </button>
+
+    <button class="btn-matieres" onclick="ouvrirPage('matieres.html')">
+        Matières
+    </button>
+
+    <button class="btn-resultats" onclick="ouvrirPage('resultats.html')">
+        Résultats
+    </button>
+
+    <button class="btn-finances" onclick="ouvrirPage('finances.html')">
+        Finances
+    </button>
+
+    <button class="btn-personnel" onclick="ouvrirPage('personnel.html')">
+        Personnel
+    </button>
+
+    <button class="btn-annees active" onclick="ouvrirPage('annees-scolaires.html')">
+        Année scolaire
+    </button>
+
+    <button class="btn-vacances" onclick="ouvrirPage('vacances.html')">
+        Vacances
+    </button>
+
+    <button class="btn-pdg" onclick="ouvrirPage('pdg.html')">
+        PDG
+    </button>
+</nav>
+
+<main class="conteneur">
+
+    <section class="carte">
+        <h2>Année scolaire active</h2>
+
+        <div class="formulaire">
+            <label for="anneeActive">Année académique :</label>
+
+            <select id="anneeActive" onchange="selectionnerAnnee(this.value)">
+                <option value="">Sélectionner une année</option>
+            </select>
+        </div>
+
+        <div id="message" class="message"></div>
+    </section>
+
+    <section class="carte">
+        <h2>Ajouter une année scolaire</h2>
+
+        <div class="formulaire">
+            <input
+                type="text"
+                id="nouvelleAnnee"
+                placeholder="Exemple : 2041-2042"
+                maxlength="9"
+            >
+
+            <button class="btn btn-ajouter" onclick="ajouterAnnee()">
+                Ajouter
+            </button>
+        </div>
+    </section>
+
+    <section class="carte">
+        <h2>Liste des années scolaires</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Année scolaire</th>
+                    <th>État</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+
+            <tbody id="listeAnnees"></tbody>
+        </table>
+    </section>
+
+</main>
+
+<script src="secure-storage.js"></script>
+<script src="auth.js"></script>
+<script>
+
+// Guard d'authentification
+document.addEventListener("DOMContentLoaded", function() {
+  IMCAuth.requireAuth("personnel.html");
+});
+
+const CLE_ANNEES = "imc_annees_scolaires";
+const CLE_ANNEE_ACTIVE = "imc_active_year";
+
+    let annees = [];
+    let anneeActive = "";
+
+    function ouvrirPage(page) {
+        window.location.href = page;
+    }
+
+    function afficherMessage(texte, type = "succes") {
+        const message = document.getElementById("message");
+
+        message.textContent = texte;
+        message.className = "message " + type;
+        message.style.display = "block";
+
+        setTimeout(() => {
+            message.style.display = "none";
+        }, 3000);
+    }
+
+    function chargerDonnees() {
+        const anneesEnregistrees = localStorage.getItem(CLE_ANNEES);
+
+        if (anneesEnregistrees) {
+            annees = JSON.parse(anneesEnregistrees);
+        } else {
+            annees = [];
+
+            for (let annee = 2026; annee <= 2040; annee++) {
+                annees.push(annee + "-" + (annee + 1));
+            }
+
+            localStorage.setItem(CLE_ANNEES, JSON.stringify(annees));
+        }
+
+        anneeActive = localStorage.getItem(CLE_ANNEE_ACTIVE);
+
+        if (!anneeActive || !annees.includes(anneeActive)) {
+            anneeActive = annees[0];
+
+            localStorage.setItem(CLE_ANNEE_ACTIVE, anneeActive);
+        }
+
+        afficherAnnees();
+        afficherSelectAnnee();
+    }
+
+    function afficherSelectAnnee() {
+        const select = document.getElementById("anneeActive");
+
+        select.innerHTML = "";
+
+        annees.forEach(annee => {
+            const option = document.createElement("option");
+
+            option.value = annee;
+            option.textContent = annee;
+
+            if (annee === anneeActive) {
+                option.selected = true;
+            }
+
+            select.appendChild(option);
+        });
+    }
+
+    function afficherAnnees() {
+        const tbody = document.getElementById("listeAnnees");
+
+        tbody.innerHTML = "";
+
+        annees.forEach((annee, index) => {
+            const ligne = document.createElement("tr");
+
+            if (annee === anneeActive) {
+                ligne.classList.add("active-year");
+            }
+
+            ligne.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${annee}</td>
+                <td>
+                    ${
+                        annee === anneeActive
+                            ? "Année active"
+                            : "Inactive"
+                    }
+                </td>
+                <td>
+                    <button
+                        class="btn btn-selectionner"
+                        onclick="rendreActive('${annee}')">
+                        Sélectionner
+                    </button>
+
+                    <button
+                        class="btn btn-modifier"
+                        onclick="modifierAnnee('${annee}')">
+                        Modifier
+                    </button>
+
+                    <button
+                        class="btn btn-supprimer"
+                        onclick="supprimerAnnee('${annee}')">
+                        Supprimer
+                    </button>
+                </td>
+            `;
+
+            tbody.appendChild(ligne);
+        });
+    }
+
+    function selectionnerAnnee(annee) {
+        if (!annee) {
+            return;
+        }
+
+        rendreActive(annee);
+    }
+
+    function rendreActive(annee) {
+        if (!annees.includes(annee)) {
+            return;
+        }
+
+        anneeActive = annee;
+
+        localStorage.setItem(CLE_ANNEE_ACTIVE, anneeActive);
+
+        afficherAnnees();
+        afficherSelectAnnee();
+
+        afficherMessage("L’année scolaire " + annee + " est maintenant active.");
+    }
+
+    function ajouterAnnee() {
+        if (!IMCAuth.requirePermission("annees.create")) {
+            afficherMessage("Permission refusée.", "erreur");
+            return;
+        }
+
+        const champ = document.getElementById("nouvelleAnnee");
+        const valeur = champ.value.trim();
+
+        const formatCorrect = /^\d{4}-\d{4}$/;
+
+        if (!formatCorrect.test(valeur)) {
+            afficherMessage(
+                "Veuillez saisir une année sous la forme 2041-2042.",
+                "erreur"
+            );
+            return;
+        }
+
+        const parties = valeur.split("-");
+        const debut = Number(parties[0]);
+        const fin = Number(parties[1]);
+
+        if (fin !== debut + 1) {
+            afficherMessage(
+                "L’année scolaire doit avoir deux années consécutives.",
+                "erreur"
+            );
+            return;
+        }
+
+        if (annees.includes(valeur)) {
+            afficherMessage(
+                "Cette année scolaire existe déjà.",
+                "erreur"
+            );
+            return;
+        }
+
+        annees.push(valeur);
+        annees.sort();
+
+        localStorage.setItem(CLE_ANNEES, JSON.stringify(annees));
+
+        champ.value = "";
+
+        afficherAnnees();
+        afficherSelectAnnee();
+
+        afficherMessage("Année scolaire ajoutée avec succès.");
+    }
+
+    function modifierAnnee(ancienneAnnee) {
+        if (!IMCAuth.requirePermission("annees.update")) {
+            afficherMessage("Permission refusée.", "erreur");
+            return;
+        }
+
+        const nouvelleAnnee = prompt(
+            "Entrez la nouvelle année scolaire :",
+            ancienneAnnee
+        );
+
+        if (nouvelleAnnee === null) {
+            return;
+        }
+
+        const valeur = nouvelleAnnee.trim();
+        const formatCorrect = /^\d{4}-\d{4}$/;
+
+        if (!formatCorrect.test(valeur)) {
+            afficherMessage(
+                "Format incorrect. Exemple : 2041-2042.",
+                "erreur"
+            );
+            return;
+        }
+
+        const parties = valeur.split("-");
+        const debut = Number(parties[0]);
+        const fin = Number(parties[1]);
+
+        if (fin !== debut + 1) {
+            afficherMessage(
+                "Les deux années doivent être consécutives.",
+                "erreur"
+            );
+            return;
+        }
+
+        if (annees.includes(valeur) && valeur !== ancienneAnnee) {
+            afficherMessage(
+                "Cette année scolaire existe déjà.",
+                "erreur"
+            );
+            return;
+        }
+
+        const position = annees.indexOf(ancienneAnnee);
+
+        if (position === -1) {
+            return;
+        }
+
+        annees[position] = valeur;
+
+        if (anneeActive === ancienneAnnee) {
+            anneeActive = valeur;
+            localStorage.setItem(CLE_ANNEE_ACTIVE, anneeActive);
+        }
+
+        annees.sort();
+
+        localStorage.setItem(CLE_ANNEES, JSON.stringify(annees));
+
+        afficherAnnees();
+        afficherSelectAnnee();
+
+        afficherMessage("Année scolaire modifiée avec succès.");
+    }
+
+    function supprimerAnnee(annee) {
+        if (!IMCAuth.requirePermission("annees.delete")) {
+            afficherMessage(
+                "Permission refusée.",
+                "erreur"
+            );
+            return;
+        }
+
+        if (annees.length <= 1) {
+            afficherMessage(
+                "Vous devez conserver au moins une année scolaire.",
+                "erreur"
+            );
+            return;
+        }
+
+        const confirmation = confirm(
+            "Voulez-vous vraiment supprimer l’année " + annee + " ?"
+        );
+
+        if (!confirmation) {
+            return;
+        }
+
+        annees = annees.filter(element => element !== annee);
+
+        if (anneeActive === annee) {
+            anneeActive = annees[0];
+            localStorage.setItem(CLE_ANNEE_ACTIVE, anneeActive);
+        }
+
+        localStorage.setItem(CLE_ANNEES, JSON.stringify(annees));
+
+        afficherAnnees();
+        afficherSelectAnnee();
+
+        afficherMessage("Année scolaire supprimée avec succès.");
+    }
+
+    chargerDonnees();
+</script>
+
+</body>
+</html>

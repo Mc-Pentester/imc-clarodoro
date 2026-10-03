@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matières - IMC Clarodaro</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    color: #222;
+}
+
+header {
+    background: #17365d;
+    color: white;
+    text-align: center;
+    padding: 18px;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 26px;
+}
+
+header p {
+    margin: 5px 0 0;
+}
+
+.menu-principal {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    justify-content: center;
+    padding: 10px;
+    background: white;
+}
+
+.menu-principal button {
+    border: 0;
+    background: #e7e7e7;
+    padding: 10px 14px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.menu-principal button.active {
+    background: #17365d;
+    color: white;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 20px auto;
+    padding: 15px;
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    margin-bottom: 20px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+}
+
+label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #bbb;
+    border-radius: 5px;
+}
+
+button {
+    cursor: pointer;
+}
+
+.btn {
+    border: 0;
+    border-radius: 5px;
+    padding: 10px 14px;
+}
+
+.btn-ajouter {
+    background: #198754;
+    color: white;
+}
+
+.btn-modifier {
+    background: #0d6efd;
+    color: white;
+}
+
+.btn-supprimer {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-annuler {
+    background: #6c757d;
+    color: white;
+}
+
+.recherche {
+    margin-bottom: 15px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th,
+td {
+    border: 1px solid #ccc;
+    padding: 10px;
+    text-align: center;
+}
+
+th {
+    background: #17365d;
+    color: white;
+}
+
+.actions {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.message {
+    display: none;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    background: #d1e7dd;
+    color: #0f5132;
+}
+
+@media (max-width: 700px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    table {
+        font-size: 13px;
+    }
+
+    th,
+    td {
+        padding: 7px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+
+<header class="entete-ecole">
+    <div class="informations-ecole">
+        <h1>Institution Mixte Clarodaro</h1>
+        <p>Clarodaro, la clarté du savoir !</p>
+    </div>
+
+</header>
+
+<nav class="menu-principal">
+
+    <button onclick="ouvrirPage('index.html')">
+        Élèves
+    </button>
+
+    <button class="active">
+        Matières
+    </button>
+
+    <button onclick="ouvrirPage('resultats.html')">
+        Résultats
+    </button>
+
+    <button onclick="ouvrirPage('finances.html')">
+        Finances
+    </button>
+
+    <button onclick="ouvrirPage('personnel.html')">
+        Personnel
+    </button>
+
+    <button onclick="ouvrirPage('annees-scolaires.html')">
+        Année scolaire
+    </button>
+
+    <button onclick="ouvrirPage('vacances.html')">
+        Vacances
+    </button>
+
+    <button onclick="ouvrirPage('pdg.html')">
+        PDG
+    </button>
+
+</nav>
+
+<div class="container">
+
+    <div class="card">
+
+        <h2 id="titreFormulaire">
+            Ajouter une matière
+        </h2>
+
+        <div id="message" class="message"></div>
+
+        <form id="formMatiere">
+
+            <div class="form-grid">
+
+                <div>
+                    <label for="nomMatiere">
+                        Nom de la matière
+                    </label>
+
+                    <input
+                        type="text"
+                        id="nomMatiere"
+                        required
+                        placeholder="Exemple : Mathématiques"
+                    >
+                </div>
+
+                <div>
+                    <label for="pointsMax">
+                        Points Max
+                    </label>
+
+                    <input
+                        type="number"
+                        id="pointsMax"
+                        min="1"
+                        step="1"
+                        required
+                        placeholder="20"
+                    >
+                </div>
+
+                <div>
+
+                    <button
+                        type="submit"
+                        id="btnEnregistrer"
+                        class="btn btn-ajouter"
+                    >
+                        Ajouter
+                    </button>
+
+                    <button
+                        type="button"
+                        id="btnAnnuler"
+                        class="btn btn-annuler"
+                        style="display:none;"
+                        onclick="annulerModification()"
+                    >
+                        Annuler
+                    </button>
+
+                </div>
+
+            </div>
+
+        </form>
+
+    </div>
+
+
+    <div class="card">
+
+        <h2>Liste des matières</h2>
+
+        <div class="recherche">
+
+            <input
+                type="text"
+                id="recherche"
+                placeholder="Rechercher une matière..."
+            >
+
+        </div>
+
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>#</th>
+                    <th>Matière</th>
+                    <th>Points Max</th>
+                    <th>Contrôle 1</th>
+                    <th>Contrôle 2</th>
+                    <th>Contrôle 3</th>
+                    <th>Actions</th>
+                </tr>
+
+            </thead>
+
+            <tbody id="tableauMatieres"></tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
+<script src="secure-storage.js"></script>
+<script src="auth.js"></script>
+<script>
+
+// Guard d'authentification
+document.addEventListener("DOMContentLoaded", function() {
+  IMCAuth.requireAuth("personnel.html");
+});
+
+const MATIERES_KEY = "imc_matieres";
+
+let matieres = [];
+let indexModification = -1;
+
+
+/* ============================================================
+   CHARGER
+   ============================================================ */
+
+function chargerMatieres() {
+
+    try {
+
+        matieres = JSON.parse(
+            localStorage.getItem(MATIERES_KEY) || "[]"
+        );
+
+        if (!Array.isArray(matieres)) {
+            matieres = [];
+        }
+
+    } catch (e) {
+
+        matieres = [];
+
+    }
+
+    afficherMatieres();
+}
+
+
+/* ============================================================
+   SAUVEGARDER
+   ============================================================ */
+
+function sauvegarderMatieres() {
+
+    localStorage.setItem(
+        MATIERES_KEY,
+        JSON.stringify(matieres)
+    );
+}
+
+
+/* ============================================================
+   AFFICHER
+   ============================================================ */
+
+function afficherMatieres() {
+
+    const tbody =
+        document.getElementById(
+            "tableauMatieres"
+        );
+
+    const recherche =
+        document.getElementById(
+            "recherche"
+        ).value
+        .trim()
+        .toLowerCase();
+
+
+    const liste =
+        matieres.filter(
+            matiere =>
+                String(matiere.nom || "")
+                    .toLowerCase()
+                    .includes(recherche)
+        );
+
+
+    tbody.innerHTML = "";
+
+
+    if (liste.length === 0) {
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7">
+                    Aucune matière trouvée.
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+
+    liste.forEach(
+        (matiere) => {
+
+            const index =
+                matieres.indexOf(
+                    matiere
+                );
+
+            const max =
+                Number(
+                    matiere.pointsMax
+                ) || 10;
+
+
+            tbody.innerHTML += `
+
+                <tr>
+
+                    <td>
+                        ${index + 1}
+                    </td>
+
+                    <td>
+                        ${echapperHTML(
+                            matiere.nom
+                        )}
+                    </td>
+
+                    <td>
+                        ${max}
+                    </td>
+
+                    <td>
+                        0 – ${max}
+                    </td>
+
+                    <td>
+                        0 – ${max}
+                    </td>
+
+                    <td>
+                        0 – ${max}
+                    </td>
+
+                    <td>
+
+                        <div class="actions">
+
+                            <button
+                                class="btn btn-modifier"
+                                onclick="
+                                    modifierMatiere(
+                                        ${index}
+                                    )
+                                "
+                            >
+                                Modifier
+                            </button>
+
+                            <button
+                                class="btn btn-supprimer"
+                                onclick="
+                                    supprimerMatiere(
+                                        ${index}
+                                    )
+                                "
+                            >
+                                Supprimer
+                            </button>
+
+                        </div>
+
+                    </td>
+
+                </tr>
+
+            `;
+
+        }
+    );
+}
+
+
+/* ============================================================
+   AJOUT / MODIFICATION
+   ============================================================ */
+
+document
+    .getElementById("formMatiere")
+    .addEventListener(
+        "submit",
+        function(event) {
+
+            event.preventDefault();
+
+            // Vérifier la permission appropriée selon l'action
+            if (indexModification === -1) {
+                if (!IMCAuth.requirePermission("matieres.create")) {
+                    afficherMessage("Permission refusée pour la création.");
+                    return;
+                }
+            } else {
+                if (!IMCAuth.requirePermission("matieres.update")) {
+                    afficherMessage("Permission refusée pour la modification.");
+                    return;
+                }
+            }
+
+            const nom =
+                document
+                    .getElementById(
+                        "nomMatiere"
+                    )
+                    .value
+                    .trim();
+
+
+            const pointsMax =
+                Number(
+                    document
+                        .getElementById(
+                            "pointsMax"
+                        )
+                        .value
+                );
+
+
+            if (!nom) {
+
+                afficherMessage(
+                    "Veuillez entrer le nom de la matière."
+                );
+
+                return;
+            }
+
+
+            if (
+                !Number.isFinite(pointsMax) ||
+                pointsMax <= 0
+            ) {
+
+                afficherMessage(
+                    "Les Points Max doivent être supérieurs à zéro."
+                );
+
+                return;
+            }
+
+
+            const doublon =
+                matieres.some(
+                    (matiere, index) => {
+
+                        if (
+                            index ===
+                            indexModification
+                        ) {
+                            return false;
+                        }
+
+                        return (
+                            String(
+                                matiere.nom
+                            )
+                            .trim()
+                            .toLowerCase()
+                            ===
+                            nom.toLowerCase()
+                        );
+
+                    }
+                );
+
+
+            if (doublon) {
+
+                afficherMessage(
+                    "Cette matière existe déjà."
+                );
+
+                return;
+            }
+
+
+            if (
+                indexModification === -1
+            ) {
+
+                matieres.push({
+
+                    id:
+                        Date.now(),
+
+                    nom:
+                        nom,
+
+                    pointsMax:
+                        pointsMax
+
+                });
+
+
+                afficherMessage(
+                    "La matière a été ajoutée."
+                );
+
+            } else {
+
+                matieres[
+                    indexModification
+                ].nom =
+                    nom;
+
+                matieres[
+                    indexModification
+                ].pointsMax =
+                    pointsMax;
+
+
+                afficherMessage(
+                    "La matière a été modifiée."
+                );
+
+            }
+
+
+            sauvegarderMatieres();
+
+            annulerModification();
+
+            afficherMatieres();
+
+        }
+    );
+
+
+/* ============================================================
+   MODIFIER
+   ============================================================ */
+
+function modifierMatiere(index) {
+
+    const matiere =
+        matieres[index];
+
+
+    if (!matiere) {
+        return;
+    }
+
+
+    document
+        .getElementById(
+            "nomMatiere"
+        )
+        .value =
+        matiere.nom;
+
+
+    document
+        .getElementById(
+            "pointsMax"
+        )
+        .value =
+        matiere.pointsMax;
+
+
+    indexModification =
+        index;
+
+
+    document
+        .getElementById(
+            "titreFormulaire"
+        )
+        .textContent =
+        "Modifier la matière";
+
+
+    const bouton =
+        document
+            .getElementById(
+                "btnEnregistrer"
+            );
+
+
+    bouton.textContent =
+        "Modifier";
+
+
+    bouton.className =
+        "btn btn-modifier";
+
+
+    document
+        .getElementById(
+            "btnAnnuler"
+        )
+        .style
+        .display =
+        "inline-block";
+
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+}
+
+
+/* ============================================================
+   ANNULER
+   ============================================================ */
+
+function annulerModification() {
+
+    indexModification = -1;
+
+
+    document
+        .getElementById(
+            "formMatiere"
+        )
+        .reset();
+
+
+    document
+        .getElementById(
+            "titreFormulaire"
+        )
+        .textContent =
+        "Ajouter une matière";
+
+
+    const bouton =
+        document
+            .getElementById(
+                "btnEnregistrer"
+            );
+
+
+    bouton.textContent =
+        "Ajouter";
+
+
+    bouton.className =
+        "btn btn-ajouter";
+
+
+    document
+        .getElementById(
+            "btnAnnuler"
+        )
+        .style
+        .display =
+        "none";
+}
+
+
+/* ============================================================
+   SUPPRIMER
+   ============================================================ */
+
+function supprimerMatiere(index) {
+
+    if (!IMCAuth.requirePermission("matieres.delete")) {
+        alert("Permission refusée.");
+        return;
+    }
+
+    const matiere =
+        matieres[index];
+
+
+    if (!matiere) {
+        return;
+    }
+
+
+    const confirmer =
+        confirm(
+            `Voulez-vous supprimer la matière "${matiere.nom}" ?`
+        );
+
+
+    if (!confirmer) {
+        return;
+    }
+
+
+    matieres.splice(
+        index,
+        1
+    );
+
+
+    sauvegarderMatieres();
+
+    afficherMatieres();
+
+
+    afficherMessage(
+        "La matière a été supprimée."
+    );
+}
+
+
+/* ============================================================
+   RECHERCHE
+   ============================================================ */
+
+document
+    .getElementById(
+        "recherche"
+    )
+    .addEventListener(
+        "input",
+        afficherMatieres
+    );
+
+
+/* ============================================================
+   MESSAGE
+   ============================================================ */
+
+function afficherMessage(
+    texte
+) {
+
+    const message =
+        document.getElementById(
+            "message"
+        );
+
+
+    message.textContent =
+        texte;
+
+
+    message.style.display =
+        "block";
+
+
+    setTimeout(
+        () => {
+
+            message.style.display =
+                "none";
+
+        },
+        2500
+    );
+}
+
+
+/* ============================================================
+   PROTECTION HTML
+   ============================================================ */
+
+function echapperHTML(
+    valeur
+) {
+
+    return String(
+        valeur ?? ""
+    )
+    .replace(
+        /&/g,
+        "&amp;"
+    )
+    .replace(
+        /</g,
+        "&lt;"
+    )
+    .replace(
+        />/g,
+        "&gt;"
+    )
+    .replace(
+        /"/g,
+        "&quot;"
+    )
+    .replace(
+        /'/g,
+        "&#039;"
+    );
+}
+
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+
+function ouvrirPage(page) {
+
+    window.location.href =
+        page;
+}
+
+
+/* ============================================================
+   DÉMARRAGE
+   ============================================================ */
+
+chargerMatieres();
+
+</script>
+
+</body>
+</html>

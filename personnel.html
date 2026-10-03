@@ -1,0 +1,2840 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestion du Personnel - IMC Clarodaro</title>
+
+<style>
+*{
+  box-sizing:border-box;
+}
+
+body{
+  margin:0;
+  padding:20px;
+  background:#f4f6f7;
+  color:#222;
+  font-family:"Times New Roman",serif;
+}
+
+header{
+  background:white;
+  border-radius:10px;
+  padding:15px;
+  margin-bottom:15px;
+  box-shadow:0 2px 8px #ccc;
+  text-align:center;
+}
+
+header h1{
+  margin:0;
+  color:#1f618d;
+}
+
+.annee-affichee{
+  margin-top:8px;
+  padding:8px 10px;
+  border-radius:8px;
+  background:#eaf2f8;
+  color:#1f618d;
+  font-weight:bold;
+  text-align:center;
+}
+
+.menu-principal{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:15px;
+}
+
+.menu-principal button{
+  border:0;
+  border-radius:7px;
+  padding:9px 12px;
+  background:#2874a6;
+  color:white;
+  cursor:pointer;
+  font:bold 11pt "Times New Roman";
+}
+
+.menu-principal button:hover{
+  filter:brightness(1.08);
+}
+
+.card{
+  background:white;
+  border-radius:10px;
+  padding:15px;
+  margin-bottom:15px;
+  box-shadow:0 2px 8px #ccc;
+}
+
+h2{
+  margin-top:0;
+  color:#1f618d;
+}
+
+h3{
+  color:#2874a6;
+}
+
+label{
+  display:block;
+  margin-top:8px;
+  margin-bottom:4px;
+  font-weight:bold;
+}
+
+input,
+select{
+  width:100%;
+  padding:9px;
+  border:1px solid #bbb;
+  border-radius:6px;
+  font:12pt "Times New Roman";
+}
+
+button{
+  font-family:"Times New Roman",serif;
+}
+
+.btn{
+  border:0;
+  border-radius:7px;
+  padding:9px 14px;
+  margin:5px 3px 5px 0;
+  cursor:pointer;
+  font-weight:bold;
+  background:#2874a6;
+  color:white;
+}
+
+.btn:hover{
+  filter:brightness(1.08);
+}
+
+.btn-success{
+  background:#117864;
+}
+
+.btn-danger{
+  background:#c0392b;
+}
+
+.btn-warning{
+  background:#b9770e;
+}
+
+.btn-secondary{
+  background:#566573;
+}
+
+.hidden{
+  display:none!important;
+}
+
+.message{
+  margin-top:10px;
+  padding:9px;
+  border-radius:6px;
+  display:none;
+}
+
+.message.ok{
+  display:block;
+  background:#d5f5e3;
+  color:#196f3d;
+}
+
+.message.erreur{
+  display:block;
+  background:#fadbd8;
+  color:#922b21;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+  background:white;
+}
+
+th,
+td{
+  border:1px solid #aaa;
+  padding:7px;
+  text-align:center;
+  vertical-align:middle;
+}
+
+th{
+  background:#d6eaf8;
+  color:#154360;
+}
+
+.form-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:10px;
+}
+
+.classes-buttons{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:8px;
+}
+
+.class-button{
+  border:0;
+  border-radius:8px;
+  padding:8px 11px;
+  font:700 11pt "Times New Roman";
+  cursor:pointer;
+  color:white;
+  background:#2874a6;
+}
+
+.class-button:hover{
+  filter:brightness(1.08);
+  transform:translateY(-1px);
+}
+
+.class-button.selected{
+  outline:3px solid #f4d03f;
+  box-shadow:0 2px 6px #999;
+}
+
+.all-classes{
+  background:#117864;
+  width:100%;
+  margin:0;
+}
+
+.student-list button{
+  width:100%;
+  text-align:left;
+  border:1px solid #ccd6dd;
+  background:#f8f9f9;
+  border-radius:7px;
+  padding:9px;
+  margin:4px 0;
+  cursor:pointer;
+  font:12pt "Times New Roman";
+}
+
+.student-list button:hover{
+  background:#eaf2f8;
+}
+
+.student-list button.selected{
+  background:#d6eaf8;
+  border-color:#2874a6;
+  font-weight:bold;
+}
+
+.presence-table{
+  overflow-x:auto;
+}
+
+.presence-table table{
+  min-width:850px;
+}
+
+.presence-case{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  align-items:flex-start;
+  justify-content:center;
+}
+
+.presence-option{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  cursor:pointer;
+  font-size:10pt;
+}
+
+.presence-option input{
+  width:auto;
+  cursor:pointer;
+}
+
+.presence-statut{
+  font-weight:bold;
+}
+
+.resume-box{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin-top:10px;
+}
+
+.resume-item{
+  padding:10px;
+  border-radius:7px;
+  background:#eaf2f8;
+  text-align:center;
+  font-weight:bold;
+}
+
+.resume-item span{
+  display:block;
+  font-size:18px;
+  margin-top:4px;
+  color:#1f618d;
+}
+
+.rapport-actions{
+  margin-top:10px;
+  padding:10px;
+  background:#f8f9f9;
+  border-radius:8px;
+}
+
+.rapport-resultat{
+  margin-top:15px;
+}
+
+.rapport-entete{
+  text-align:center;
+  margin-bottom:12px;
+}
+
+.rapport-entete h2{
+  margin-bottom:5px;
+}
+
+.rapport-statistiques{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin-bottom:12px;
+}
+
+.rapport-stat{
+  border:1px solid #aaa;
+  padding:10px;
+  text-align:center;
+  border-radius:7px;
+  background:#f8f9f9;
+}
+
+.rapport-stat strong{
+  display:block;
+  color:#154360;
+}
+
+.login-box{
+  max-width:500px;
+  margin:auto;
+}
+
+@media(max-width:800px){
+  .form-grid,
+  .resume-box,
+  .rapport-statistiques{
+    grid-template-columns:1fr;
+  }
+}
+
+@media print{
+  .no-print,
+  .menu-principal,
+  button,
+  input,
+  select{
+    display:none!important;
+  }
+
+  body{
+    background:white;
+    padding:0;
+  }
+
+  .card{
+    box-shadow:none;
+    border:0;
+  }
+
+  .rapport-resultat{
+    display:block!important;
+  }
+}
+
+.password-wrapper{
+  position:relative;
+  display:flex;
+  align-items:center;
+}
+
+.password-wrapper input{
+  width:100%;
+  padding-right:45px;
+}
+
+.toggle-password{
+  position:absolute;
+  right:5px;
+  top:50%;
+  transform:translateY(-50%);
+  border:0;
+  background:transparent;
+  cursor:pointer;
+  font-size:18px;
+  padding:5px;
+}
+
+.info-password{
+  display:block;
+  margin-top:5px;
+  font-size:10pt;
+  color:#7b241c;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Gestion du Personnel</h1>
+
+  <div class="annee-affichee">
+    Année académique :
+    <span id="anneeAcademique">2026-2027</span>
+  </div>
+</header>
+<header class="entete-ecole">
+
+    <div class="informations-ecole">
+        <h1>Institution Mixte Clarodaro</h1>
+        <p>Clarodaro, la clarté du savoir !</p>
+    </div>
+
+</header>
+
+<nav class="menu-principal no-print">
+  <button type="button" onclick="ouvrirPage('index.html')">Élèves</button>
+  <button type="button" onclick="ouvrirPage('matieres.html')">Matières</button>
+  <button type="button" onclick="ouvrirPage('resultats.html')">Résultats</button>
+  <button type="button" onclick="ouvrirPage('finances.html')">Finances</button>
+  <button type="button" onclick="ouvrirPage('personnel.html')">Personnel</button>
+  <button type="button" onclick="ouvrirPage('annees-scolaires.html')">Année scolaire</button>
+  <button type="button" onclick="ouvrirPage('vacances.html')">Vacances</button>
+  <button type="button" onclick="ouvrirPage('pdg.html')">PDG</button>
+</nav>
+
+<!-- CONNEXION -->
+<section id="sectionConnexion" class="card no-print">
+  <div class="login-box">
+    <h2>Connexion du personnel</h2>
+
+    <label for="identifiantConnexion">Identifiant</label>
+    <input type="text" id="identifiantConnexion">
+
+    <label for="motDePasseConnexion">Mot de passe</label>
+    <div class="password-wrapper">
+      <input type="password" id="motDePasseConnexion">
+      <button type="button" class="toggle-password" onclick="basculerMotDePasse('motDePasseConnexion', this)" aria-label="Afficher le mot de passe">👁</button>
+    </div>
+
+    <button type="button" class="btn btn-success"
+            onclick="connecterPersonnelWrapper()">
+      Se connecter
+    </button>
+
+    <div id="messageConnexion" class="message"></div>
+    
+    <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; font-size: 12px;">
+      <strong>Information:</strong> Les comptes du personnel doivent être créés par l'administrateur via la page PDG.
+    </div>
+  </div>
+</section>
+
+<!-- INTERFACE PERSONNEL -->
+<div id="interfacePersonnel" class="hidden">
+
+  <!-- GESTION DU PERSONNEL -->
+  <section class="card no-print">
+    <h2>Gestion du personnel</h2>
+
+    <button type="button" class="btn btn-warning" onclick="deconnecterPersonnel()" style="margin-bottom: 15px;">
+      Se déconnecter
+    </button>
+
+    <div class="form-grid">
+
+      <div>
+        <label for="personnelNom">Nom et prénom</label>
+        <input type="text" id="personnelNom">
+      </div>
+
+      <div>
+        <label for="personnelFonction">Fonction</label>
+        <select id="personnelFonction">
+          <option value="">Sélectionner</option>
+          <option value="PDG">PDG</option>
+          <option value="Directeur">Directeur</option>
+          <option value="Enseignant">Enseignant</option>
+          <option value="Secrétaire">Secrétaire</option>
+          <option value="Surveillant">Surveillant</option>
+          <option value="Autre">Autre</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="personnelClasse">Classe</label>
+        <input type="text" id="personnelClasse">
+      </div>
+
+      <div>
+        <label for="personnelIdentifiant">Identifiant</label>
+        <input type="text" id="personnelIdentifiant">
+      </div>
+
+      <div>
+        <label for="personnelMotDePasse">Mot de passe</label>
+        <div class="password-wrapper">
+            <input type="password" id="personnelMotDePasse">
+            <button type="button" class="toggle-password" onclick="basculerMotDePasse('personnelMotDePasse', this)" aria-label="Afficher le mot de passe">👁</button>
+          </div>
+      </div>
+
+    </div>
+
+    <button type="button" class="btn btn-success"
+            onclick="ajouterPersonnel()">
+      Ajouter
+    </button>
+
+    <button type="button" class="btn btn-secondary"
+            onclick="viderFormulairePersonnel()">
+      Vider
+    </button>
+
+    <button type="button" class="btn"
+            onclick="window.print()">
+      Imprimer
+    </button>
+
+    <div id="messagePersonnel" class="message"></div>
+
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Fonction</th>
+            <th>Classe</th>
+            <th>Identifiant</th>
+            <th class="no-print">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableauPersonnel"></tbody>
+      </table>
+    </div>
+
+    <div id="zoneModificationPersonnel" class="hidden no-print">
+      <h3>Modifier le personnel</h3>
+
+      <div class="form-grid">
+        <div>
+          <label for="modNom">Nom et prénom</label>
+          <input type="text" id="modNom">
+        </div>
+
+        <div>
+          <label for="modFonction">Fonction</label>
+          <select id="modFonction">
+            <option value="">Sélectionner</option>
+            <option value="PDG">PDG</option>
+            <option value="Directeur">Directeur</option>
+            <option value="Enseignant">Enseignant</option>
+            <option value="Secrétaire">Secrétaire</option>
+            <option value="Surveillant">Surveillant</option>
+            <option value="Autre">Autre</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="modClasse">Classe</label>
+          <input type="text" id="modClasse">
+        </div>
+
+        <div>
+          <label for="modIdentifiant">Identifiant</label>
+          <input type="text" id="modIdentifiant">
+        </div>
+
+        <div>
+          <label for="modMotDePasse">Mot de passe</label>
+          <div class="password-wrapper">
+            <input type="password" id="modMotDePasse">
+            <button type="button" class="toggle-password" onclick="basculerMotDePasse('modMotDePasse', this)" aria-label="Afficher le mot de passe">👁</button>
+          </div>
+          <small id="infoModificationAcces" class="info-password"></small>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-success"
+              onclick="enregistrerModificationPersonnel()">
+        Enregistrer les modifications
+      </button>
+
+      <button type="button" class="btn btn-secondary"
+              onclick="annulerModificationPersonnel()">
+        Annuler
+      </button>
+    </div>
+  </section>
+
+  <!-- PRESENCE ENSEIGNANT -->
+  <section id="sectionEnseignant" class="card">
+
+    <h2>Présences des élèves</h2>
+
+    <div class="annee-affichee">
+      Année académique :
+      <span id="anneeAcademiquePresence">2026-2027</span>
+    </div>
+
+    <br>
+
+    <!-- TOUTES LES CLASSES -->
+    <div class="no-print">
+
+      <button
+        type="button"
+        id="btnToutesClassesPersonnel"
+        class="class-button all-classes"
+        onclick="afficherToutesLesClassesPersonnel()">
+        Toutes les classes
+      </button>
+
+      <div
+        id="listeClassesPersonnelPresence"
+        class="classes-buttons hidden">
+      </div>
+
+      <input type="hidden"
+             id="classePresencePersonnel"
+             value="">
+    </div>
+
+    <!-- LISTE DES ELEVES -->
+    <section id="listeElevesPersonnelSection" class="card no-print">
+
+      <h3>Élèves</h3>
+
+      <div id="listeElevesPersonnel"
+           class="student-list">
+      </div>
+
+    </section>
+
+    <!-- ELEVE SELECTIONNE -->
+    <div id="elevePresenceSelectionne"
+         class="message ok hidden">
+    </div>
+
+    <!-- PRESENCE -->
+    <section class="card">
+
+      <h3>Présence</h3>
+
+      <div class="form-grid no-print">
+
+        <div>
+          <label for="dateDebutSemaine">
+            Date de la semaine
+          </label>
+
+          <input
+            type="date"
+            id="dateDebutSemaine"
+            onchange="chargerSemainePresence()">
+        </div>
+
+      </div>
+
+      <div id="resumeSemaine"
+           class="resume-box no-print">
+      </div>
+
+      <div id="tableauPresenceContainer"
+           class="presence-table">
+      </div>
+
+      <button
+        type="button"
+        class="btn btn-success no-print"
+        onclick="enregistrerPresences()">
+        Enregistrer les présences
+      </button>
+
+      <button
+        type="button"
+        class="btn no-print"
+        onclick="window.print()">
+        Imprimer
+      </button>
+
+      <div id="messagePresence"
+           class="message">
+      </div>
+
+    </section>
+
+    <!-- RAPPORTS -->
+    <section class="card no-print">
+
+      <h2>Rapports des présences</h2>
+
+      <div class="rapport-actions">
+
+        <h3>Rapport journalier</h3>
+
+        <label for="dateRapportJournalier">
+          Date
+        </label>
+
+        <input
+          type="date"
+          id="dateRapportJournalier">
+
+        <button
+          type="button"
+          class="btn btn-success"
+          onclick="genererRapportJournalier()">
+          Générer le rapport journalier
+        </button>
+
+      </div>
+
+      <div class="rapport-actions">
+
+        <h3>Rapport hebdomadaire</h3>
+
+        <label for="dateRapportHebdomadaire">
+          Semaine
+        </label>
+
+        <input
+          type="date"
+          id="dateRapportHebdomadaire">
+
+        <button
+          type="button"
+          class="btn btn-success"
+          onclick="genererRapportHebdomadaire()">
+          Générer le rapport hebdomadaire
+        </button>
+
+      </div>
+
+      <div class="rapport-actions">
+
+        <h3>Rapport mensuel</h3>
+
+        <div class="form-grid">
+
+          <div>
+            <label for="moisRapportMensuel">
+              Mois
+            </label>
+
+            <select id="moisRapportMensuel">
+              <option value="1">Janvier</option>
+              <option value="2">Février</option>
+              <option value="3">Mars</option>
+              <option value="4">Avril</option>
+              <option value="5">Mai</option>
+              <option value="6">Juin</option>
+              <option value="7">Juillet</option>
+              <option value="8">Août</option>
+              <option value="9">Septembre</option>
+              <option value="10">Octobre</option>
+              <option value="11">Novembre</option>
+              <option value="12">Décembre</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="anneeRapportMensuel">
+              Année
+            </label>
+
+            <input
+              type="number"
+              id="anneeRapportMensuel"
+              min="2000"
+              max="2100">
+          </div>
+
+        </div>
+
+        <button
+          type="button"
+          class="btn btn-success"
+          onclick="genererRapportMensuel()">
+          Générer le rapport mensuel
+        </button>
+
+      </div>
+
+    </section>
+
+    <!-- RESULTAT DU RAPPORT -->
+    <section id="rapportResultat"
+             class="card rapport-resultat hidden">
+
+      <div id="contenuRapport"></div>
+
+      <div class="no-print">
+        <button
+          type="button"
+          class="btn"
+          onclick="window.print()">
+          Imprimer le rapport
+        </button>
+      </div>
+
+    </section>
+
+  </section>
+
+</div>
+
+<script src="secure-storage.js"></script>
+<script src="auth.js"></script>
+<script>
+
+// Guard d'authentification - vérifier la session au chargement
+document.addEventListener("DOMContentLoaded", function() {
+  if (IMCAuth.isAuthenticated()) {
+    const user = IMCAuth.currentUser();
+    if (user) {
+      // Session valide - restaurer l'état si possible
+      // Pour l'instant, on affiche le formulaire de connexion
+      // car nous avons besoin de vérifier les credentials complets
+    }
+  }
+  // Par défaut, afficher le formulaire de connexion
+});
+
+/* =========================================================
+   DONNEES
+========================================================= */
+
+let personnel = [];
+let eleves = [];
+let presences = {};
+let personnelConnecte = null;
+let personnelEnModification = null;
+
+let classePresenceSelectionnee = "";
+let elevePresenceSelectionne = null;
+
+const CLE_PERSONNEL = "imc_personnel";
+const CLE_ELEVES = "imc_students";
+const CLE_PRESENCES = "imc_presences";
+const CLE_ANNEE = "imc_active_year";
+
+let anneeAcademique =
+  localStorage.getItem(CLE_ANNEE) || "2026-2027";
+
+
+/* =========================================================
+   INITIALISATION
+========================================================= */
+
+document.addEventListener("DOMContentLoaded", function(){
+
+  IMCSecureStorage.ready.then(function(ok){
+
+  if(!ok) return;
+
+  chargerDonnees();
+
+  document.getElementById("anneeRapportMensuel").value =
+    new Date().getFullYear();
+
+  document.getElementById("moisRapportMensuel").value =
+    String(new Date().getMonth() + 1);
+
+  document.getElementById("dateRapportJournalier").value =
+    dateISO(new Date());
+
+  document.getElementById("dateRapportHebdomadaire").value =
+    dateISO(obtenirLundi(new Date()));
+
+  document.getElementById("dateDebutSemaine").value =
+    dateISO(obtenirLundi(new Date()));
+
+  document.getElementById("anneeAcademique").textContent =
+    anneeAcademique;
+
+  document.getElementById("anneeAcademiquePresence").textContent =
+    anneeAcademique;
+
+  // Vérifier si du personnel est enregistré
+  verifierPersonnelEnregistre();
+
+  });
+
+});
+
+
+/* =========================================================
+   VÉRIFICATION DU PERSONNEL
+========================================================= */
+
+function verifierPersonnelEnregistre(){
+  if(personnel.length === 0){
+    afficherMessage(
+      "messageConnexion",
+      "Aucun personnel n'est enregistré. Contactez l'administrateur pour configurer les comptes.",
+      "erreur"
+    );
+  }
+}
+
+function chargerDonnees(){
+
+  try{
+    personnel =
+      JSON.parse(localStorage.getItem(CLE_PERSONNEL)) || [];
+  }catch(e){
+    personnel = [];
+  }
+
+  try{
+    eleves =
+      JSON.parse(localStorage.getItem(CLE_ELEVES)) || [];
+  }catch(e){
+    eleves = [];
+  }
+
+  try{
+    presences =
+      JSON.parse(localStorage.getItem(CLE_PRESENCES)) || {};
+  }catch(e){
+    presences = {};
+  }
+
+  chargerPersonnelTableau();
+
+  afficherElevesPersonnel();
+}
+
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+
+function ouvrirPage(page){
+  window.location.href = page;
+}
+
+
+/* =========================================================
+   CONNEXION
+========================================================= */
+
+// Fonction de hashage sécurisée avec Web Crypto API (SHA-256)
+async function secureHash(str) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+}
+
+// Fonction de hashage simple (fallback pour compatibilité)
+function simpleHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash.toString(16);
+}
+
+async function connecterPersonnelWrapper() {
+  await connecterPersonnel();
+}
+
+async function connecterPersonnel(){
+
+  const identifiant =
+    document.getElementById("identifiantConnexion")
+    .value.trim();
+
+  const motDePasse =
+    document.getElementById("motDePasseConnexion")
+    .value;
+
+  const inputHash = await secureHash(motDePasse);
+  
+  const trouve =
+    personnel.find(function(p){
+
+      return String(p.identifiant || "") === identifiant &&
+             String(p.motDePasseHash || "") === inputHash;
+
+    });
+
+  if(!trouve){
+
+    afficherMessage(
+      "messageConnexion",
+      "Identifiant ou mot de passe incorrect.",
+      "erreur"
+    );
+
+    return;
+  }
+
+  personnelConnecte = trouve;
+
+  // Créer la session d'authentification
+  IMCAuth.login({
+    userId: trouve.id,
+    username: trouve.nom,
+    role: trouve.fonction
+  });
+
+  document.getElementById("sectionConnexion")
+    .classList.add("hidden");
+
+  document.getElementById("interfacePersonnel")
+    .classList.remove("hidden");
+
+  afficherInformationsEnseignant();
+}
+
+function deconnecterPersonnel() {
+  // Détruire la session d'authentification
+  IMCAuth.logout();
+
+  personnelConnecte = null;
+
+  document.getElementById("sectionConnexion")
+    .classList.remove("hidden");
+
+  document.getElementById("interfacePersonnel")
+    .classList.add("hidden");
+
+  document.getElementById("identifiantConnexion").value = "";
+  document.getElementById("motDePasseConnexion").value = "";
+}
+
+
+/* =========================================================
+   GESTION DU PERSONNEL
+========================================================= */
+
+ async function ajouterPersonnel(){
+
+  if (!IMCAuth.requirePermission("personnel.create")) {
+    afficherMessage(
+      "messagePersonnel",
+      "Permission refusée.",
+      "erreur"
+    );
+    return;
+  }
+
+  const nom =
+    document.getElementById("personnelNom")
+    .value.trim();
+
+  const fonction =
+    document.getElementById("personnelFonction")
+    .value;
+
+  const classe =
+    document.getElementById("personnelClasse")
+    .value.trim();
+
+  const identifiant =
+    document.getElementById("personnelIdentifiant")
+    .value.trim();
+
+  const motDePasse =
+    document.getElementById("personnelMotDePasse")
+    .value;
+
+  if(!nom || !fonction || !identifiant || !motDePasse){
+
+    afficherMessage(
+      "messagePersonnel",
+      "Veuillez remplir les champs obligatoires.",
+      "erreur"
+    );
+
+    return;
+  }
+
+  const existe =
+    personnel.some(function(p){
+      return String(p.identifiant || "") === identifiant;
+    });
+
+  if(existe){
+
+    afficherMessage(
+      "messagePersonnel",
+      "Cet identifiant existe déjà.",
+      "erreur"
+    );
+
+    return;
+  }
+
+  personnel.push({
+    id:Date.now(),
+    nom:nom,
+    fonction:fonction,
+    classe:classe,
+    identifiant:identifiant,
+    motDePasseHash:await secureHash(motDePasse)
+  });
+
+  sauvegarderPersonnel();
+
+  viderFormulairePersonnel();
+
+  afficherMessage(
+    "messagePersonnel",
+    "Personnel ajouté avec succès.",
+    "ok"
+  );
+}
+
+
+function sauvegarderPersonnel(){
+
+  localStorage.setItem(
+    CLE_PERSONNEL,
+    JSON.stringify(personnel)
+  );
+
+  chargerPersonnelTableau();
+}
+
+
+function chargerPersonnelTableau(){
+
+  const tbody =
+    document.getElementById("tableauPersonnel");
+
+  if(!tbody) return;
+
+  tbody.innerHTML = "";
+
+  personnel.forEach(function(p){
+
+    const tr =
+      document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${echapperHTML(p.nom)}</td>
+      <td>${echapperHTML(p.fonction)}</td>
+      <td>${echapperHTML(p.classe || "")}</td>
+      <td>${echapperHTML(p.identifiant)}</td>
+      <td class="no-print">
+        <button
+          type="button"
+          class="btn btn-warning"
+          onclick="modifierPersonnel('${p.id}')">
+          Modifier
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-danger"
+          onclick="supprimerPersonnel('${p.id}')">
+          Supprimer
+        </button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+
+function basculerMotDePasse(id, bouton){
+  const champ = document.getElementById(id);
+  if(!champ) return;
+
+  if(champ.type === "password"){
+    champ.type = "text";
+    bouton.textContent = "🙈";
+    bouton.setAttribute("aria-label", "Masquer le mot de passe");
+  }else{
+    champ.type = "password";
+    bouton.textContent = "👁";
+    bouton.setAttribute("aria-label", "Afficher le mot de passe");
+  }
+}
+
+function estPDG(){
+  const user = IMCAuth.currentUser();
+  return !!user && String(user.role || "").trim().toLowerCase() === "pdg";
+}
+
+function modifierPersonnel(id){
+
+  const p =
+    personnel.find(function(x){
+      return String(x.id) === String(id);
+    });
+
+  if(!p) return;
+
+  personnelEnModification = p;
+
+  document.getElementById("modNom").value =
+    p.nom || "";
+
+  document.getElementById("modFonction").value =
+    p.fonction || "";
+
+  document.getElementById("modClasse").value =
+    p.classe || "";
+
+  document.getElementById("modIdentifiant").value =
+    p.identifiant || "";
+
+  document.getElementById("modMotDePasse").value =
+    p.motDePasse || "";
+
+  const champIdentifiant = document.getElementById("modIdentifiant");
+  const champMotDePasse = document.getElementById("modMotDePasse");
+  const infoAcces = document.getElementById("infoModificationAcces");
+
+  champIdentifiant.readOnly = !estPDG();
+  champMotDePasse.readOnly = !estPDG();
+
+  if(infoAcces){
+    infoAcces.textContent = estPDG()
+      ? "Le PDG peut modifier cet identifiant et ce mot de passe."
+      : "Seul le PDG peut modifier l’identifiant et le mot de passe.";
+  }
+
+  document.getElementById("zoneModificationPersonnel")
+    .classList.remove("hidden");
+}
+
+
+ async function enregistrerModificationPersonnel(){
+
+  if (!IMCAuth.requirePermission("personnel.update")) {
+    afficherMessage(
+      "messagePersonnel",
+      "Permission refusée.",
+      "erreur"
+    );
+    return;
+  }
+
+  if(!personnelEnModification) return;
+
+  personnelEnModification.nom =
+    document.getElementById("modNom").value.trim();
+
+  personnelEnModification.fonction =
+    document.getElementById("modFonction").value;
+
+  personnelEnModification.classe =
+    document.getElementById("modClasse").value.trim();
+
+  if(estPDG()){
+    personnelEnModification.identifiant =
+      document.getElementById("modIdentifiant").value.trim();
+
+    const nouveauMotDePasse = document.getElementById("modMotDePasse").value;
+    if(nouveauMotDePasse){
+      personnelEnModification.motDePasseHash = await secureHash(nouveauMotDePasse);
+    }
+  }
+
+  sauvegarderPersonnel();
+
+  afficherMessage(
+    "messagePersonnel",
+    "Modification enregistrée.",
+    "ok"
+  );
+
+  annulerModificationPersonnel();
+}
+
+
+function annulerModificationPersonnel(){
+
+  personnelEnModification = null;
+
+  document.getElementById("zoneModificationPersonnel")
+    .classList.add("hidden");
+}
+
+
+function supprimerPersonnel(id){
+
+  if(!IMCAuth.requirePermission("personnel.delete")){
+    afficherMessage(
+      "messagePersonnel",
+      "Permission refusée.",
+      "erreur"
+    );
+    return;
+  }
+
+  if(!confirm("Voulez-vous supprimer ce personnel ?")){
+    return;
+  }
+
+  personnel =
+    personnel.filter(function(p){
+      return String(p.id) !== String(id);
+    });
+
+  sauvegarderPersonnel();
+
+  afficherMessage(
+    "messagePersonnel",
+    "Personnel supprimé.",
+    "ok"
+  );
+}
+
+
+function viderFormulairePersonnel(){
+
+  document.getElementById("personnelNom").value = "";
+  document.getElementById("personnelFonction").value = "";
+  document.getElementById("personnelClasse").value = "";
+  document.getElementById("personnelIdentifiant").value = "";
+  document.getElementById("personnelMotDePasse").value = "";
+}
+
+
+/* =========================================================
+   INFORMATIONS ENSEIGNANT
+========================================================= */
+
+function afficherInformationsEnseignant(){
+
+  const user = IMCAuth.currentUser();
+  if(!user) return;
+
+  /*
+    Si c'est un enseignant avec une classe,
+    cette classe peut être présélectionnée.
+  */
+  if(user.role === "Enseignant" &&
+     personnelConnecte && personnelConnecte.classe){
+
+    classePresenceSelectionnee =
+      personnelConnecte.classe;
+
+    document.getElementById("classePresencePersonnel").value =
+      personnelConnecte.classe;
+  }
+
+  afficherClassesPersonnelPresence();
+  afficherElevesPersonnel();
+  chargerSemainePresence();
+}
+
+
+/* =========================================================
+   CLASSES
+========================================================= */
+
+function obtenirClasses(){
+
+  const ensemble = new Set();
+
+  eleves.forEach(function(eleve){
+
+    const classe =
+      String(eleve.classe || "").trim();
+
+    if(classe){
+      ensemble.add(classe);
+    }
+
+  });
+
+  /*
+    On ajoute aussi les classes du personnel.
+  */
+  personnel.forEach(function(p){
+
+    const classe =
+      String(p.classe || "").trim();
+
+    if(classe){
+      ensemble.add(classe);
+    }
+
+  });
+
+  return Array.from(ensemble).sort(function(a,b){
+    return a.localeCompare(b);
+  });
+}
+
+
+function afficherClassesPersonnelPresence(){
+
+  const box =
+    document.getElementById(
+      "listeClassesPersonnelPresence"
+    );
+
+  box.innerHTML = "";
+
+  const classes = obtenirClasses();
+
+  const classeSelectionnee =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  classes.forEach(function(classe){
+
+    const bouton =
+      document.createElement("button");
+
+    bouton.type = "button";
+
+    bouton.className =
+      "class-button" +
+      (classeSelectionnee === classe
+        ? " selected"
+        : "");
+
+    bouton.textContent = classe;
+
+    bouton.onclick = function(){
+      selectionnerClassePersonnelPresence(classe);
+    };
+
+    box.appendChild(bouton);
+
+  });
+
+  document
+    .getElementById("btnToutesClassesPersonnel")
+    .classList
+    .toggle(
+      "selected",
+      !classeSelectionnee
+    );
+}
+
+
+function afficherToutesLesClassesPersonnel(){
+
+  document.getElementById(
+    "classePresencePersonnel"
+  ).value = "";
+
+  classePresenceSelectionnee = "";
+  elevePresenceSelectionne = null;
+
+  document
+    .getElementById("listeClassesPersonnelPresence")
+    .classList
+    .remove("hidden");
+
+  document
+    .getElementById("elevePresenceSelectionne")
+    .classList
+    .add("hidden");
+
+  afficherClassesPersonnelPresence();
+  afficherElevesPersonnel();
+  chargerSemainePresence();
+}
+
+
+function selectionnerClassePersonnelPresence(classe){
+
+  classePresenceSelectionnee = classe;
+
+  document.getElementById(
+    "classePresencePersonnel"
+  ).value = classe;
+
+  elevePresenceSelectionne = null;
+
+  document
+    .getElementById("listeClassesPersonnelPresence")
+    .classList
+    .remove("hidden");
+
+  afficherClassesPersonnelPresence();
+  afficherElevesPersonnel();
+  chargerSemainePresence();
+
+  document
+    .getElementById("listeElevesPersonnelSection")
+    .scrollIntoView({
+      behavior:"smooth"
+    });
+}
+
+
+/* =========================================================
+   ELEVES
+========================================================= */
+
+function obtenirNomEleve(eleve){
+
+  return (
+    String(eleve.nom || "") +
+    " " +
+    String(eleve.prenom || "")
+  ).trim();
+}
+
+
+function obtenirIdEleve(eleve){
+
+  return String(
+    eleve.id ||
+    eleve.identifiant ||
+    (eleve.nom + "_" + eleve.prenom)
+  );
+}
+
+
+function obtenirSexeEleve(eleve){
+
+  const sexe =
+    String(
+      eleve.sexe ||
+      eleve.genre ||
+      eleve.gender ||
+      ""
+    ).toLowerCase()
+    .trim();
+
+  if(
+    sexe === "f" ||
+    sexe === "fille" ||
+    sexe === "féminin" ||
+    sexe === "feminin" ||
+    sexe === "female"
+  ){
+    return "F";
+  }
+
+  if(
+    sexe === "m" ||
+    sexe === "garçon" ||
+    sexe === "garcon" ||
+    sexe === "masculin" ||
+    sexe === "male"
+  ){
+    return "M";
+  }
+
+  return "";
+}
+
+
+function afficherElevesPersonnel(){
+
+  const liste =
+    document.getElementById(
+      "listeElevesPersonnel"
+    );
+
+  if(!liste) return;
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  liste.innerHTML = "";
+
+  let resultat =
+    eleves.filter(function(eleve){
+
+      return !classe ||
+             String(eleve.classe || "") === classe;
+
+    });
+
+  resultat.sort(function(a,b){
+
+    return obtenirNomEleve(a)
+      .localeCompare(obtenirNomEleve(b));
+
+  });
+
+  if(!resultat.length){
+
+    liste.innerHTML =
+      "<p>Aucun élève trouvé.</p>";
+
+    return;
+  }
+
+  resultat.forEach(function(eleve){
+
+    const bouton =
+      document.createElement("button");
+
+    bouton.type = "button";
+
+    if(
+      elevePresenceSelectionne &&
+      obtenirIdEleve(eleve) ===
+      obtenirIdEleve(elevePresenceSelectionne)
+    ){
+      bouton.classList.add("selected");
+    }
+
+    bouton.textContent =
+      obtenirNomEleve(eleve) +
+      " — " +
+      String(eleve.classe || "");
+
+    bouton.onclick = function(){
+
+      selectionnerElevePersonnelPresence(eleve);
+
+    };
+
+    liste.appendChild(bouton);
+
+  });
+}
+
+
+function selectionnerElevePersonnelPresence(eleve){
+
+  elevePresenceSelectionne = eleve;
+
+  afficherElevesPersonnel();
+
+  const box =
+    document.getElementById(
+      "elevePresenceSelectionne"
+    );
+
+  box.textContent =
+    "Élève sélectionné : " +
+    obtenirNomEleve(eleve);
+
+  box.classList.remove("hidden");
+
+  chargerSemainePresence();
+
+  box.scrollIntoView({
+    behavior:"smooth"
+  });
+}
+
+
+/* =========================================================
+   DATES
+========================================================= */
+
+function obtenirLundi(date){
+
+  const d = new Date(date);
+
+  d.setHours(0,0,0,0);
+
+  const jour = d.getDay();
+
+  const difference =
+    jour === 0 ? -6 : 1 - jour;
+
+  d.setDate(d.getDate() + difference);
+
+  return d;
+}
+
+
+function dateISO(date){
+
+  const d = new Date(date);
+
+  const annee = d.getFullYear();
+
+  const mois =
+    String(d.getMonth()+1).padStart(2,"0");
+
+  const jour =
+    String(d.getDate()).padStart(2,"0");
+
+  return annee + "-" + mois + "-" + jour;
+}
+
+
+function formatDateFrancais(date){
+
+  const jours = [
+    "Dimanche",
+    "Lundi",
+    "Mardi",
+    "Mercredi",
+    "Jeudi",
+    "Vendredi",
+    "Samedi"
+  ];
+
+  const mois = [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre"
+  ];
+
+  const d = new Date(date);
+
+  return
+    jours[d.getDay()] +
+    " " +
+    d.getDate() +
+    " " +
+    mois[d.getMonth()] +
+    " " +
+    d.getFullYear();
+}
+
+
+/* =========================================================
+   PRESENCES
+========================================================= */
+
+function obtenirPresence(idEleve,date){
+
+  const cle =
+    anneeAcademique +
+    "_" +
+    idEleve +
+    "_" +
+    date;
+
+  return presences[cle] || "";
+}
+
+
+function modifierCasePresence(idEleve,date,statut){
+
+  if (!IMCAuth.requirePermission("presences.create")) {
+    return;
+  }
+
+  const cle =
+    anneeAcademique +
+    "_" +
+    idEleve +
+    "_" +
+    date;
+
+  if(statut === ""){
+
+    delete presences[cle];
+
+  }else{
+
+    presences[cle] = statut;
+
+  }
+
+  /*
+    On ne reconstruit PAS le tableau ici.
+    Cela évite que la case disparaisse pendant
+    le clic de l'utilisateur.
+  */
+  mettreAJourResumeSemaine();
+}
+
+
+function gererCasePresence(caseCochee){
+
+  const idEleve =
+    caseCochee.dataset.id;
+
+  const date =
+    caseCochee.dataset.date;
+
+  const statut =
+    caseCochee.dataset.statut;
+
+  const cellule =
+    caseCochee.closest("td");
+
+  if(!cellule) return;
+
+  const cases =
+    cellule.querySelectorAll(
+      'input[type="checkbox"]'
+    );
+
+  cases.forEach(function(c){
+
+    if(c !== caseCochee){
+      c.checked = false;
+    }
+
+  });
+
+  if(caseCochee.checked){
+
+    modifierCasePresence(
+      idEleve,
+      date,
+      statut
+    );
+
+  }else{
+
+    /*
+      Si l'utilisateur décoche la case,
+      on supprime la présence du jour.
+    */
+    modifierCasePresence(
+      idEleve,
+      date,
+      ""
+    );
+
+  }
+
+  const ligne =
+    caseCochee.closest("tr");
+
+  if(ligne){
+
+    const statutCell =
+      ligne.querySelector(
+        ".presence-statut"
+      );
+
+    if(statutCell){
+
+      const autreCase =
+        cellule.querySelector(
+          'input[data-statut="Absent"]'
+        );
+
+      const casePresent =
+        cellule.querySelector(
+          'input[data-statut="Présent"]'
+        );
+
+      if(
+        casePresent &&
+        casePresent.checked
+      ){
+
+        statutCell.textContent =
+          "Présent";
+
+      }else if(
+        autreCase &&
+        autreCase.checked
+      ){
+
+        statutCell.textContent =
+          "Absent";
+
+      }else{
+
+        statutCell.textContent =
+          "—";
+
+      }
+
+    }
+
+  }
+
+}
+
+
+/* =========================================================
+   TABLEAU HEBDOMADAIRE
+========================================================= */
+
+function chargerSemainePresence(){
+
+  const container =
+    document.getElementById(
+      "tableauPresenceContainer"
+    );
+
+  if(!container) return;
+
+  const dateDebut =
+    document.getElementById(
+      "dateDebutSemaine"
+    ).value;
+
+  if(!dateDebut){
+
+    container.innerHTML =
+      "<p>Veuillez sélectionner une date.</p>";
+
+    return;
+  }
+
+  const lundi =
+    obtenirLundi(dateDebut);
+
+  const dates = [];
+
+  for(let i=0;i<5;i++){
+
+    const d = new Date(lundi);
+
+    d.setDate(
+      lundi.getDate()+i
+    );
+
+    dates.push(dateISO(d));
+
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  let elevesAffiches =
+    eleves.filter(function(eleve){
+
+      return !classe ||
+        String(eleve.classe || "") === classe;
+
+    });
+
+  elevesAffiches.sort(function(a,b){
+
+    return obtenirNomEleve(a)
+      .localeCompare(obtenirNomEleve(b));
+
+  });
+
+  if(!elevesAffiches.length){
+
+    container.innerHTML =
+      "<p>Aucun élève dans cette classe.</p>";
+
+    mettreAJourResumeSemaine();
+
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Élève</th>
+  `;
+
+  dates.forEach(function(date){
+
+    const d =
+      new Date(date + "T00:00:00");
+
+    html += `
+      <th>
+        ${d.toLocaleDateString("fr-FR",{
+          weekday:"long"
+        })}
+        <br>
+        ${d.toLocaleDateString("fr-FR")}
+      </th>
+    `;
+
+  });
+
+  html += `
+          <th>Résumé</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  elevesAffiches.forEach(function(eleve){
+
+    const id =
+      obtenirIdEleve(eleve);
+
+    html += `
+      <tr data-eleve="${echapperHTML(id)}">
+
+        <td>
+          <strong>
+            ${echapperHTML(obtenirNomEleve(eleve))}
+          </strong>
+          <br>
+          <small>
+            ${echapperHTML(eleve.classe || "")}
+          </small>
+        </td>
+    `;
+
+    dates.forEach(function(date){
+
+      const presence =
+        obtenirPresence(id,date);
+
+      html += `
+        <td>
+          <div class="presence-case">
+
+            <label class="presence-option">
+              <input
+                type="checkbox"
+                data-id="${echapperHTML(id)}"
+                data-date="${date}"
+                data-statut="Présent"
+                onchange="gererCasePresence(this)"
+                ${presence === "Présent" ? "checked" : ""}>
+              Présent
+            </label>
+
+            <label class="presence-option">
+              <input
+                type="checkbox"
+                data-id="${echapperHTML(id)}"
+                data-date="${date}"
+                data-statut="Absent"
+                onchange="gererCasePresence(this)"
+                ${presence === "Absent" ? "checked" : ""}>
+              Absent
+            </label>
+
+          </div>
+        </td>
+      `;
+
+    });
+
+    let absences = 0;
+    let presents = 0;
+
+    dates.forEach(function(date){
+
+      const p =
+        obtenirPresence(id,date);
+
+      if(p === "Absent"){
+        absences++;
+      }
+
+      if(p === "Présent"){
+        presents++;
+      }
+
+    });
+
+    html += `
+      <td class="presence-statut">
+        ${presents} présent(s)<br>
+        ${absences} absent(s)
+      </td>
+    `;
+
+    html += `</tr>`;
+
+  });
+
+  html += `
+      </tbody>
+    </table>
+  `;
+
+  container.innerHTML = html;
+
+  mettreAJourResumeSemaine();
+}
+
+
+/* =========================================================
+   ENREGISTRER PRESENCES
+========================================================= */
+
+function enregistrerPresences(){
+
+  try{
+
+    localStorage.setItem(
+      CLE_PRESENCES,
+      JSON.stringify(presences)
+    );
+
+    const verification =
+      localStorage.getItem(CLE_PRESENCES);
+
+    if(verification === null){
+
+      throw new Error(
+        "La sauvegarde localStorage a échoué."
+      );
+
+    }
+
+    afficherMessage(
+      "messagePresence",
+      "Les présences ont été enregistrées avec succès.",
+      "ok"
+    );
+
+  }catch(erreur){
+
+    console.error(erreur);
+
+    afficherMessage(
+      "messagePresence",
+      "Erreur : les présences n'ont pas pu être enregistrées.",
+      "erreur"
+    );
+
+  }
+
+}
+
+
+/* =========================================================
+   RESUME HEBDOMADAIRE
+========================================================= */
+
+function mettreAJourResumeSemaine(){
+
+  const box =
+    document.getElementById(
+      "resumeSemaine"
+    );
+
+  if(!box) return;
+
+  const dateDebut =
+    document.getElementById(
+      "dateDebutSemaine"
+    ).value;
+
+  if(!dateDebut){
+
+    box.innerHTML = "";
+
+    return;
+  }
+
+  const lundi =
+    obtenirLundi(dateDebut);
+
+  const dates = [];
+
+  for(let i=0;i<5;i++){
+
+    const d = new Date(lundi);
+
+    d.setDate(
+      lundi.getDate()+i
+    );
+
+    dates.push(dateISO(d));
+
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  const liste =
+    eleves.filter(function(eleve){
+
+      return !classe ||
+        String(eleve.classe || "") === classe;
+
+    });
+
+  let total = liste.length;
+  let absents = 0;
+  let presents = 0;
+
+  liste.forEach(function(eleve){
+
+    const id =
+      obtenirIdEleve(eleve);
+
+    let aEteAbsent = false;
+    let aEtePresent = false;
+
+    dates.forEach(function(date){
+
+      const p =
+        obtenirPresence(id,date);
+
+      if(p === "Absent"){
+        aEteAbsent = true;
+      }
+
+      if(p === "Présent"){
+        aEtePresent = true;
+      }
+
+    });
+
+    if(aEteAbsent){
+      absents++;
+    }
+
+    if(aEtePresent){
+      presents++;
+    }
+
+  });
+
+  box.innerHTML = `
+    <div class="resume-item">
+      Effectif total
+      <span>${total}</span>
+    </div>
+
+    <div class="resume-item">
+      Présents
+      <span>${presents}</span>
+    </div>
+
+    <div class="resume-item">
+      Absents
+      <span>${absents}</span>
+    </div>
+
+    <div class="resume-item">
+      Non renseignés
+      <span>${Math.max(0,total-presents-absents)}</span>
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   CALCUL STATISTIQUES
+========================================================= */
+
+function obtenirStatistiquesPourDates(
+  dates,
+  classe
+){
+
+  const liste =
+    eleves.filter(function(eleve){
+
+      return !classe ||
+        String(eleve.classe || "") === classe;
+
+    });
+
+  const statistiques = {
+
+    totalEleves: liste.length,
+
+    fillesTotal:0,
+    garconsTotal:0,
+    sexeNonPrecise:0,
+
+    fillesAbsentes:0,
+    garconsAbsents:0,
+    sexeNonPreciseAbsents:0,
+
+    fillesPresentes:0,
+    garconsPresentes:0,
+    sexeNonPrecisePresentes:0,
+
+    totalAbsences:0,
+    totalPresences:0
+
+  };
+
+  liste.forEach(function(eleve){
+
+    const sexe =
+      obtenirSexeEleve(eleve);
+
+    if(sexe === "F"){
+      statistiques.fillesTotal++;
+    }else if(sexe === "M"){
+      statistiques.garconsTotal++;
+    }else{
+      statistiques.sexeNonPrecise++;
+    }
+
+    let absent = false;
+    let present = false;
+
+    dates.forEach(function(date){
+
+      const id =
+        obtenirIdEleve(eleve);
+
+      const p =
+        obtenirPresence(id,date);
+
+      if(p === "Absent"){
+
+        statistiques.totalAbsences++;
+        absent = true;
+
+        if(sexe === "F"){
+          statistiques.fillesAbsentes++;
+        }else if(sexe === "M"){
+          statistiques.garconsAbsents++;
+        }else{
+          statistiques.sexeNonPreciseAbsents++;
+        }
+
+      }
+
+      if(p === "Présent"){
+
+        statistiques.totalPresences++;
+        present = true;
+
+        if(sexe === "F"){
+          statistiques.fillesPresentes++;
+        }else if(sexe === "M"){
+          statistiques.garconsPresentes++;
+        }else{
+          statistiques.sexeNonPrecisePresentes++;
+        }
+
+      }
+
+    });
+
+  });
+
+  /*
+    Pour les rapports d'effectif,
+    on calcule l'effectif restant à partir
+    de l'effectif total et du nombre d'élèves
+    absents.
+
+    Exemple :
+    35 élèves - 8 absents = 27 présents.
+  */
+
+  statistiques.effectifApresAbsences =
+    Math.max(
+      0,
+      statistiques.totalEleves -
+      statistiques.fillesAbsentes -
+      statistiques.garconsAbsents -
+      statistiques.sexeNonPreciseAbsents
+    );
+
+  return statistiques;
+}
+
+
+/* =========================================================
+   RAPPORT JOURNALIER
+========================================================= */
+
+function genererRapportJournalier(){
+
+  const date =
+    document.getElementById(
+      "dateRapportJournalier"
+    ).value;
+
+  if(!date){
+
+    alert("Veuillez sélectionner une date.");
+
+    return;
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  const stats =
+    obtenirStatistiquesPourDates(
+      [date],
+      classe
+    );
+
+  afficherRapport(
+    "Rapport journalier",
+    date,
+    date,
+    classe,
+    stats
+  );
+
+}
+
+
+/* =========================================================
+   RAPPORT HEBDOMADAIRE
+========================================================= */
+
+function genererRapportHebdomadaire(){
+
+  const date =
+    document.getElementById(
+      "dateRapportHebdomadaire"
+    ).value;
+
+  if(!date){
+
+    alert("Veuillez sélectionner une date.");
+
+    return;
+  }
+
+  const lundi =
+    obtenirLundi(date);
+
+  const dates = [];
+
+  for(let i=0;i<5;i++){
+
+    const d = new Date(lundi);
+
+    d.setDate(
+      lundi.getDate()+i
+    );
+
+    dates.push(dateISO(d));
+
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  const stats =
+    obtenirStatistiquesPourDates(
+      dates,
+      classe
+    );
+
+  afficherRapport(
+    "Rapport hebdomadaire",
+    dates[0],
+    dates[4],
+    classe,
+    stats
+  );
+
+}
+
+
+/* =========================================================
+   RAPPORT MENSUEL
+========================================================= */
+
+function genererRapportMensuel(){
+
+  const mois =
+    parseInt(
+      document.getElementById(
+        "moisRapportMensuel"
+      ).value,
+      10
+    );
+
+  const annee =
+    parseInt(
+      document.getElementById(
+        "anneeRapportMensuel"
+      ).value,
+      10
+    );
+
+  if(!mois || !annee){
+
+    alert(
+      "Veuillez sélectionner le mois et l'année."
+    );
+
+    return;
+  }
+
+  /*
+    IMPORTANT :
+    Le mois commence à 1 dans le select,
+    mais JavaScript utilise 0 à 11.
+  */
+
+  const dernierJour =
+    new Date(
+      annee,
+      mois,
+      0
+    ).getDate();
+
+  const dates = [];
+
+  for(
+    let jour = 1;
+    jour <= dernierJour;
+    jour++
+  ){
+
+    const d =
+      new Date(
+        annee,
+        mois - 1,
+        jour
+      );
+
+    dates.push(
+      dateISO(d)
+    );
+
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  const stats =
+    obtenirStatistiquesPourDates(
+      dates,
+      classe
+    );
+
+  afficherRapport(
+    "Rapport mensuel",
+    dates[0],
+    dates[dates.length-1],
+    classe,
+    stats
+  );
+
+}
+
+
+/* =========================================================
+   AFFICHAGE RAPPORT
+========================================================= */
+
+function afficherRapport(
+  titre,
+  dateDebut,
+  dateFin,
+  classe,
+  stats
+){
+
+  const resultat =
+    document.getElementById(
+      "rapportResultat"
+    );
+
+  const contenu =
+    document.getElementById(
+      "contenuRapport"
+    );
+
+  let periode = "";
+
+  if(dateDebut === dateFin){
+
+    periode =
+      formaterDateComplete(dateDebut);
+
+  }else{
+
+    periode =
+      formaterDateComplete(dateDebut) +
+      " au " +
+      formaterDateComplete(dateFin);
+
+  }
+
+  const nomClasse =
+    classe || "Toutes les classes";
+
+  const totalAbsents =
+    stats.fillesAbsentes +
+    stats.garconsAbsents +
+    stats.sexeNonPreciseAbsents;
+
+  /*
+    EFFECTIF RESTANT :
+    total élèves - total absents.
+  */
+  const effectifRestant =
+    Math.max(
+      0,
+      stats.totalEleves - totalAbsents
+    );
+
+  /*
+    Si le sexe est connu, on affiche
+    filles et garçons.
+  */
+  contenu.innerHTML = `
+
+    <div class="rapport-entete">
+
+      <h2>${echapperHTML(titre)}</h2>
+
+      <strong>
+        Année académique :
+        ${echapperHTML(anneeAcademique)}
+      </strong>
+
+      <br>
+
+      <strong>
+        Classe :
+        ${echapperHTML(nomClasse)}
+      </strong>
+
+      <br>
+
+      <span>
+        Période :
+        ${echapperHTML(periode)}
+      </span>
+
+    </div>
+
+    <div class="rapport-statistiques">
+
+      <div class="rapport-stat">
+        <strong>Effectif total</strong>
+        ${stats.totalEleves}
+      </div>
+
+      <div class="rapport-stat">
+        <strong>Total absents</strong>
+        ${totalAbsents}
+      </div>
+
+      <div class="rapport-stat">
+        <strong>Total présents</strong>
+        ${effectifRestant}
+      </div>
+
+      <div class="rapport-stat">
+        <strong>Non renseignés</strong>
+        ${Math.max(
+          0,
+          stats.totalEleves -
+          effectifRestant -
+          totalAbsents
+        )}
+      </div>
+
+    </div>
+
+    <table>
+
+      <thead>
+        <tr>
+          <th>Catégorie</th>
+          <th>Effectif</th>
+          <th>Absents</th>
+          <th>Présents / restant</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        <tr>
+          <td>Filles</td>
+          <td>${stats.fillesTotal}</td>
+          <td>${stats.fillesAbsentes}</td>
+          <td>
+            ${Math.max(
+              0,
+              stats.fillesTotal -
+              stats.fillesAbsentes
+            )}
+          </td>
+        </tr>
+
+        <tr>
+          <td>Garçons</td>
+          <td>${stats.garconsTotal}</td>
+          <td>${stats.garconsAbsents}</td>
+          <td>
+            ${Math.max(
+              0,
+              stats.garconsTotal -
+              stats.garconsAbsents
+            )}
+          </td>
+        </tr>
+
+        ${
+          stats.sexeNonPrecise > 0
+          ? `
+          <tr>
+            <td>Sexe non précisé</td>
+            <td>${stats.sexeNonPrecise}</td>
+            <td>${stats.sexeNonPreciseAbsents}</td>
+            <td>
+              ${Math.max(
+                0,
+                stats.sexeNonPrecise -
+                stats.sexeNonPreciseAbsents
+              )}
+            </td>
+          </tr>
+          `
+          : ""
+        }
+
+        <tr>
+          <th>TOTAL</th>
+          <th>${stats.totalEleves}</th>
+          <th>${totalAbsents}</th>
+          <th>${effectifRestant}</th>
+        </tr>
+
+      </tbody>
+
+    </table>
+
+    <div style="
+      margin-top:15px;
+      padding:12px;
+      border:1px solid #aaa;
+      border-radius:8px;
+      background:#f8f9f9;
+      text-align:center;
+      font-weight:bold;
+    ">
+
+      Effectif total :
+      ${stats.totalEleves}
+      &nbsp; − &nbsp;
+      Total absents :
+      ${totalAbsents}
+      &nbsp; = &nbsp;
+      Effectif restant :
+      ${effectifRestant}
+
+    </div>
+
+  `;
+
+  resultat.classList.remove("hidden");
+
+  resultat.scrollIntoView({
+    behavior:"smooth"
+  });
+}
+
+
+/* =========================================================
+   DATE RAPPORT
+========================================================= */
+
+function formaterDateComplete(date){
+
+  const d =
+    new Date(date + "T00:00:00");
+
+  return d.toLocaleDateString(
+    "fr-FR",
+    {
+      day:"2-digit",
+      month:"long",
+      year:"numeric"
+    }
+  );
+}
+
+
+/* =========================================================
+   UTILITAIRES
+========================================================= */
+
+function afficherMessage(
+  id,
+  texte,
+  type
+){
+
+  const element =
+    document.getElementById(id);
+
+  if(!element) return;
+
+  element.textContent = texte;
+
+  element.className =
+    "message " +
+    (type || "ok");
+
+  clearTimeout(
+    element._timerMessage
+  );
+
+  element._timerMessage =
+    setTimeout(function(){
+
+      element.classList.remove(
+        "ok",
+        "erreur"
+      );
+
+      element.style.display = "none";
+
+    },5000);
+
+  element.style.display = "block";
+}
+
+
+function echapperHTML(valeur){
+
+  return String(valeur ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Badge élève - IMC Clarodaro</title>
+
+<style>
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    padding:20px;
+    font-family:"Times New Roman", serif;
+    background:#f2f2f2;
+    color:#111;
+}
+
+/* =========================
+   COMMANDES
+========================= */
+
+.commandes{
+    max-width:900px;
+    margin:0 auto 25px;
+    padding:18px;
+    background:#fff;
+    border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+}
+
+.commandes h2{
+    margin:0 0 15px;
+    text-align:center;
+    color:#075e2d;
+    font-size:22px;
+}
+
+.boutons-principaux{
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+button{
+    font-family:"Times New Roman", serif;
+    cursor:pointer;
+    border:none;
+    border-radius:6px;
+    padding:10px 16px;
+    font-size:15px;
+    font-weight:bold;
+}
+
+.btn-badge{
+    background:#087f3f;
+    color:white;
+}
+
+.btn-imprimer{
+    background:#155db5;
+    color:white;
+}
+
+.btn-enregistrer{
+    background:#d88a00;
+    color:white;
+}
+
+.btn-retour{
+    background:#666;
+    color:white;
+}
+
+button:hover{
+    opacity:.88;
+}
+
+#listeClasses,
+#zoneEleves{
+    display:none;
+    margin-top:18px;
+    padding-top:15px;
+    border-top:1px solid #ccc;
+}
+
+#listeClasses h3,
+#zoneEleves h3{
+    text-align:center;
+    margin:0 0 12px;
+    font-size:17px;
+}
+
+#boutonsClasses,
+#boutonsEleves{
+    display:flex;
+    justify-content:center;
+    flex-wrap:wrap;
+    gap:8px;
+}
+
+.btn-classe{
+    background:#e8f3ec;
+    color:#075e2d;
+    border:1px solid #087f3f;
+    padding:8px 12px;
+}
+
+.btn-eleve{
+    background:#eaf1fb;
+    color:#155db5;
+    border:1px solid #155db5;
+    padding:8px 12px;
+}
+
+/* =========================
+   BADGE VERTICAL
+========================= */
+
+.badge{
+    position:relative;
+
+    width:5.4cm;
+    height:8.56cm;
+
+    margin:20px auto;
+    padding:6px;
+
+    background:#fff;
+    border:1.5px solid #111;
+    border-radius:6px;
+
+    overflow:hidden;
+
+    box-shadow:0 2px 8px rgba(0,0,0,.25);
+}
+
+/* =========================
+   ENTÊTE
+========================= */
+
+.entete-principal{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    width:100%;
+}
+
+.logo{
+    width:0.78cm;
+    height:0.78cm;
+    object-fit:contain;
+    flex-shrink:0;
+}
+
+.bloc-identite{
+    flex:1;
+    text-align:center;
+    min-width:0;
+    padding:0 2px;
+}
+
+.institution{
+    font-weight:bold;
+    font-size:9pt;
+    line-height:1;
+}
+
+.clarodaro{
+    font-size:12pt;
+    font-weight:bold;
+    line-height:1;
+}
+
+.sigle{
+    font-size:11pt;
+    font-weight:bold;
+    line-height:1;
+}
+
+/* =========================
+   ADRESSE ET TÉLÉPHONE
+========================= */
+
+.adresse{
+    text-align:center;
+    font-size:6.7pt;
+    line-height:1.05;
+    margin-top:3px;
+}
+
+.telephone{
+    text-align:center;
+    font-size:6.5pt;
+    line-height:1.05;
+    margin-top:2px;
+}
+
+/* =========================
+   CONTENU DU BADGE
+========================= */
+
+.contenu{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    width:100%;
+
+    margin-top:5px;
+    padding-bottom:1.55cm;
+}
+
+/* =========================
+   PHOTO
+========================= */
+
+.photo-container{
+    width:2.25cm;
+    height:2.75cm;
+
+    flex-shrink:0;
+
+    overflow:hidden;
+
+    border:1.5px solid #222;
+    background:#eee;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    position:relative;
+
+    margin-bottom:5px;
+}
+
+.photo{
+    display:block;
+
+    width:100%;
+    height:100%;
+
+    object-fit:cover;
+    object-position:center center;
+
+    margin:0;
+    padding:0;
+    border:0;
+}
+
+.photo-vide{
+    font-size:8pt;
+    color:#777;
+    text-align:center;
+}
+
+/* =========================
+   INFORMATIONS ÉLÈVE
+========================= */
+
+.informations{
+    width:100%;
+}
+
+.ligne{
+    display:flex;
+    align-items:flex-start;
+
+    width:100%;
+
+    margin-bottom:3px;
+
+    font-size:7.5pt;
+    line-height:1.05;
+}
+
+.etiquette{
+    font-weight:bold;
+    flex:0 0 auto;
+    margin-right:3px;
+}
+
+.valeur{
+    flex:1;
+    min-width:0;
+
+    overflow-wrap:anywhere;
+    word-break:break-word;
+}
+
+/* =========================
+   ANNÉE SCOLAIRE
+   SOUS LE TÉLÉPHONE
+========================= */
+
+.pied{
+    width:100%;
+    text-align:left;
+    margin-top:3px;
+    padding-left:2px;
+    font-size:7.5pt;
+    font-weight:bold;
+}
+
+#annee{
+    font-weight:normal;
+}
+
+/* =========================
+   SIGNATURE DIRECTRICE
+   CONSERVÉE
+========================= */
+
+.signature-directrice{
+    position:absolute;
+    bottom:4px;
+    right:6px;
+    width:3.2cm;
+    text-align:center;
+    color:#111;
+    font-size:8pt;
+}
+
+.signature-directrice img{
+    width:3.0cm;
+    height:0.95cm;
+    object-fit:contain;
+    display:block;
+    margin:0 auto 1px;
+}
+
+.signature-directrice .ligne-signature{
+    width:100%;
+    border-top:1px solid #111;
+    margin:0 auto 2px;
+}
+
+.signature-directrice .nom-directrice{
+    font-weight:bold;
+    font-size:8pt;
+    line-height:1.05;
+    white-space:nowrap;
+}
+
+.signature-directrice .fonction-directrice{
+    font-size:7.5pt;
+    font-style:italic;
+    line-height:1.05;
+}
+
+/* =========================
+   IMPRESSION
+========================= */
+
+@media print{
+
+    @page{
+        size:auto;
+        margin:0;
+    }
+
+    html,
+    body{
+        width:auto;
+        height:auto;
+        margin:0;
+        padding:0;
+        background:white;
+    }
+
+    .commandes{
+        display:none !important;
+    }
+
+    .badge{
+        width:5.4cm;
+        height:8.56cm;
+
+        margin:0;
+
+        border:1.5px solid #111;
+        border-radius:0;
+
+        box-shadow:none;
+
+        page-break-inside:avoid;
+        break-inside:avoid;
+    }
+}
+
+/* =========================
+   PETITS ÉCRANS
+========================= */
+
+@media(max-width:600px){
+
+    body{
+        padding:10px;
+    }
+
+    .commandes{
+        padding:12px;
+    }
+
+    .boutons-principaux{
+        flex-direction:column;
+    }
+
+    .boutons-principaux button{
+        width:100%;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- =========================
+     COMMANDES
+========================= -->
+
+<div class="commandes">
+
+    <h2>Badge des élèves</h2>
+
+    <div class="boutons-principaux">
+
+        <button
+            class="btn-badge"
+            onclick="afficherClasses()">
+            Toutes les classes
+        </button>
+
+        <button
+            class="btn-imprimer"
+            onclick="imprimerBadge()">
+            Imprimer le badge
+        </button>
+
+        <!-- NOUVEAU BOUTON -->
+
+        <button
+            class="btn-enregistrer"
+            onclick="enregistrerBadge()">
+            Enregistrer le badge
+        </button>
+
+        <button
+            class="btn-retour"
+            onclick="location.href='index.html'">
+            Retour aux élèves
+        </button>
+
+    </div>
+
+
+    <!-- =========================
+         LISTE DES CLASSES
+    ========================= -->
+
+    <div id="listeClasses">
+
+        <h3>Choisir une classe</h3>
+
+        <div id="boutonsClasses"></div>
+
+    </div>
+
+
+    <!-- =========================
+         LISTE DES ÉLÈVES
+    ========================= -->
+
+    <div id="zoneEleves">
+
+        <h3>
+            Élèves de la classe :
+            <span id="nomClasse"></span>
+        </h3>
+
+        <div id="boutonsEleves"></div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================
+     BADGE
+========================= -->
+
+<section class="badge" id="badge">
+
+    <!-- EN-TÊTE -->
+
+    <div class="entete-principal">
+
+        <img
+            class="logo logo-gauche"
+            src="logo-clarodaro.png"
+            alt="Logo gauche">
+
+        <div class="bloc-identite">
+
+            <div class="institution">
+                INSTITUTION MIXTE
+            </div>
+
+            <div class="clarodaro">
+                CLARODARO
+            </div>
+
+            <div class="sigle">
+                IMC
+            </div>
+
+        </div>
+
+        <img
+            class="logo logo-droite"
+            src="logo-clarodaro.png"
+            alt="Logo droite">
+
+    </div>
+
+
+    <!-- ADRESSE -->
+
+    <div class="adresse">
+
+        Adresse : Route des rails et Latour,<br>
+        Pont-Sondé, Haïti
+
+    </div>
+
+
+    <!-- TÉLÉPHONE -->
+
+    <div class="telephone">
+
+        Tél. : (509) 3613 8179 / 3740 8506 / 4024 4663
+
+    </div>
+
+
+    <!-- =========================
+         CONTENU
+    ========================= -->
+
+    <div class="contenu">
+
+        <!-- PHOTO -->
+
+        <div
+            class="photo-container"
+            id="photoContainer">
+
+            <div class="photo-vide">
+                Photo
+            </div>
+
+        </div>
+
+
+        <!-- INFORMATIONS -->
+
+        <div class="informations">
+
+            <div class="ligne">
+
+                <span class="etiquette">
+                    Nom :
+                </span>
+
+                <span
+                    class="valeur"
+                    id="nom">
+                    ……………………
+                </span>
+
+            </div>
+
+
+            <div class="ligne">
+
+                <span class="etiquette">
+                    Prénom :
+                </span>
+
+                <span
+                    class="valeur"
+                    id="prenom">
+                    ……………………
+                </span>
+
+            </div>
+
+
+            <div class="ligne">
+
+                <span class="etiquette">
+                    Adresse :
+                </span>
+
+                <span
+                    class="valeur"
+                    id="adresseEleve">
+                    ……………………
+                </span>
+
+            </div>
+
+
+            <div class="ligne">
+
+                <span class="etiquette">
+                    Tél :
+                </span>
+
+                <span class="valeur">
+
+                    (509)
+                    <span id="telephoneEleve">
+                        ………………
+                    </span>
+
+                </span>
+
+            </div>
+
+
+            <!-- ANNÉE JUSTE SOUS LE TÉLÉPHONE -->
+
+            <div class="pied">
+
+                Année :
+                <span id="annee"></span>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         SIGNATURE DIRECTRICE
+    ========================= -->
+
+    <div class="signature-directrice">
+
+        <img
+            src="signature-directrice.png"
+            alt="Signature de la Directrice">
+
+        <div class="ligne-signature"></div>
+
+        <div class="nom-directrice">
+            Ronide Kénol
+        </div>
+
+        <div class="fonction-directrice">
+            La Directrice
+        </div>
+
+    </div>
+
+</section>
+
+
+<script src="secure-storage.js"></script>
+<script src="auth.js"></script>
+<script>
+
+// Guard d'authentification
+document.addEventListener("DOMContentLoaded", function() {
+  IMCAuth.requireAuth("personnel.html");
+});
+
+/* =========================
+   DONNÉES
+========================= */
+
+let eleves = [];
+
+let eleveSelectionne = null;
+
+
+/* =========================
+   CHARGER LES ÉLÈVES
+========================= */
+
+function chargerEleves(){
+
+    try{
+
+        eleves = JSON.parse(
+            localStorage.getItem("imc_students") || "[]"
+        );
+
+        if(!Array.isArray(eleves)){
+
+            eleves = [];
+
+        }
+
+    }catch(e){
+
+        console.error(
+            "Erreur lors du chargement des élèves :",
+            e
+        );
+
+        eleves = [];
+
+    }
+
+}
+
+
+/* =========================
+   ANNÉE ACADÉMIQUE
+========================= */
+
+function chargerAnnee(){
+
+    const annee =
+        localStorage.getItem("imc_active_year")
+        || "2026-2027";
+
+    document.getElementById("annee").textContent =
+        annee;
+
+}
+
+
+/* =========================
+   OBTENIR UNE VALEUR
+========================= */
+
+function obtenirValeur(objet, champs){
+
+    for(const champ of champs){
+
+        if(
+            objet &&
+            objet[champ] !== undefined &&
+            objet[champ] !== null &&
+            String(objet[champ]).trim() !== ""
+        ){
+
+            return String(
+                objet[champ]
+            ).trim();
+
+        }
+
+    }
+
+    return "";
+
+}
+
+
+/* =========================
+   NOM
+========================= */
+
+function obtenirNom(eleve){
+
+    return obtenirValeur(
+        eleve,
+        [
+            "nom",
+            "Nom"
+        ]
+    );
+
+}
+
+
+/* =========================
+   PRÉNOM
+========================= */
+
+function obtenirPrenom(eleve){
+
+    return obtenirValeur(
+        eleve,
+        [
+            "prenom",
+            "prénom",
+            "Prenom"
+        ]
+    );
+
+}
+
+
+/* =========================
+   ADRESSE
+========================= */
+
+function obtenirAdresse(eleve){
+
+    return obtenirValeur(
+        eleve,
+        [
+            "adresse",
+            "Adresse",
+            "commune"
+        ]
+    );
+
+}
+
+
+/* =========================
+   TÉLÉPHONE
+========================= */
+
+function obtenirTelephone(eleve){
+
+    return obtenirValeur(
+        eleve,
+        [
+            "telephone",
+            "tel",
+            "contact"
+        ]
+    );
+
+}
+
+
+/* =========================
+   CLASSE
+========================= */
+
+function obtenirClasse(eleve){
+
+    return obtenirValeur(
+        eleve,
+        [
+            "classe",
+            "Classe",
+            "niveau",
+            "Niveau",
+            "class",
+            "Class"
+        ]
+    );
+
+}
+
+
+/* =========================
+   PHOTO
+========================= */
+
+function obtenirPhoto(eleve){
+
+    return obtenirValeur(
+        eleve,
+        [
+            "photo",
+            "image",
+            "photoData"
+        ]
+    );
+
+}
+
+
+/* =========================
+   NORMALISER CLASSE
+========================= */
+
+function normaliserClasse(classe){
+
+    return String(classe || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+}
+
+
+/* =========================
+   CLASSES PAR DÉFAUT
+========================= */
+
+const classesParDefaut = [
+
+    "1ère Kind",
+    "2ème Kind",
+    "3ème Kind",
+
+    "1ère A.F.",
+    "2ème A.F.",
+    "3ème A.F.",
+    "4ème A.F.",
+    "5ème A.F.",
+    "6ème A.F.",
+    "7ème A.F.",
+    "8ème A.F.",
+    "9ème A.F."
+
+];
+
+
+/* =========================
+   AFFICHER LES CLASSES
+========================= */
+
+function afficherClasses(){
+
+    chargerEleves();
+
+    const zone =
+        document.getElementById(
+            "listeClasses"
+        );
+
+    const boutons =
+        document.getElementById(
+            "boutonsClasses"
+        );
+
+    const zoneEleves =
+        document.getElementById(
+            "zoneEleves"
+        );
+
+    boutons.innerHTML = "";
+
+    zone.style.display =
+        zone.style.display === "block"
+            ? "none"
+            : "block";
+
+
+    if(zone.style.display !== "block"){
+
+        zoneEleves.style.display =
+            "none";
+
+        return;
+
+    }
+
+
+    const classesReelles =
+        eleves
+        .map(eleve =>
+            obtenirClasse(eleve)
+        )
+        .filter(classe =>
+            classe !== ""
+        );
+
+
+    const toutesLesClasses = [
+
+        ...classesParDefaut,
+        ...classesReelles
+
+    ];
+
+
+    const classesUniques = [];
+
+    const dejaVues = new Set();
+
+
+    toutesLesClasses.forEach(classe => {
+
+        const cle =
+            normaliserClasse(classe);
+
+
+        if(!dejaVues.has(cle)){
+
+            dejaVues.add(cle);
+
+            classesUniques.push(
+                classe
+            );
+
+        }
+
+    });
+
+
+    classesUniques.forEach(classe => {
+
+        const bouton =
+            document.createElement(
+                "button"
+            );
+
+        bouton.className =
+            "btn-classe";
+
+        bouton.textContent =
+            classe;
+
+
+        bouton.onclick = function(){
+
+            afficherElevesClasse(
+                classe
+            );
+
+        };
+
+
+        boutons.appendChild(
+            bouton
+        );
+
+    });
+
+}
+
+
+/* =========================
+   AFFICHER LES ÉLÈVES
+========================= */
+
+function afficherElevesClasse(classe){
+
+    chargerEleves();
+
+    const zone =
+        document.getElementById(
+            "zoneEleves"
+        );
+
+    const boutons =
+        document.getElementById(
+            "boutonsEleves"
+        );
+
+    const nomClasse =
+        document.getElementById(
+            "nomClasse"
+        );
+
+
+    boutons.innerHTML = "";
+
+    nomClasse.textContent =
+        classe;
+
+
+    const classeNormalisee =
+        normaliserClasse(classe);
+
+
+    const elevesClasse =
+        eleves
+        .map((eleve,index) => ({
+            eleve,
+            index
+        }))
+        .filter(item => {
+
+            return normaliserClasse(
+                obtenirClasse(
+                    item.eleve
+                )
+            ) === classeNormalisee;
+
+        })
+        .sort((a,b) => {
+
+            const nomA =
+                (
+                    obtenirNom(a.eleve)
+                    + " "
+                    + obtenirPrenom(a.eleve)
+                ).toLowerCase();
+
+
+            const nomB =
+                (
+                    obtenirNom(b.eleve)
+                    + " "
+                    + obtenirPrenom(b.eleve)
+                ).toLowerCase();
+
+
+            return nomA.localeCompare(
+                nomB,
+                "fr"
+            );
+
+        });
+
+
+    if(elevesClasse.length === 0){
+
+        const message =
+            document.createElement(
+                "div"
+            );
+
+        message.textContent =
+            "Aucun élève dans cette classe.";
+
+        message.style.textAlign =
+            "center";
+
+        message.style.color =
+            "#777";
+
+        message.style.padding =
+            "10px";
+
+
+        boutons.appendChild(
+            message
+        );
+
+
+        zone.style.display =
+            "block";
+
+        return;
+
+    }
+
+
+    elevesClasse.forEach(item => {
+
+        const bouton =
+            document.createElement(
+                "button"
+            );
+
+        bouton.className =
+            "btn-eleve";
+
+
+        const nom =
+            obtenirNom(
+                item.eleve
+            );
+
+        const prenom =
+            obtenirPrenom(
+                item.eleve
+            );
+
+
+        bouton.textContent =
+            (
+                nom + " " + prenom
+            ).trim()
+            || "Élève sans nom";
+
+
+        bouton.onclick = function(){
+
+            selectionnerEleve(
+                item.index
+            );
+
+        };
+
+
+        boutons.appendChild(
+            bouton
+        );
+
+    });
+
+
+    zone.style.display =
+        "block";
+
+}
+
+
+/* =========================
+   SÉLECTIONNER UN ÉLÈVE
+========================= */
+
+function selectionnerEleve(index){
+
+    if(
+        index < 0 ||
+        index >= eleves.length
+    ){
+
+        return;
+
+    }
+
+
+    const eleve =
+        eleves[index];
+
+    eleveSelectionne =
+        eleve;
+
+
+    /* NOM */
+
+    document.getElementById(
+        "nom"
+    ).textContent =
+        obtenirNom(eleve)
+        || "……………………";
+
+
+    /* PRÉNOM */
+
+    document.getElementById(
+        "prenom"
+    ).textContent =
+        obtenirPrenom(eleve)
+        || "……………………";
+
+
+    /* ADRESSE */
+
+    document.getElementById(
+        "adresseEleve"
+    ).textContent =
+        obtenirAdresse(eleve)
+        || "……………………";
+
+
+    /* TÉLÉPHONE */
+
+    document.getElementById(
+        "telephoneEleve"
+    ).textContent =
+        obtenirTelephone(eleve)
+        || "………………";
+
+
+    /* PHOTO */
+
+    const photoContainer =
+        document.getElementById(
+            "photoContainer"
+        );
+
+
+    photoContainer.innerHTML =
+        "";
+
+
+    const photo =
+        obtenirPhoto(eleve);
+
+
+    if(photo){
+
+        const img =
+            document.createElement(
+                "img"
+            );
+
+        img.className =
+            "photo";
+
+        img.alt =
+            "Photo de l'élève";
+
+
+        img.onerror =
+            function(){
+
+                photoContainer.innerHTML =
+                    '<div class="photo-vide">Photo</div>';
+
+            };
+
+
+        img.src =
+            photo;
+
+
+        photoContainer.appendChild(
+            img
+        );
+
+    }else{
+
+        photoContainer.innerHTML =
+            '<div class="photo-vide">Photo</div>';
+
+    }
+
+
+    /* ALLER AU BADGE */
+
+    document.getElementById(
+        "badge"
+    ).scrollIntoView({
+
+        behavior:"smooth",
+
+        block:"center"
+
+    });
+
+}
+
+
+/* =========================
+   IMPRIMER
+========================= */
+
+function imprimerBadge(){
+
+    if (!IMCAuth.requirePermission("badge.print")) {
+        alert("Permission refusée.");
+        return;
+    }
+
+    if(!eleveSelectionne){
+
+        alert(
+            "Veuillez d'abord sélectionner un élève."
+        );
+
+        return;
+
+    }
+
+
+    window.print();
+
+}
+
+
+/* =========================
+   ENREGISTRER LE BADGE
+========================= */
+
+function enregistrerBadge(){
+
+    if(!eleveSelectionne){
+
+        alert(
+            "Veuillez d'abord sélectionner un élève."
+        );
+
+        return;
+
+    }
+
+
+    const badge =
+        document.getElementById("badge");
+
+
+    const nom =
+        obtenirNom(eleveSelectionne);
+
+    const prenom =
+        obtenirPrenom(eleveSelectionne);
+
+
+    const nomFichier =
+        (
+            "Badge-" +
+            nom +
+            "-" +
+            prenom
+        )
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[\\/:*?"<>|]/g, "");
+
+
+    const badgeClone =
+        badge.cloneNode(true);
+
+
+    /* Récupérer le HTML et les styles */
+
+    const styles =
+        Array.from(
+            document.querySelectorAll("style")
+        )
+        .map(style => style.innerHTML)
+        .join("\n");
+
+
+    const htmlBadge = `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>${nomFichier}</title>
+
+<style>
+
+${styles}
+
+/* =========================
+   PAGE DU BADGE ENREGISTRÉ
+========================= */
+
+body{
+    margin:0;
+    padding:20px;
+    background:#fff;
+}
+
+.badge{
+    margin:0 auto;
+    box-shadow:none;
+}
+
+.commandes{
+    display:none !important;
+}
+
+@media print{
+
+    @page{
+        size:auto;
+        margin:0;
+    }
+
+    html,
+    body{
+        width:auto;
+        height:auto;
+        margin:0;
+        padding:0;
+        background:white;
+    }
+
+    .badge{
+        width:5.4cm;
+        height:8.56cm;
+        margin:0;
+        border:1.5px solid #111;
+        border-radius:0;
+        box-shadow:none;
+        page-break-inside:avoid;
+        break-inside:avoid;
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+${badgeClone.outerHTML}
+
+</body>
+
+</html>
+`;
+
+
+    const fichier =
+        new Blob(
+            [htmlBadge],
+            {
+                type:"text/html;charset=utf-8"
+            }
+        );
+
+
+    const url =
+        URL.createObjectURL(
+            fichier
+        );
+
+
+    const lien =
+        document.createElement("a");
+
+
+    lien.href =
+        url;
+
+    lien.download =
+        nomFichier + ".html";
+
+
+    document.body.appendChild(
+        lien
+    );
+
+
+    lien.click();
+
+
+    document.body.removeChild(
+        lien
+    );
+
+
+    URL.revokeObjectURL(
+        url
+    );
+
+
+    alert(
+        "Le badge a été enregistré avec succès."
+    );
+
+}
+
+
+/* =========================
+   INITIALISATION
+========================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function(){
+
+        IMCSecureStorage.ready.then(function(ok){
+
+        if(!ok) return;
+
+        chargerEleves();
+
+        chargerAnnee();
+
+        });
+
+    }
+);
+
+</script>
+
+</body>
+</html>
+
