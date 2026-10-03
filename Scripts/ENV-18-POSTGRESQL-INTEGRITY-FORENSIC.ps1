@@ -52,18 +52,18 @@ Write-Host "READ-ONLY : aucune écriture SQL."
 $failures = 0
 $results = @()
 
-$version = Invoke-PsqlScalar -Sql "SELECT version();"
+$version = Invoke-PsqlScalar -Sql 'SELECT version();'
 
 $checks = @(
-  @("public tables",19,"SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind='r' AND n.nspname='public';"),
-  @("UNIQUE constraints",11,"SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype='u';"),
-  @("PRIMARY KEY constraints",19,"SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype='p';"),
-  @("CHECK constraints",23,"SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype='c';"),
-  @("FOREIGN KEY constraints",17,"SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype='f';"),
-  @("ordinary application indexes",13,"SELECT count(*) FROM pg_class i JOIN pg_namespace n ON n.oid=i.relnamespace WHERE i.relkind='i' AND n.nspname='public' AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid=i.oid) AND i.relname <> 'enrollments_one_active_per_student_year';"),
-  @("partial unique enrollment index",1,"SELECT count(*) FROM pg_class i JOIN pg_namespace n ON n.oid=i.relnamespace WHERE n.nspname='public' AND i.relkind='i' AND i.relname='enrollments_one_active_per_student_year';"),
-  @("ON DELETE CASCADE FKs",0,"SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype='f' AND con.confdeltype='c';"),
-  @("application triggers",0,"SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal;")
+  @("public tables",19,'SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.relkind=''r'' AND n.nspname=''public'';'),
+  @("UNIQUE constraints",11,'SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname=''public'' AND con.contype=''u'';'),
+  @("PRIMARY KEY constraints",19,'SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname=''public'' AND con.contype=''p'';'),
+  @("CHECK constraints",23,'SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname=''public'' AND con.contype=''c'';'),
+  @("FOREIGN KEY constraints",17,'SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname=''public'' AND con.contype=''f'';'),
+  @("ordinary application indexes",13,'SELECT count(*) FROM pg_class i JOIN pg_namespace n ON n.oid=i.relnamespace WHERE i.relkind=''i'' AND n.nspname=''public'' AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid=i.oid) AND i.relname <> ''enrollments_one_active_per_student_year'';'),
+  @("partial unique enrollment index",1,'SELECT count(*) FROM pg_class i JOIN pg_namespace n ON n.oid=i.relnamespace WHERE n.nspname=''public'' AND i.relkind=''i'' AND i.relname=''enrollments_one_active_per_student_year'';'),
+  @("ON DELETE CASCADE FKs",0,'SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname=''public'' AND con.contype=''f'' AND con.confdeltype=''c'';'),
+  @("application triggers",0,'SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=''public'' AND NOT t.tgisinternal;')
 )
 
 foreach ($c in $checks) {
@@ -71,7 +71,7 @@ foreach ($c in $checks) {
   $results += Add-Check -Name $c[0] -Expected ([int]$c[1]) -Actual $actual -Failures ([ref]$failures)
 }
 
-$columnSql = "SELECT table_name||'.'||column_name FROM information_schema.columns WHERE table_schema='public' AND ((table_name='users' AND column_name IN ('password_hash','password')) OR (table_name='grades' AND column_name IN ('enrollment_id','student_id','coefficient')) OR (table_name='attendance' AND column_name IN ('enrollment_id','student_id','class_id'))) ORDER BY 1;"
+$columnSql = 'SELECT table_name||''.''||column_name FROM information_schema.columns WHERE table_schema=''public'' AND ((table_name=''users'' AND column_name IN (''password_hash'',''password'')) OR (table_name=''grades'' AND column_name IN (''enrollment_id'',''student_id'',''coefficient'')) OR (table_name=''attendance'' AND column_name IN (''enrollment_id'',''student_id'',''class_id''))) ORDER BY 1;'
 $columnOut = & $PsqlPath -X -h $Host -p $Port -U $Username -d $Database -tA -c $columnSql 2>&1
 if ($LASTEXITCODE -ne 0) {
   throw "psql failed during column check: $($columnOut -join ([Environment]::NewLine))"
