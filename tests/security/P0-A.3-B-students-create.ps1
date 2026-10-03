@@ -647,9 +647,9 @@ if ($session) {
     Write-Host 'Test 14: X-Role header...' -ForegroundColor Yellow
 
     $studentData = @{
-        matricule = 'TEST-994'
+        matricule = "P0-A3B-XROLE-$timestamp"
         last_name = 'Test'
-        first_name = 'Student'
+        first_name = 'Student-XRole'
     }
 
     $tempTestJson = Join-Path $env:TEMP "imc-xrole.json"
@@ -701,9 +701,9 @@ if ($session) {
     Write-Host 'Test 15: X-Permission header...' -ForegroundColor Yellow
 
     $studentData = @{
-        matricule = 'TEST-993'
+        matricule = "P0-A3B-XPERMISSION-$timestamp"
         last_name = 'Test'
-        first_name = 'Student'
+        first_name = 'Student-XPermission'
     }
 
     $tempTestJson = Join-Path $env:TEMP "imc-xpermission.json"
