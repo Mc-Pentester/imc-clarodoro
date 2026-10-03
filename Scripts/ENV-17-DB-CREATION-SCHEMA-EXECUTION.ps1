@@ -53,7 +53,7 @@ Write-Host "[1/6] Pré-check PostgreSQL..." -ForegroundColor Yellow
 if ($LASTEXITCODE -ne 0) { throw "Connexion PostgreSQL impossible." }
 
 Write-Host "[2/6] Vérification de la base cible..." -ForegroundColor Yellow
-$exists = (& $psql @common -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname = '$Database';").Trim()
+$exists = [string]((& $psql @common -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname = '$Database';") -join "").Trim()
 if ($LASTEXITCODE -ne 0) { throw "Impossible de vérifier l'existence de $Database." }
 
 if ($exists -eq '1') {
