@@ -1,7 +1,7 @@
 # ENV-18 - PostgreSQL Integrity Forensic Validation
 [CmdletBinding()]
 param(
-  [string]$Host = "localhost",
+  [string]$DbHost = "localhost",
   [int]$Port = 5432,
   [string]$Database = "imc_clarodoro",
   [string]$Username = "postgres",
@@ -16,7 +16,7 @@ New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 function Invoke-PsqlScalar {
   param([Parameter(Mandatory=$true)][string]$Sql)
 
-  $out = & $PsqlPath -X -h $Host -p $Port -U $Username -d $Database -tA -c $Sql 2>&1
+  $out = & $PsqlPath -X -h $DbHost -p $Port -U $Username -d $Database -tA -c $Sql 2>&1
   if ($LASTEXITCODE -ne 0) {
     throw "psql failed: $($out -join ([Environment]::NewLine))"
   }
@@ -71,7 +71,7 @@ foreach ($c in $checks) {
 }
 
 $columnSql = 'SELECT table_name||''.''||column_name FROM information_schema.columns WHERE table_schema=''public'' AND ((table_name=''users'' AND column_name IN (''password_hash'',''password'')) OR (table_name=''grades'' AND column_name IN (''enrollment_id'',''student_id'',''coefficient'')) OR (table_name=''attendance'' AND column_name IN (''enrollment_id'',''student_id'',''class_id''))) ORDER BY 1;'
-$columnOut = & $PsqlPath -X -h $Host -p $Port -U $Username -d $Database -tA -c $columnSql 2>&1
+$columnOut = & $PsqlPath -X -h $DbHost -p $Port -U $Username -d $Database -tA -c $columnSql 2>&1
 if ($LASTEXITCODE -ne 0) {
   throw "psql failed during column check: $($columnOut -join ([Environment]::NewLine))"
 }
