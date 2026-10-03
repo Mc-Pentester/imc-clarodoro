@@ -7,7 +7,8 @@
 # - Ne fait aucun DROP/TRUNCATE/DELETE/UPDATE.
 # - Ne démarre pas le service Windows PostgreSQL.
 # - Crée imc_clarodoro uniquement si elle n'existe pas.
-# - Exécute database/schema.sql avec ON_ERROR_STOP.
+# - Exécute database/schema.sql avec ON_ERROR_STOP uniquement lors d'une création.
+# - Avec -VerifyExisting, ne rejoue jamais schema.sql et vérifie uniquement la DB existante.
 # - Vérifie ensuite les invariants du schéma.
 
 [CmdletBinding()]
@@ -17,7 +18,8 @@ param(
     [string]$PgHost = '127.0.0.1',
     [int]$Port = 5432,
     [string]$AdminUser = 'postgres',
-    [string]$Database = 'imc_clarodoro'
+    [string]$Database = 'imc_clarodoro',
+    [switch]$VerifyExisting
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,23 +58,38 @@ Write-Host "[2/6] Vérification de la base cible..." -ForegroundColor Yellow
 $exists = [string]((& $psql @common -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname = '$Database';") -join "").Trim()
 if ($LASTEXITCODE -ne 0) { throw "Impossible de vérifier l'existence de $Database." }
 
+$createdDatabase = $false
+
 if ($exists -eq '1') {
-    Write-Host "Base $Database déjà présente : aucune création." -ForegroundColor DarkYellow
+    Write-Host "Base $Database déjà présente." -ForegroundColor DarkYellow
+    if (-not $VerifyExisting) {
+        throw "La base $Database existe déjà. Par sécurité, aucun DDL n'est exécuté. Relance avec -VerifyExisting pour vérifier la base existante sans rejouer database/schema.sql."
+    }
+    Write-Host "Mode -VerifyExisting : schema.sql ne sera PAS exécuté." -ForegroundColor Cyan
 } else {
+    if ($VerifyExisting) {
+        throw "Mode -VerifyExisting demandé, mais la base $Database n'existe pas. Crée d'abord la base avec une exécution normale d'ENV-17."
+    }
     Write-Host "Création contrôlée de $Database..." -ForegroundColor Green
     & $psql @common -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $Database WITH OWNER = $AdminUser ENCODING = 'UTF8' TEMPLATE = template0;"
     if ($LASTEXITCODE -ne 0) { throw "Échec CREATE DATABASE." }
+    $createdDatabase = $true
 }
 
-Write-Host "[3/6] Vérification que le schéma n'est pas déjà installé..." -ForegroundColor Yellow
-$tableCountBefore = (& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public';").Trim()
-if ([int]$tableCountBefore -gt 0) {
-    throw "La base $Database contient déjà $tableCountBefore table(s) publiques. Arrêt préventif : aucun DDL n'est exécuté."
-}
+Write-Host "[3/6] Contrôle du mode d'exécution..." -ForegroundColor Yellow
+$tableCountBefore = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public';").Trim())
 
-Write-Host "[4/6] Exécution database/schema.sql..." -ForegroundColor Yellow
-& $psql @common -d $Database -v ON_ERROR_STOP=1 -f $schema
-if ($LASTEXITCODE -ne 0) { throw "Échec de l'exécution de database/schema.sql." }
+if ($VerifyExisting) {
+    Write-Host "Base existante : $tableCountBefore table(s) publiques détectées. Vérification seule." -ForegroundColor Green
+} else {
+    if ($tableCountBefore -gt 0) {
+        throw "La base $Database contient déjà $tableCountBefore table(s) publiques. Arrêt préventif : aucun DDL n'est exécuté."
+    }
+
+    Write-Host "[4/6] Exécution database/schema.sql..." -ForegroundColor Yellow
+    & $psql @common -d $Database -v ON_ERROR_STOP=1 -f $schema
+    if ($LASTEXITCODE -ne 0) { throw "Échec de l'exécution de database/schema.sql." }
+}
 
 Write-Host "[5/6] Vérification des invariants..." -ForegroundColor Yellow
 $tableCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public';").Trim())
@@ -134,6 +151,8 @@ Base : $Database
 
 ENV-17 : PASS
 
+Mode : $(if ($VerifyExisting) { 'VerifyExisting — vérification non destructive de la base existante' } else { 'Création contrôlée + exécution du schéma' })
+
 ## Vérifications
 
 | Contrôle | Attendu | Réel |
@@ -172,7 +191,7 @@ $userColumns
 
 ## Schéma exécuté
 
-database/schema.sql
+$(if ($VerifyExisting) { 'Aucun — mode VerifyExisting : le schéma existant n’a pas été rejoué.' } else { 'database/schema.sql' })
 
 ## Verdict
 
