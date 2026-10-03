@@ -111,9 +111,9 @@ $userColumns = (& $psql @common -d $Database -Atqc "SELECT string_agg(column_nam
 $checks = @(
     @{ Name='tables'; Actual=$tableCount; Expected=19 },
     @{ Name='foreign keys'; Actual=$fkCount; Expected=17 },
-    @{ Name='UNIQUE constraints'; Actual=$uniqueCount; Expected=10 },
+    @{ Name='UNIQUE constraints'; Actual=$uniqueCount; Expected=11 },
     @{ Name='PRIMARY KEY constraints'; Actual=$primaryCount; Expected=19 },
-    @{ Name='check constraints'; Actual=$checkCount; Expected=25 },
+    @{ Name='check constraints'; Actual=$checkCount; Expected=23 },
     @{ Name='indexes hors contraintes'; Actual=$indexCount; Expected=13 },
     @{ Name='partial unique index'; Actual=$partialUniqueIndexCount; Expected=1 },
     @{ Name='CASCADE FK'; Actual=$cascadeCount; Expected=0 },
@@ -159,9 +159,9 @@ Mode : $(if ($VerifyExisting) { 'VerifyExisting — vérification non destructiv
 |---|---:|---:|
 | Tables publiques | 19 | $tableCount |
 | Foreign Keys | 17 | $fkCount |
-| UNIQUE | 10 | $uniqueCount |
+| UNIQUE | 11 | $uniqueCount |
 | PRIMARY KEY | 19 | $primaryCount |
-| CHECK | 25 | $checkCount |
+| CHECK | 23 | $checkCount |
 | Indexes hors contraintes | 13 | $indexCount |
 | Index UNIQUE partiel enrollment | 1 | $partialUniqueIndexCount |
 | FK CASCADE | 0 | $cascadeCount |
