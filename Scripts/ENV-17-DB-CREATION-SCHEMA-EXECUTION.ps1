@@ -12,7 +12,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$ProjectRoot = '',
     [string]$PgBin = 'C:\Program Files\PostgreSQL\18\bin',
     [string]$Host = '127.0.0.1',
     [int]$Port = 5432,
@@ -21,6 +21,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    $ProjectRoot = Split-Path -Parent $PSScriptRoot
+}
+
 
 $psql = Join-Path $PgBin 'psql.exe'
 $schema = Join-Path $ProjectRoot 'database\schema.sql'
