@@ -146,7 +146,7 @@ PLACEHOLDER_VERSION
 '@ -split ([Environment]::NewLine)
 
 $report = $report -replace 'PLACEHOLDER_DATE', (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-$report = $report -replace 'PLACEHOLDER_VERSION', [regex]::Escape($version)
+$report = $report.Replace('PLACEHOLDER_VERSION', $version)
 
 foreach ($r in $results) {
   $report += "| $($r.Check) | $($r.Expected) | $($r.Actual) | $($r.Result) |"
