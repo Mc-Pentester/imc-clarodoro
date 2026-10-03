@@ -196,7 +196,7 @@ if ($session -and $testStudentId -and $testStudentData) {
             $student.last_name -eq $testStudentData.last_name -and
             $student.id -ne $null) {
             $results['verification_donnees'] = 'PASS'
-            Write-Host 'PASS: Données correspondantes (vérifié via GET)" -ForegroundColor Green
+            Write-Host 'PASS: Données correspondantes (vérifié via GET)' -ForegroundColor Green
         }
         else {
             $results['verification_donnees'] = 'FAIL'
@@ -905,7 +905,7 @@ Write-Host "last_name manquant               : $lastnameManquant" -ForegroundCol
 Write-Host "first_name manquant              : $firstnameManquant" -ForegroundColor White
 Write-Host "Status invalide                   : $statusInvalide" -ForegroundColor White
 Write-Host "Champ inconnu                     : $champInconnu" -ForegroundColor White
-Write-Host "Spoif JSON role/permission       : $spoofJson" -ForegroundColor White
+Write-Host "Spoof JSON role/permission        : $spoofJson" -ForegroundColor White
 Write-Host "X-Role header                     : $xRoleHeader" -ForegroundColor White
 Write-Host "X-Permission header              : $xPermissionHeader" -ForegroundColor White
 Write-Host "LOGOUT                            : $logout" -ForegroundColor White
