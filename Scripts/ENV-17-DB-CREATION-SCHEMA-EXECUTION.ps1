@@ -76,11 +76,15 @@ if ($LASTEXITCODE -ne 0) { throw "Échec de l'exécution de database/schema.sql.
 
 Write-Host "[5/6] Vérification des invariants..." -ForegroundColor Yellow
 $tableCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname = 'public';").Trim())
-$fkCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint WHERE contype = 'f';").Trim())
-$uniqueCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint WHERE contype = 'u' OR contype = 'p';").Trim())
-$checkCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint WHERE contype = 'c';").Trim())
-$indexCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='i' AND c.relname NOT LIKE '%_pkey';").Trim())
-$cascadeCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint WHERE contype='f' AND confdeltype='c';").Trim())
+$fkCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype = 'f';").Trim())
+$uniqueCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype = 'u';").Trim())
+$primaryCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype = 'p';").Trim())
+$checkCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype = 'c';").Trim())
+# Indexes applicatifs : les 13 CREATE INDEX ordinaires du schéma.
+# L'index partiel UNIQUE d'enrollments est vérifié séparément.
+$indexCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace LEFT JOIN pg_constraint con ON con.conindid=c.oid WHERE n.nspname='public' AND c.relkind='i' AND con.oid IS NULL AND c.relname <> 'enrollments_one_active_per_student_year';").Trim())
+$partialUniqueIndexCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='i' AND c.relname='enrollments_one_active_per_student_year';").Trim())
+$cascadeCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_constraint con JOIN pg_namespace n ON n.oid=con.connamespace WHERE n.nspname='public' AND con.contype='f' AND con.confdeltype='c';").Trim())
 $triggerCount = [int]((& $psql @common -d $Database -Atqc "SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal;").Trim())
 
 $gradeColumns = (& $psql @common -d $Database -Atqc "SELECT string_agg(column_name, ',' ORDER BY ordinal_position) FROM information_schema.columns WHERE table_schema='public' AND table_name='grades';").Trim()
@@ -90,9 +94,11 @@ $userColumns = (& $psql @common -d $Database -Atqc "SELECT string_agg(column_nam
 $checks = @(
     @{ Name='tables'; Actual=$tableCount; Expected=19 },
     @{ Name='foreign keys'; Actual=$fkCount; Expected=17 },
-    @{ Name='unique/primary constraints'; Actual=$uniqueCount; Expected=14 },
-    @{ Name='check constraints'; Actual=$checkCount; Expected=23 },
-    @{ Name='indexes hors PK'; Actual=$indexCount; Expected=13 },
+    @{ Name='UNIQUE constraints'; Actual=$uniqueCount; Expected=10 },
+    @{ Name='PRIMARY KEY constraints'; Actual=$primaryCount; Expected=19 },
+    @{ Name='check constraints'; Actual=$checkCount; Expected=25 },
+    @{ Name='indexes hors contraintes'; Actual=$indexCount; Expected=13 },
+    @{ Name='partial unique index'; Actual=$partialUniqueIndexCount; Expected=1 },
     @{ Name='CASCADE FK'; Actual=$cascadeCount; Expected=0 },
     @{ Name='triggers applicatifs'; Actual=$triggerCount; Expected=0 }
 )
@@ -134,9 +140,11 @@ ENV-17 : PASS
 |---|---:|---:|
 | Tables publiques | 19 | $tableCount |
 | Foreign Keys | 17 | $fkCount |
-| UNIQUE/PK | 14 | $uniqueCount |
-| CHECK | 23 | $checkCount |
-| Index hors PK | 13 | $indexCount |
+| UNIQUE | 10 | $uniqueCount |
+| PRIMARY KEY | 19 | $primaryCount |
+| CHECK | 25 | $checkCount |
+| Indexes hors contraintes | 13 | $indexCount |
+| Index UNIQUE partiel enrollment | 1 | $partialUniqueIndexCount |
 | FK CASCADE | 0 | $cascadeCount |
 | Triggers applicatifs | 0 | $triggerCount |
 
