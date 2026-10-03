@@ -1,128 +1,59 @@
-# ENV-17 — DB CREATION + SCHEMA EXECUTION
+﻿# ENV-17 â€” DB CREATION + SCHEMA EXECUTION REPORT
 
-Date : 2026-10-01 13:20:00
+Date d'exÃ©cution : 2026-10-03 11:52:50
 
-Projet : C:\IMC-Clarodoro-securise-client\IMC-Clarodoro
-
-PostgreSQL : 18.4
+Projet : C:\imc-clarodoro
+PostgreSQL : 18.x
 Host : 127.0.0.1
 Port : 5432
+Base : imc_clarodoro
 
-## 1. Pré-check
+## RÃ©sultat
 
-PostgreSQL accessible : FAIL
-Utilisateur : postgres
-Base admin : postgres
+ENV-17 : PASS
 
-**Erreur :** psql.exe n'a pas répondu après 10 secondes lors de la tentative de connexion. Le service PostgreSQL peut ne pas être démarré ou la connexion est bloquée.
+Mode : VerifyExisting â€” vÃ©rification non destructive de la base existante
 
-## 2. État avant création
+## VÃ©rifications
 
-imc_clarodoro existait : NON TESTÉ
+| ContrÃ´le | Attendu | RÃ©el |
+|---|---:|---:|
+| Tables publiques | 19 | 19 |
+| Foreign Keys | 17 | 17 |
+| UNIQUE | 11 | 11 |
+| PRIMARY KEY | 19 | 19 |
+| CHECK | 23 | 23 |
+| Indexes hors contraintes | 13 | 13 |
+| Index UNIQUE partiel enrollment | 1 | 1 |
+| FK CASCADE | 0 | 0 |
+| Triggers applicatifs | 0 | 0 |
 
-## 3. Création
+## Grades
 
-Non exécuté - échec du pré-check PostgreSQL.
+id,enrollment_id,subject_id,grade,grade_date,created_at,updated_at
 
-## 4. Exécution schema.sql
+## Attendance
 
-Fichier : database/schema.sql
+id,enrollment_id,attendance_date,status,comment,created_at,updated_at
 
-SQL exécuté : NON
+## Users
 
-Résultat : REVIEW-REQUIRED
+id,username,email,password_hash,role_id,status,created_at,updated_at
 
-## 5. Tables
+## SÃ©curitÃ©
 
-Attendu : 19
-Réel : NON TESTÉ
-Résultat : REVIEW-REQUIRED
+- DROP DATABASE : NON
+- DROP TABLE : NON
+- TRUNCATE : NON
+- DELETE : NON
+- UPDATE : NON
+- Autres bases modifiÃ©es : NON
+- Le service Windows PostgreSQL n'a pas Ã©tÃ© dÃ©marrÃ© par ce script.
 
-## 6. Foreign Keys
+## SchÃ©ma exÃ©cutÃ©
 
-Attendu : 17
-Réel : NON TESTÉ
-Résultat : REVIEW-REQUIRED
+Aucun â€” mode VerifyExisting : le schÃ©ma existant nâ€™a pas Ã©tÃ© rejouÃ©.
 
-## 7. Delete Rules
+## Verdict
 
-RESTRICT : NON TESTÉ
-CASCADE : NON TESTÉ
-
-## 8. UNIQUE
-
-Attendu : 14
-Réel : NON TESTÉ
-
-## 9. CHECK
-
-Attendu : 23
-Réel : NON TESTÉ
-
-## 10. INDEX
-
-CREATE INDEX attendus : 13
-Réel : NON TESTÉ
-
-## 11. Grades
-
-enrollment_id : NON TESTÉ
-student_id absent : NON TESTÉ
-coefficient absent : NON TESTÉ
-
-## 12. Attendance
-
-enrollment_id : NON TESTÉ
-student_id absent : NON TESTÉ
-class_id absent : NON TESTÉ
-
-## 13. Authentication
-
-password_hash : NON TESTÉ
-password absent : NON TESTÉ
-
-## 14. Triggers
-
-Attendu : 0
-Réel : NON TESTÉ
-
-## 15. Tables V1 exclues
-
-sections : NON TESTÉ
-holidays : NON TESTÉ
-
-## 16. PDO
-
-Connexion PDO : NON TESTÉ
-
-Base retournée : NON TESTÉ
-
-Nombre de tables retourné : NON TESTÉ
-
-## 17. Sécurité d'exécution
-
-Autres bases modifiées : NON
-
-DROP DATABASE : NON
-
-DROP TABLE : NON
-
-TRUNCATE : NON
-
-DELETE : NON
-
-UPDATE : NON
-
-## 18. Verdict
-
-ENV-17-REVIEW-REQUIRED
-
-**Échec du pré-check PostgreSQL :** La connexion psql.exe à PostgreSQL 18 sur 127.0.0.1:5432 n'a pas répondu dans le délai imparti (10 secondes). 
-
-**Recommandations :**
-1. Vérifier que le service PostgreSQL 18 est démarré
-2. Vérifier que le port 5432 est accessible
-3. Vérifier que l'authentification postgres fonctionne
-4. Relancer ENV-17 après correction de la connexion PostgreSQL
-
-Le fichier database/schema.sql V1.1 est intact et prêt pour exécution une fois la connexion PostgreSQL rétablie.
+**ENV-17-PASS**

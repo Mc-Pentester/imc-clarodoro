@@ -35,3 +35,7 @@ Thumbs.db
 *.pem
 *.key
 *.crt
+# Local authentication test artifacts
+cookies.txt
+login-test.cookies
+login-test.json
