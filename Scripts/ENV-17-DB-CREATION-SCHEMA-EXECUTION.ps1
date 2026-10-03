@@ -14,7 +14,7 @@
 param(
     [string]$ProjectRoot = '',
     [string]$PgBin = 'C:\Program Files\PostgreSQL\18\bin',
-    [string]$Host = '127.0.0.1',
+    [string]$PgHost = '127.0.0.1',
     [int]$Port = 5432,
     [string]$AdminUser = 'postgres',
     [string]$Database = 'imc_clarodoro'
@@ -35,7 +35,7 @@ if (-not (Test-Path -LiteralPath $psql)) { throw "psql.exe introuvable : $psql" 
 if (-not (Test-Path -LiteralPath $schema)) { throw "Schema introuvable : $schema" }
 
 Write-Host "=== ENV-17 IMC-CLARODORO ===" -ForegroundColor Cyan
-Write-Host "PostgreSQL : $Host / port $Port"
+Write-Host "PostgreSQL : $PgHost / port $Port"
 Write-Host "Base cible : $Database"
 Write-Host ""
 
@@ -46,7 +46,7 @@ if (-not $env:PGPASSWORD) {
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
 }
 
-$common = @('-h', $Host, '-p', $Port.ToString(), '-U', $AdminUser)
+$common = @('-h', $PgHost, '-p', $Port.ToString(), '-U', $AdminUser)
 
 Write-Host "[1/6] Pré-check PostgreSQL..." -ForegroundColor Yellow
 & $psql @common -d postgres -v ON_ERROR_STOP=1 -Atqc 'SELECT version();'
@@ -120,7 +120,7 @@ Date d'exécution : $now
 
 Projet : $ProjectRoot
 PostgreSQL : 18.x
-Host : $Host
+Host : $PgHost
 Port : $Port
 Base : $Database
 
