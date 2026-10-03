@@ -126,52 +126,46 @@ foreach ($e in $columnExpectations) {
   }
 }
 
-$report = @'
-# ENV-18 — PostgreSQL Integrity Forensic Validation
-
-Date : PLACEHOLDER_DATE
-
-## Mode
-
-**READ-ONLY** — uniquement des requêtes SELECT/catalogue PostgreSQL.
-
-## PostgreSQL
-
-PLACEHOLDER_VERSION
-
-## Résultats
-
-| Contrôle | Attendu | Réel | Résultat |
-|---|---:|---:|---|
-'@ -split ([Environment]::NewLine)
-
-$report = $report -replace 'PLACEHOLDER_DATE', (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-$report = $report.Replace('PLACEHOLDER_VERSION', $version)
+$report = @()
+$report += '# ENV-18 — PostgreSQL Integrity Forensic Validation'
+$report += ''
+$report += ('Date : {0}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
+$report += ''
+$report += '## Mode'
+$report += ''
+$report += '**READ-ONLY** — uniquement des requêtes SELECT/catalogue PostgreSQL.'
+$report += ''
+$report += '## PostgreSQL'
+$report += ''
+$report += $version
+$report += ''
+$report += '## Résultats'
+$report += ''
+$report += '| Contrôle | Attendu | Réel | Résultat |'
+$report += '|---|---:|---:|---|'
 
 foreach ($r in $results) {
-  $report += "| $($r.Check) | $($r.Expected) | $($r.Actual) | $($r.Result) |"
+  $report += ('| {0} | {1} | {2} | {3} |' -f $r.Check, $r.Expected, $r.Actual, $r.Result)
 }
 
 if ($failures -eq 0) {
-  $verdict = "**ENV-18 PASS**"
+  $verdict = '**ENV-18 PASS**'
 } else {
-  $verdict = "**ENV-18 FAIL** — $failures contrôle(s) en échec."
+  $verdict = ('**ENV-18 FAIL** — {0} contrôle(s) en échec.' -f $failures)
 }
 
-$report += @(
-  "",
-  "## Verdict",
-  "",
-  $verdict,
-  "",
-  "## Sécurité d'exécution",
-  "",
-  "- DB ciblée : $Database",
-  "- INSERT/UPDATE/DELETE : NON",
-  "- CREATE/ALTER/DROP : NON",
-  "- TRUNCATE : NON",
-  "- Base recréée : NON"
-)
+$report += ''
+$report += '## Verdict'
+$report += ''
+$report += $verdict
+$report += ''
+$report += '## Sécurité d''exécution'
+$report += ''
+$report += ('- DB ciblée : {0}' -f $Database)
+$report += '- INSERT/UPDATE/DELETE : NON'
+$report += '- CREATE/ALTER/DROP : NON'
+$report += '- TRUNCATE : NON'
+$report += '- Base recréée : NON'
 
 Set-Content -LiteralPath $reportPath -Value ($report -join ([Environment]::NewLine)) -Encoding UTF8
 
