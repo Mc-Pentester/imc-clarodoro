@@ -169,7 +169,19 @@ try {
         Result 'conflit_matricule' 'FAIL' 'Devrait retourner HTTP 409'
     } catch {
         $s=StatusOf $_
-        if ($s -eq 409) { Result 'conflit_matricule' 'PASS' 'HTTP 409 retourné' } else { Result 'conflit_matricule' 'FAIL' "Statut inattendu $s" }
+        if ($s -eq 409) {
+            $body = ''
+            try {
+                $resp = $_.Exception.Response
+                if ($resp) {
+                    $reader = New-Object System.IO.StreamReader($resp.GetResponseStream())
+                    $body = $reader.ReadToEnd()
+                    $reader.Dispose()
+                }
+            } catch {}
+            if ($body -match 'Matricule déjà utilisé') { Result 'conflit_matricule' 'PASS' 'HTTP 409 + message de conflit confirmé' }
+            else { Result 'conflit_matricule' 'FAIL' "HTTP 409 mais body inattendu: $body" }
+        } else { Result 'conflit_matricule' 'FAIL' "Statut inattendu $s" }
     }
 } catch { Result 'conflit_matricule' 'FAIL' $_.Exception.Message }
 finally {
