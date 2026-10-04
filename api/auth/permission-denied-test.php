@@ -12,10 +12,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $pdo = getDatabaseConnection();
-$user = requireAuthenticatedUser($pdo);
+$user = requirePermission($pdo, 'eleves.create');
 
 echo json_encode([
     'success' => true,
+    'authorized' => true,
+    'permission' => 'eleves.create',
     'user' => [
         'id' => $user['id'],
         'username' => $user['username'],

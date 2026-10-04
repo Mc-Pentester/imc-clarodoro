@@ -64,7 +64,7 @@ function readJsonBody(): array
     return $data;
 }
 
-function requireAuthenticatedUser(): array
+function requireAuthenticatedUser(PDO $pdo): array
 {
     configureAuthSession();
 
@@ -72,17 +72,52 @@ function requireAuthenticatedUser(): array
         apiError(401, 'Authentification requise');
     }
 
+    $stmt = $pdo->prepare(
+        'SELECT
+            u.id,
+            u.username,
+            u.role_id,
+            u.status,
+            r.name AS role_name
+         FROM users u
+         INNER JOIN roles r
+            ON r.id = u.role_id
+         WHERE u.id = :user_id
+         LIMIT 1'
+    );
+
+    $stmt->execute([
+        ':user_id' => $_SESSION['user_id'],
+    ]);
+
+    $user = $stmt->fetch();
+
+    if (!$user) {
+        session_destroy();
+        apiError(401, 'Authentification requise');
+    }
+
+    if ($user['status'] !== 'ACTIVE') {
+        session_destroy();
+        apiError(403, 'Compte non actif');
+    }
+
+    $_SESSION['user_id'] = $user['id'];
+    $_SESSION['username'] = $user['username'];
+    $_SESSION['role_id'] = $user['role_id'];
+    $_SESSION['role_name'] = $user['role_name'];
+
     return [
-        'id' => $_SESSION['user_id'],
-        'username' => $_SESSION['username'],
-        'role_id' => $_SESSION['role_id'],
-        'role_name' => $_SESSION['role_name'],
+        'id' => $user['id'],
+        'username' => $user['username'],
+        'role_id' => $user['role_id'],
+        'role_name' => $user['role_name'],
     ];
 }
 
 function requirePermission(PDO $pdo, string $permissionName): array
 {
-    $user = requireAuthenticatedUser();
+    $user = requireAuthenticatedUser($pdo);
 
     $stmt = $pdo->prepare(
         'SELECT 1
