@@ -1349,6 +1349,10 @@ function imprimerBadge(){
 
 function enregistrerBadge(){
 
+    if (!IMCAuth.requirePermission("badge.create")) {
+        return;
+    }
+
     if(!eleveSelectionne){
 
         alert(
