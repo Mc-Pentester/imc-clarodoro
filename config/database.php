@@ -8,6 +8,8 @@
  * La configuration provient des variables d'environnement.
  */
 
+require_once __DIR__ . '/env.php';
+
 function getDatabaseConnection() {
     // Récupération des variables d'environnement avec valeurs par défaut
     $host = getenv('DB_HOST') ?: '127.0.0.1';
