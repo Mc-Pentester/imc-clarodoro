@@ -10,8 +10,17 @@ function LoadLocalEnv([string]$Path) {
         if ($separator -lt 1) { continue }
         $name = $trimmed.Substring(0, $separator).Trim()
         $value = $trimmed.Substring($separator + 1).Trim()
-        if ($name -notmatch '^[A-Za-z_][A-Za-z0-9_]*
-    $v = [Environment]::GetEnvironmentVariable($Name)
+        if ($name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { continue }
+        if ($null -ne [Environment]::GetEnvironmentVariable($name, 'Process')) { continue }
+        if ($value.Length -ge 2 -and (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+        [Environment]::SetEnvironmentVariable($name, $value, 'Process')
+    }
+}
+
+function EnvOrDefault([string]$Name,[string]$Default) {
+    $v = [Environment]::GetEnvironmentVariable($Name, 'Process')
     if ([string]::IsNullOrWhiteSpace($v)) { return $Default }
     return $v
 }
