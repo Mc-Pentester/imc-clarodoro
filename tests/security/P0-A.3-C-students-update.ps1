@@ -12,7 +12,7 @@ function StatusOf($e) {
 function Result([string]$Key,[string]$Value,[string]$Message) {
     $script:results[$Key] = $Value
     $c = if ($Value -eq 'PASS') {'Green'} elseif ($Value -eq 'SKIP') {'Yellow'} else {'Red'}
-    Write-Host "$Value: $Message" -ForegroundColor $c
+    Write-Host "${Value}: $Message" -ForegroundColor $c
 }
 function Psql([string]$Sql) {
     if ([string]::IsNullOrWhiteSpace($env:DB_PASSWORD)) { throw 'DB_PASSWORD non défini pour psql' }
