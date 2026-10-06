@@ -1,187 +1,82 @@
 /*
  * IMC-Clarodoro - Module d'authentification central
  *
- * Ce module fournit une authentification locale côté navigateur.
- * Il ne constitue pas une autorisation serveur.
+ * Authentification client pour l'application IMC-Clarodoro.
  *
- * Session storage pour éviter une persistance illimitée.
- * Aucun mot de passe ou clé AES n'est stocké dans la session.
+ * La source de vérité est l'API PHP /api/auth/login.php et la session PHP HttpOnly.
+ * Le navigateur ne choisit jamais l'identité ou le rôle.
+ * sessionStorage ne contient plus de session d'autorité.
  */
 (function () {
   "use strict";
 
   const SESSION_KEY = "imc_auth_session";
-  const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 heures
+  let serverUser = null;
+  let serverSessionReady = false;
 
-  function generateSessionId() {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-    // Fallback cryptographiquement approprié si crypto.randomUUID n'est pas disponible
-    const array = new Uint8Array(16);
-    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
-      crypto.getRandomValues(array);
-    } else {
-      // Dernier recours - utiliser Math.random() seulement si crypto n'est pas disponible
-      for (let i = 0; i < array.length; i++) {
-        array[i] = Math.floor(Math.random() * 256);
-      }
-    }
-    return Array.from(array)
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
+  function getCachedUser() {
+    return serverUser ? { ...serverUser } : null;
   }
 
-  function validateSession(session) {
-    if (!session || typeof session !== "object") {
-      return false;
+  async function login(credentials) {
+    if (!credentials || typeof credentials !== "object") throw new Error("Identifiants invalides");
+    const response = await fetch("/api/auth/login.php", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: String(credentials.username || credentials.identifiant || ""),
+        password: String(credentials.password || credentials.motDePasse || "")
+      })
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch (error) {}
+    if (!response.ok || !payload || !payload.success || !payload.user) {
+      serverUser = null; serverSessionReady = true;
+      throw new Error((payload && payload.message) || "Identifiant ou mot de passe incorrect.");
     }
-    if (!session.sessionId || typeof session.sessionId !== "string") {
-      return false;
-    }
-    if (!session.userId || typeof session.userId !== "string") {
-      return false;
-    }
-    if (!session.username || typeof session.username !== "string") {
-      return false;
-    }
-    if (!session.role || typeof session.role !== "string") {
-      return false;
-    }
-    if (!session.loginAt || typeof session.loginAt !== "number") {
-      return false;
-    }
-    if (!session.expiresAt || typeof session.expiresAt !== "number") {
-      return false;
-    }
-    if (session.expiresAt <= Date.now()) {
-      return false;
-    }
-    return true;
-  }
-
-  function getSession() {
-    try {
-      const sessionJson = sessionStorage.getItem(SESSION_KEY);
-      if (!sessionJson) {
-        return null;
-      }
-      const session = JSON.parse(sessionJson);
-      if (!validateSession(session)) {
-        sessionStorage.removeItem(SESSION_KEY);
-        return null;
-      }
-      return session;
-    } catch (error) {
-      console.error("Erreur lors de la lecture de la session:", error);
-      sessionStorage.removeItem(SESSION_KEY);
-      return null;
-    }
-  }
-
-  function saveSession(session) {
-    try {
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde de la session:", error);
-      throw new Error("Impossible de sauvegarder la session");
-    }
-  }
-
-  function isSessionExpired() {
-    const session = getSession();
-    if (!session) {
-      return true;
-    }
-    return session.expiresAt <= Date.now();
-  }
-
-  function isAuthenticated() {
-    return !isSessionExpired();
-  }
-
-  function currentUser() {
-    const session = getSession();
-    if (!session) {
-      return null;
-    }
-    // Ne jamais retourner de mot de passe ou de clé
-    return {
-      userId: session.userId,
-      username: session.username,
-      role: session.role,
-      loginAt: session.loginAt,
-      expiresAt: session.expiresAt
-    };
-  }
-
-  function login(credentials) {
-    const userId = credentials.userId || credentials.id || String(Date.now());
-    const username = credentials.username || credentials.nom || "Utilisateur";
-    const role = credentials.role || "USER";
-
-    const session = {
-      sessionId: generateSessionId(),
-      userId: String(userId),
-      username: String(username),
-      role: String(role),
-      loginAt: Date.now(),
-      expiresAt: Date.now() + SESSION_DURATION
-    };
-
-    saveSession(session);
-    return session;
-  }
-
-  function logout() {
+    serverUser = { userId: String(payload.user.id), username: String(payload.user.username), role: String(payload.user.role) };
+    serverSessionReady = true;
     sessionStorage.removeItem(SESSION_KEY);
-    
-    // Tenter de verrouiller le coffre si le mécanisme existe
+    return getCachedUser();
+  }
+
+  async function verifySession() {
+    try {
+      const response = await fetch("/api/auth/me.php", { method: "GET", credentials: "same-origin", cache: "no-store", headers: { "Accept": "application/json" } });
+      const payload = await response.json();
+      if (!response.ok || !payload || !payload.success || !payload.user) { serverUser = null; serverSessionReady = true; return null; }
+      serverUser = { userId: String(payload.user.id), username: String(payload.user.username), role: String(payload.user.role) };
+      serverSessionReady = true;
+      sessionStorage.removeItem(SESSION_KEY);
+      return getCachedUser();
+    } catch (error) { serverUser = null; serverSessionReady = true; return null; }
+  }
+
+  async function logout() {
+    try { await fetch("/api/auth/logout.php", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" }); }
+    catch (error) { console.error("Erreur lors de la déconnexion serveur:", error); }
+    serverUser = null; serverSessionReady = true;
+    sessionStorage.removeItem(SESSION_KEY);
     if (window.IMCSecureStorage && typeof window.IMCSecureStorage.lock === "function") {
-      try {
-        window.IMCSecureStorage.lock();
-      } catch (error) {
-        console.error("Erreur lors du verrouillage du coffre:", error);
-      }
+      try { window.IMCSecureStorage.lock(); } catch (error) { console.error("Erreur lors du verrouillage du coffre:", error); }
     }
   }
 
-  function refresh() {
-    const session = getSession();
-    if (!session) {
-      return false;
-    }
-    session.expiresAt = Date.now() + SESSION_DURATION;
-    saveSession(session);
-    return true;
-  }
+  function isAuthenticated() { return serverSessionReady && serverUser !== null; }
+  function currentUser() { return getCachedUser(); }
 
   function requireAuth(loginPageUrl) {
-    if (isAuthenticated()) {
-      return true;
-    }
-    
-    // Session invalide ou absente - rediriger vers login
-    if (loginPageUrl) {
-      window.location.href = loginPageUrl;
-    } else {
-      // Par défaut, rediriger vers index.html
-      window.location.href = "index.html";
-    }
+    if (isAuthenticated()) return true;
+    window.location.href = loginPageUrl || "index.html";
     return false;
   }
 
   function requireRole(requiredRole) {
     const user = currentUser();
-    if (!user) {
-      return false;
-    }
-    return String(user.role).toUpperCase() === String(requiredRole).toUpperCase();
+    return !!user && String(user.role).toUpperCase() === String(requiredRole).toUpperCase();
   }
 
-  function hasRole(requiredRole) {
-    return requireRole(requiredRole);
-  }
+  function hasRole(requiredRole) { return requireRole(requiredRole); }
 
   // Matrice RBAC basée sur l'analyse forensic
   const PERMISSION_MATRIX = {
@@ -327,8 +222,9 @@
     currentUser: currentUser,
     requireAuth: requireAuth,
     getSession: getSession,
-    refresh: refresh,
-    isSessionExpired: isSessionExpired,
+    verifySession: verifySession,
+    refresh: function () { return false; },
+    isSessionExpired: function () { return !isAuthenticated(); },
     requireRole: requireRole,
     hasRole: hasRole,
     hasPermission: hasPermission,
