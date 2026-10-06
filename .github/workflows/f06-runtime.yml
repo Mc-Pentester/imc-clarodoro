@@ -36,7 +36,7 @@ jobs:
       DB_USER: postgres
       DB_PASSWORD: postgres
       AUTH_IDLE_TIMEOUT_SECONDS: 3
-      AUTH_ABSOLUTE_TIMEOUT_SECONDS: 10
+      AUTH_ABSOLUTE_TIMEOUT_SECONDS: 15
 
     steps:
       - name: Checkout
@@ -154,7 +154,7 @@ jobs:
           sleep 4
           STATUS="$(me)"
           assert_status 'absolute test activity 2' "$STATUS" "200"
-          sleep 7
+          sleep 12
           STATUS="$(me)"
           assert_status 'post-absolute-expiry /me' "$STATUS" "401"
 
