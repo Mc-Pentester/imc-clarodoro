@@ -135,6 +135,11 @@ if ($attendanceColumns -notmatch 'enrollment_id' -or $attendanceColumns -match '
 
 Write-Host "[6/6] Génération du rapport..." -ForegroundColor Yellow
 $now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+$schemaExecuted = if ($VerifyExisting) {
+    'Aucun — mode VerifyExisting : le schéma existant n’a pas été rejoué.'
+} else {
+    'database/schema.sql'
+}
 
 @"
 # ENV-17 — DB CREATION + SCHEMA EXECUTION REPORT
@@ -191,7 +196,7 @@ $userColumns
 
 ## Schéma exécuté
 
-$(if ($VerifyExisting) { 'Aucun — mode VerifyExisting : le schéma existant n’a pas été rejoué.' } else { 'database/schema.sql' })
+$schemaExecuted
 
 ## Verdict
 
