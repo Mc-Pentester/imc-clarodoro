@@ -57,6 +57,9 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
             -v ON_ERROR_STOP=1 \
             -f database/migrations/20261006170000_add_user_teacher_scope.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 \
+            -f database/migrations/20261006190000_add_login_rate_limit.sql
 
       - name: Seed isolated F-03 runtime dataset
         shell: bash
