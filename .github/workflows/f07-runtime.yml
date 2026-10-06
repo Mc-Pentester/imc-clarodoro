@@ -73,10 +73,17 @@ jobs:
             END IF;
           END $$;
 
-          BEGIN;
-          INSERT INTO roles (name) VALUES ('ENSEIGNANT');
-          ROLLBACK;
           SQL
+
+          set +e
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -c "INSERT INTO roles (name) VALUES ('ENSEIGNANT');" >/tmp/f07-legacy.out 2>&1
+          legacy_status=$?
+          set -e
+          if [ "$legacy_status" -eq 0 ]; then
+            echo "F-07 FAIL: legacy role ENSEIGNANT was accepted"
+            cat /tmp/f07-legacy.out
+            exit 1
+          fi
 
           if psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -tAc "SELECT COUNT(*) FROM roles WHERE name = 'ENSEIGNANT';" | tr -d ' ' | grep -qx '0'; then
             echo "F-07 legacy role ENSEIGNANT absent: PASS"
