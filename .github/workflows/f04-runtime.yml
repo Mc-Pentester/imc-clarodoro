@@ -77,6 +77,14 @@ jobs:
               page.on('pageerror', error => errors.push(String(error)));
             });
 
+            await context.route('**/secure-storage.js', route =>
+              route.fulfill({
+                status: 200,
+                contentType: 'application/javascript',
+                body: 'window.IMCSecureStorage={ready:Promise.resolve(true)};'
+              })
+            );
+
             await context.route('**/auth.js', route =>
               route.fulfill({
                 status: 200,
