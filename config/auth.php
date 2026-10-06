@@ -64,6 +64,63 @@ function readJsonBody(): array
     return $data;
 }
 
+function authTimeoutSeconds(string $envName, int $default): int
+{
+    $value = getenv($envName);
+
+    if ($value === false || $value === '' || !ctype_digit((string) $value)) {
+        return $default;
+    }
+
+    return max(1, (int) $value);
+}
+
+function expireAuthSession(string $message = 'Session expirée'): never
+{
+    $_SESSION = [];
+
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+
+        setcookie(session_name(), '', [
+            'expires' => time() - 42000,
+            'path' => $params['path'],
+            'secure' => $params['secure'],
+            'httponly' => $params['httponly'],
+            'samesite' => $params['samesite'] ?? 'Lax',
+        ]);
+    }
+
+    session_destroy();
+    apiError(401, $message);
+}
+
+function enforceAuthSessionLifetime(): void
+{
+    $now = time();
+    $idleTimeout = authTimeoutSeconds('AUTH_IDLE_TIMEOUT_SECONDS', 900);
+    $absoluteTimeout = authTimeoutSeconds('AUTH_ABSOLUTE_TIMEOUT_SECONDS', 28800);
+
+    $authenticatedAt = isset($_SESSION['authenticated_at'])
+        ? (int) $_SESSION['authenticated_at']
+        : 0;
+
+    $lastActivityAt = isset($_SESSION['last_activity_at'])
+        ? (int) $_SESSION['last_activity_at']
+        : $authenticatedAt;
+
+    if (
+        $authenticatedAt <= 0 ||
+        $lastActivityAt <= 0 ||
+        ($now - $authenticatedAt) >= $absoluteTimeout ||
+        ($now - $lastActivityAt) >= $idleTimeout
+    ) {
+        expireAuthSession();
+    }
+
+    $_SESSION['last_activity_at'] = $now;
+}
+
 function requireAuthenticatedUser(PDO $pdo): array
 {
     configureAuthSession();
