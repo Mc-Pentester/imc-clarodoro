@@ -1633,16 +1633,28 @@ function chargerListePersonnelAdmin() {
 
     personnel.forEach((p, index) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${p.nom || ''}</td>
-            <td>${p.fonction || ''}</td>
-            <td>${p.identifiant || ''}</td>
-            <td>
-                <button class="btn btn-rouge" onclick="supprimerPersonnelAdmin(${index})">
-                    Supprimer
-                </button>
-            </td>
-        `;
+
+        [
+            p.nom || '',
+            p.fonction || '',
+            p.identifiant || ''
+        ].forEach(function (value) {
+            const td = document.createElement('td');
+            td.textContent = String(value);
+            tr.appendChild(td);
+        });
+
+        const actionsTd = document.createElement('td');
+        const supprimerButton = document.createElement('button');
+        supprimerButton.type = 'button';
+        supprimerButton.className = 'btn btn-rouge';
+        supprimerButton.textContent = 'Supprimer';
+        supprimerButton.addEventListener('click', function () {
+            supprimerPersonnelAdmin(index);
+        });
+        actionsTd.appendChild(supprimerButton);
+        tr.appendChild(actionsTd);
+
         tbody.appendChild(tr);
     });
 }
