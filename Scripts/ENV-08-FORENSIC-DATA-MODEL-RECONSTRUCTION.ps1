@@ -66,7 +66,7 @@ function Get-FileContent {
 Add-Line "# ENV-08 — FORENSIC DATA MODEL RECONSTRUCTION"
 Add-Line ""
 Add-Line "**Projet :** $ProjectRoot"
-Add-Line "**Date :** $($StartedAt.ToString("yyyy-MM-dd HH:mm:ss"))"
+Add-Line ("**Date :** {0}" -f $StartedAt.ToString("yyyy-MM-dd HH:mm:ss"))
 Add-Line "**Mode :** READ-ONLY"
 Add-Line ""
 
@@ -333,9 +333,9 @@ Add-Section "13. Resume d'execution"
 $FinishedAt = Get-Date
 $Duration = $FinishedAt - $StartedAt
 
-Add-Line "- Debut : $($StartedAt.ToString("yyyy-MM-dd HH:mm:ss"))"
-Add-Line "- Fin : $($FinishedAt.ToString("yyyy-MM-dd HH:mm:ss"))"
-Add-Line "- Duree : $($Duration.TotalSeconds.ToString("0.00")) secondes"
+Add-Line ("- Debut : {0}" -f $StartedAt.ToString("yyyy-MM-dd HH:mm:ss"))
+Add-Line ("- Fin : {0}" -f $FinishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
+Add-Line ("- Duree : {0} secondes" -f $Duration.TotalSeconds.ToString("0.00"))
 Add-Line ""
 Add-Line "**MODE READ-ONLY CONFIRME**"
 Add-Line ""
