@@ -12,6 +12,14 @@ if ($method === 'GET') {
     $pdo = getDatabaseConnection();
     $user = requirePermission($pdo, 'eleves.read');
 
+    // F-03: le schéma V1 ne relie pas encore users aux enseignants/classes.
+    // Tant que ce périmètre serveur n'existe pas, une lecture globale par un
+    // utilisateur non-PDG serait une fuite inter-classe. On échoue fermement
+    // plutôt que de retourner tous les élèves.
+    if ($user['role_name'] !== 'PDG') {
+        apiError(403, 'Périmètre élèves non configuré pour ce rôle');
+    }
+
     $stmt = $pdo->prepare(
         'SELECT
             id,
