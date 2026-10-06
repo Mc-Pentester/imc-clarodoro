@@ -69,7 +69,7 @@ jobs:
             -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (id, name) VALUES
             ('00000000-0000-0000-0000-000000000001', 'PDG'),
-            ('00000000-0000-0000-0000-000000000002', 'ENSEIGNANT');
+            ('00000000-0000-0000-0000-000000000002', 'Enseignant');
 
           INSERT INTO permissions (id, name) VALUES
             ('00000000-0000-0000-0000-000000000010', 'eleves.read');
