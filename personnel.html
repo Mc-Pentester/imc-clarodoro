@@ -974,51 +974,41 @@ async function connecterPersonnelWrapper() {
 
 async function connecterPersonnel(){
 
-  const identifiant =
-    document.getElementById("identifiantConnexion")
-    .value.trim();
+  const identifiant = document.getElementById("identifiantConnexion").value.trim();
+  const motDePasse = document.getElementById("motDePasseConnexion").value;
 
-  const motDePasse =
-    document.getElementById("motDePasseConnexion")
-    .value;
-
-  const inputHash = await secureHash(motDePasse);
-  
-  const trouve =
-    personnel.find(function(p){
-
-      return String(p.identifiant || "") === identifiant &&
-             String(p.motDePasseHash || "") === inputHash;
-
-    });
-
-  if(!trouve){
-
-    afficherMessage(
-      "messageConnexion",
-      "Identifiant ou mot de passe incorrect.",
-      "erreur"
-    );
-
+  if (!identifiant || !motDePasse) {
+    afficherMessage("messageConnexion", "Veuillez saisir votre identifiant et votre mot de passe.", "erreur");
     return;
   }
 
-  personnelConnecte = trouve;
+  try {
+    const utilisateur = await IMCAuth.login({
+      username: identifiant,
+      password: motDePasse
+    });
 
-  // Créer la session d'authentification
-  IMCAuth.login({
-    userId: trouve.id,
-    username: trouve.nom,
-    role: trouve.fonction
-  });
+    // Les données locales ne servent plus à authentifier l'utilisateur.
+    // Elles peuvent seulement compléter l'affichage historique de la page.
+    personnelConnecte = personnel.find(function(p) {
+      return String(p.identifiant || "") === identifiant;
+    }) || {
+      id: utilisateur.userId,
+      nom: utilisateur.username,
+      fonction: utilisateur.role,
+      identifiant: utilisateur.username
+    };
 
-  document.getElementById("sectionConnexion")
-    .classList.add("hidden");
-
-  document.getElementById("interfacePersonnel")
-    .classList.remove("hidden");
-
-  afficherInformationsEnseignant();
+    document.getElementById("sectionConnexion").classList.add("hidden");
+    document.getElementById("interfacePersonnel").classList.remove("hidden");
+    afficherInformationsEnseignant();
+  } catch (error) {
+    afficherMessage(
+      "messageConnexion",
+      error && error.message ? error.message : "Identifiant ou mot de passe incorrect.",
+      "erreur"
+    );
+  }
 }
 
 function deconnecterPersonnel() {
