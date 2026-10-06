@@ -86,7 +86,7 @@ function Add-FileInfo {
 
 Add-Line "# ENV-06 — SCHEMA FORENSIC AUDIT"
 Add-Line ""
-Add-Line "**Projet :** `$ProjectRoot`"
+Add-Line "**Projet :** $ProjectRoot"
 Add-Line "**Date :** $($StartedAt.ToString("yyyy-MM-dd HH:mm:ss"))"
 Add-Line "**Mode :** READ-ONLY"
 Add-Line ""
