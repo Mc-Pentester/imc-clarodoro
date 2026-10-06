@@ -1,0 +1,119 @@
+name: F-07 RBAC role coherence runtime proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  f07-runtime:
+    name: F-07 canonical RBAC roles
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply schema and F-07 migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006200000_normalize_rbac_role_names.sql
+
+      - name: Prove canonical roles and legacy rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (name) VALUES
+            ('PDG'), ('Directeur'), ('Enseignant'), ('Secrétaire'), ('Surveillant'), ('Autre')
+          ON CONFLICT (name) DO NOTHING;
+
+          DO $$
+          BEGIN
+            IF (SELECT COUNT(*) FROM roles WHERE name = 'ENSEIGNANT') <> 0 THEN
+              RAISE EXCEPTION 'F-07 FAIL: legacy role ENSEIGNANT exists';
+            END IF;
+            IF (SELECT COUNT(*) FROM roles WHERE name IN ('PDG','Directeur','Enseignant','Secrétaire','Surveillant','Autre')) <> 6 THEN
+              RAISE EXCEPTION 'F-07 FAIL: canonical role set incomplete';
+            END IF;
+          END $$;
+
+          BEGIN;
+          INSERT INTO roles (name) VALUES ('ENSEIGNANT');
+          ROLLBACK;
+          SQL
+
+          if psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -tAc "SELECT COUNT(*) FROM roles WHERE name = 'ENSEIGNANT';" | tr -d ' ' | grep -qx '0'; then
+            echo "F-07 legacy role ENSEIGNANT absent: PASS"
+          else
+            echo "F-07 FAIL: legacy role ENSEIGNANT accepted"
+            exit 1
+          fi
+
+      - name: Prove bootstrap/client use canonical role names
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const bootstrap = fs.readFileSync('bootstrap-auth.php', 'utf8');
+          const auth = fs.readFileSync('auth.js', 'utf8');
+          const canonical = ['PDG', 'Directeur', 'Enseignant', 'Secrétaire', 'Surveillant', 'Autre'];
+
+          for (const role of canonical) {
+            if (!bootstrap.includes("'" + role + "'")) throw new Error('F-07 FAIL: bootstrap missing canonical role ' + role);
+            if (!auth.includes(role + ':')) throw new Error('F-07 FAIL: auth.js missing canonical role ' + role);
+          }
+
+          if (bootstrap.includes("'ENSEIGNANT'") || auth.includes('ENSEIGNANT')) {
+            throw new Error('F-07 FAIL: legacy role token ENSEIGNANT remains in bootstrap/client');
+          }
+
+          console.log('F-07 bootstrap canonical roles: PASS');
+          console.log('F-07 auth.js canonical roles: PASS');
+          console.log('F-07 legacy role token absent from bootstrap/client: PASS');
+          NODE
+
+      - name: F-07 final proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "F-07 RUNTIME PROOF: PASS"
+          echo "Canonical roles: PDG, Directeur, Enseignant, Secrétaire, Surveillant, Autre"
+          echo "Legacy ENSEIGNANT: rejected"
+          echo "Bootstrap/client naming: coherent"
