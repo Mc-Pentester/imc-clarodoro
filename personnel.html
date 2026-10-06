@@ -2089,6 +2089,15 @@ function chargerSemainePresence(){
 
 function enregistrerPresences(){
 
+  if (!IMCAuth.requirePermission("presences.create")) {
+    afficherMessage(
+      "messagePresence",
+      "Permission refusée.",
+      "erreur"
+    );
+    return;
+  }
+
   try{
 
     localStorage.setItem(
