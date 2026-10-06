@@ -1,0 +1,165 @@
+name: F-06 session expiration runtime proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  f06-runtime:
+    name: F-06 session expiry and invalidation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      AUTH_IDLE_TIMEOUT_SECONDS: 3
+      AUTH_ABSOLUTE_TIMEOUT_SECONDS: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and required migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006170000_add_user_teacher_scope.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
+
+      - name: Seed F-06 runtime user
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000001', 'PDG')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO users (id, username, password_hash, role_id)
+          VALUES (
+            '00000000-0000-0000-0000-000000000606',
+            'f06_user',
+            crypt('CorrectPass123!', gen_salt('bf')),
+            '00000000-0000-0000-0000-000000000001'
+          );
+          SQL
+
+      - name: Start PHP runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8080 -t . > /tmp/imc-php.log 2>&1 &
+          echo $! > /tmp/imc-php.pid
+          for i in {1..20}; do
+            if curl -sS -o /dev/null http://127.0.0.1:8080/api/auth/me.php; then
+              break
+            fi
+            sleep 1
+          done
+          test -f /tmp/imc-php.pid
+
+      - name: Prove F-06 runtime expiry and logout
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          login() {
+            curl -sS -o /tmp/login-body.json -w '%{http_code}'               -c /tmp/f06-cookies.txt -b /tmp/f06-cookies.txt               -H 'Content-Type: application/json'               -d '{"username":"f06_user","password":"CorrectPass123!"}'               http://127.0.0.1:8080/api/auth/login.php
+          }
+
+          me() {
+            curl -sS -o /tmp/me-body.json -w '%{http_code}'               -b /tmp/f06-cookies.txt               http://127.0.0.1:8080/api/auth/me.php
+          }
+
+          logout() {
+            curl -sS -o /tmp/logout-body.json -w '%{http_code}'               -c /tmp/f06-cookies.txt -b /tmp/f06-cookies.txt               -X POST               http://127.0.0.1:8080/api/auth/logout.php
+          }
+
+          assert_status() {
+            local label="$1"
+            local actual="$2"
+            local expected="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "FAIL: $label — expected HTTP $expected, got $actual"
+              echo "--- response ---"
+              cat /tmp/me-body.json /tmp/login-body.json /tmp/logout-body.json 2>/dev/null || true
+              echo
+              echo "--- PHP log ---"
+              cat /tmp/imc-php.log || true
+              exit 1
+            fi
+          }
+
+          echo '=== Login establishes an authenticated session ==='
+          STATUS="$(login)"
+          assert_status 'login' "$STATUS" "200"
+
+          echo '=== Fresh session must authenticate ==='
+          STATUS="$(me)"
+          assert_status 'fresh /me' "$STATUS" "200"
+
+          echo '=== Logout must invalidate the session ==='
+          STATUS="$(logout)"
+          assert_status 'logout' "$STATUS" "200"
+          STATUS="$(me)"
+          assert_status 'post-logout /me' "$STATUS" "401"
+
+          echo '=== Idle timeout must expire inactive sessions ==='
+          rm -f /tmp/f06-cookies.txt
+          STATUS="$(login)"
+          assert_status 'second login' "$STATUS" "200"
+          STATUS="$(me)"
+          assert_status 'pre-idle-expiry /me' "$STATUS" "200"
+          sleep 4
+          STATUS="$(me)"
+          assert_status 'post-idle-expiry /me' "$STATUS" "401"
+
+          echo '=== Absolute timeout must expire sessions even with activity ==='
+          rm -f /tmp/f06-cookies.txt
+          STATUS="$(login)"
+          assert_status 'third login' "$STATUS" "200"
+          STATUS="$(me)"
+          assert_status 'absolute test activity 1' "$STATUS" "200"
+          sleep 4
+          STATUS="$(me)"
+          assert_status 'absolute test activity 2' "$STATUS" "200"
+          sleep 7
+          STATUS="$(me)"
+          assert_status 'post-absolute-expiry /me' "$STATUS" "401"
+
+          echo 'F-06 RUNTIME PROOF: PASS'
+          echo 'login establishes session: PASS'
+          echo 'logout invalidates session: PASS'
+          echo 'idle timeout -> 401: PASS'
+          echo 'absolute timeout despite activity -> 401: PASS'
