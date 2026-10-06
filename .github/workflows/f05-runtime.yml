@@ -1,0 +1,142 @@
+name: F-05 login rate limit runtime proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  f05-runtime:
+    name: F-05 login brute-force protection
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      AUTH_RATE_LIMIT_MAX_ATTEMPTS: 5
+      AUTH_RATE_LIMIT_WINDOW_SECONDS: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and F-05 migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro"             -v ON_ERROR_STOP=1             -f database/schema.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro"             -v ON_ERROR_STOP=1             -f database/migrations/20261006190000_add_login_rate_limit.sql
+
+      - name: Seed F-05 runtime user
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro"             -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000001', 'PDG');
+
+          INSERT INTO users (id, username, password_hash, role_id)
+          VALUES (
+            '00000000-0000-0000-0000-000000000601',
+            'f05_user',
+            crypt('CorrectPass123!', gen_salt('bf')),
+            '00000000-0000-0000-0000-000000000001'
+          );
+          SQL
+
+      - name: Start PHP runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8080 -t . > /tmp/imc-php.log 2>&1 &
+          echo $! > /tmp/imc-php.pid
+          for i in {1..20}; do
+            if curl -sS -o /dev/null http://127.0.0.1:8080/api/auth/me.php; then
+              break
+            fi
+            sleep 1
+          done
+          test -f /tmp/imc-php.pid
+
+      - name: Prove F-05 runtime protection
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          login_status() {
+            local username="$1"
+            local password="$2"
+            curl -sS -o /tmp/login-body.json -w '%{http_code}'               -H 'Content-Type: application/json'               -d "{\"username\":\"$username\",\"password\":\"$password\"}"               http://127.0.0.1:8080/api/auth/login.php
+          }
+
+          assert_status() {
+            local label="$1"
+            local actual="$2"
+            local expected="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "FAIL: $label — expected HTTP $expected, got $actual"
+              cat /tmp/login-body.json
+              exit 1
+            fi
+          }
+
+          echo '=== Four failures must remain below the threshold ==='
+          for i in 1 2 3 4; do
+            STATUS="$(login_status f05_user WrongPass123!)"
+            assert_status "failed attempt $i" "$STATUS" "401"
+          done
+
+          echo '=== A valid login must succeed and reset the limiter ==='
+          STATUS="$(login_status f05_user CorrectPass123!)"
+          assert_status 'valid login after four failures' "$STATUS" "200"
+
+          echo '=== Five consecutive failures must trigger throttling ==='
+          for i in 1 2 3 4 5; do
+            STATUS="$(login_status f05_user WrongPass123!)"
+            assert_status "post-reset failed attempt $i" "$STATUS" "401"
+          done
+
+          echo '=== Next attempt must be rate limited ==='
+          STATUS="$(login_status f05_user WrongPass123!)"
+          assert_status 'rate-limited attempt' "$STATUS" "429"
+
+          if ! grep -Fq 'Trop de tentatives de connexion' /tmp/login-body.json; then
+            echo 'FAIL: rate-limit response message missing'
+            cat /tmp/login-body.json
+            exit 1
+          fi
+
+          echo 'F-05 RUNTIME PROOF: PASS'
+          echo '4 failures -> 401: PASS'
+          echo 'valid login resets limiter: PASS'
+          echo '5 failures -> 401: PASS'
+          echo 'next attempt -> 429: PASS'
