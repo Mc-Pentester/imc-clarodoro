@@ -281,6 +281,33 @@ CREATE TABLE classes (
 );
 
 -- ============================================================
+-- USER / TEACHER SCOPE
+-- ============================================================
+
+-- Un utilisateur enseignant peut être rattaché à un ou plusieurs
+-- enregistrements teachers. Cette relation est la source de vérité
+-- du périmètre serveur ; elle ne doit jamais être fournie par le client.
+CREATE TABLE user_teachers (
+    user_id UUID PRIMARY KEY,
+    teacher_id UUID NOT NULL,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT user_teachers_user_fk
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE RESTRICT,
+
+    CONSTRAINT user_teachers_teacher_fk
+        FOREIGN KEY (teacher_id)
+        REFERENCES teachers(id)
+        ON DELETE RESTRICT
+);
+
+CREATE INDEX idx_user_teachers_teacher
+    ON user_teachers(teacher_id);
+
+-- ============================================================
 -- TEACHER / CLASS / SUBJECT ASSIGNMENTS
 -- ============================================================
 
