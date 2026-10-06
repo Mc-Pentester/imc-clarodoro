@@ -2,6 +2,17 @@
 
 declare(strict_types=1);
 
+/*
+ * P0-A.1 — Bootstrap d'administration.
+ * Exécution strictement CLI : ce script ne doit jamais être utilisable
+ * comme endpoint HTTP, même s'il se trouve accidentellement dans le
+ * document root.
+ */
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/config/database.php';
 
 $pdo = getDatabaseConnection();
