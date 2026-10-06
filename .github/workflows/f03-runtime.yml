@@ -1,0 +1,213 @@
+name: F-03 PostgreSQL runtime proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  f03-runtime:
+    name: F-03 runtime PostgreSQL isolation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and F-03 migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 \
+            -f database/schema.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 \
+            -f database/migrations/20261006170000_add_user_teacher_scope.sql
+
+      - name: Seed isolated F-03 runtime dataset
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name) VALUES
+            ('00000000-0000-0000-0000-000000000001', 'PDG'),
+            ('00000000-0000-0000-0000-000000000002', 'ENSEIGNANT');
+
+          INSERT INTO permissions (id, name) VALUES
+            ('00000000-0000-0000-0000-000000000010', 'eleves.read');
+
+          INSERT INTO role_permissions (role_id, permission_id) VALUES
+            ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010'),
+            ('00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000010');
+
+          INSERT INTO teachers (id, first_name, last_name) VALUES
+            ('00000000-0000-0000-0000-000000000101', 'Teacher', 'A'),
+            ('00000000-0000-0000-0000-000000000102', 'Teacher', 'B'),
+            ('00000000-0000-0000-0000-000000000103', 'Teacher', 'None');
+
+          INSERT INTO levels (id, code, name) VALUES
+            ('00000000-0000-0000-0000-000000000201', 'L1', 'Level 1');
+
+          INSERT INTO classes (id, code, name, level_id) VALUES
+            ('00000000-0000-0000-0000-000000000301', 'CLASS-A', 'Class A', '00000000-0000-0000-0000-000000000201'),
+            ('00000000-0000-0000-0000-000000000302', 'CLASS-B', 'Class B', '00000000-0000-0000-0000-000000000201');
+
+          INSERT INTO subjects (id, code, name) VALUES
+            ('00000000-0000-0000-0000-000000000401', 'MAT', 'Mathematics');
+
+          INSERT INTO school_years (id, label, start_date, end_date) VALUES
+            ('00000000-0000-0000-0000-000000000501', '2026-2027', '2026-09-01', '2027-06-30');
+
+          INSERT INTO users (id, username, password_hash, role_id) VALUES
+            ('00000000-0000-0000-0000-000000000601', 'teacher_a', crypt('TeacherPass123!', gen_salt('bf')), '00000000-0000-0000-0000-000000000002'),
+            ('00000000-0000-0000-0000-000000000602', 'teacher_b', crypt('TeacherPass123!', gen_salt('bf')), '00000000-0000-0000-0000-000000000002'),
+            ('00000000-0000-0000-0000-000000000603', 'teacher_none', crypt('TeacherPass123!', gen_salt('bf')), '00000000-0000-0000-0000-000000000002'),
+            ('00000000-0000-0000-0000-000000000604', 'pdg', crypt('PdgPass123!', gen_salt('bf')), '00000000-0000-0000-0000-000000000001');
+
+          INSERT INTO user_teachers (user_id, teacher_id) VALUES
+            ('00000000-0000-0000-0000-000000000601', '00000000-0000-0000-0000-000000000101'),
+            ('00000000-0000-0000-0000-000000000602', '00000000-0000-0000-0000-000000000102'),
+            ('00000000-0000-0000-0000-000000000603', '00000000-0000-0000-0000-000000000103');
+
+          INSERT INTO teacher_class_subjects (id, teacher_id, class_id, subject_id) VALUES
+            ('00000000-0000-0000-0000-000000000701', '00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000401'),
+            ('00000000-0000-0000-0000-000000000702', '00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000401');
+
+          INSERT INTO students (id, matricule, last_name, first_name) VALUES
+            ('00000000-0000-0000-0000-000000000801', 'ST-A', 'Student', 'A'),
+            ('00000000-0000-0000-0000-000000000802', 'ST-B', 'Student', 'B');
+
+          INSERT INTO enrollments (id, student_id, class_id, school_year_id) VALUES
+            ('00000000-0000-0000-0000-000000000901', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000501'),
+            ('00000000-0000-0000-0000-000000000902', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000501');
+          SQL
+
+      - name: Start PHP runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8080 -t . > /tmp/imc-php.log 2>&1 &
+          echo $! > /tmp/imc-php.pid
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:8080/api/auth/me.php >/tmp/unauth.json 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          test -f /tmp/imc-php.pid
+
+      - name: Prove F-03 runtime isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          login() {
+            local username="$1"
+            local password="$2"
+            local jar="$3"
+            curl -fsS -c "$jar" -b "$jar" \
+              -H 'Content-Type: application/json' \
+              -d "{\"username\":\"$username\",\"password\":\"$password\"}" \
+              http://127.0.0.1:8080/api/auth/login.php
+          }
+
+          students() {
+            local jar="$1"
+            curl -fsS -c "$jar" -b "$jar" \
+              -w '\nHTTP_STATUS:%{http_code}\n' \
+              http://127.0.0.1:8080/api/students/index.php
+          }
+
+          check_contains() {
+            local label="$1"
+            local body="$2"
+            local expected="$3"
+            if ! grep -Fq "$expected" <<<"$body"; then
+              echo "FAIL: $label — missing $expected"
+              exit 1
+            fi
+          }
+
+          check_not_contains() {
+            local label="$1"
+            local body="$2"
+            local forbidden="$3"
+            if grep -Fq "$forbidden" <<<"$body"; then
+              echo "FAIL: $label — forbidden $forbidden present"
+              exit 1
+            fi
+          }
+
+          rm -f /tmp/a.cookies /tmp/b.cookies /tmp/none.cookies /tmp/pdg.cookies
+
+          echo '=== Teacher A: own class only ==='
+          login teacher_a TeacherPass123! /tmp/a.cookies
+          A="$(students /tmp/a.cookies)"
+          echo "$A"
+          check_contains 'Teacher A own student' "$A" '"matricule":"ST-A"'
+          check_not_contains 'Teacher A cross-class student' "$A" '"matricule":"ST-B"'
+          check_contains 'Teacher A HTTP status' "$A" 'HTTP_STATUS:200'
+
+          echo '=== Teacher B: own class only ==='
+          login teacher_b TeacherPass123! /tmp/b.cookies
+          B="$(students /tmp/b.cookies)"
+          echo "$B"
+          check_contains 'Teacher B own student' "$B" '"matricule":"ST-B"'
+          check_not_contains 'Teacher B cross-class student' "$B" '"matricule":"ST-A"'
+          check_contains 'Teacher B HTTP status' "$B" 'HTTP_STATUS:200'
+
+          echo '=== Teacher with no assignment: no students ==='
+          login teacher_none TeacherPass123! /tmp/none.cookies
+          NONE="$(students /tmp/none.cookies)"
+          echo "$NONE"
+          check_contains 'Unassigned teacher empty result' "$NONE" '"count":0'
+          check_contains 'Unassigned teacher HTTP status' "$NONE" 'HTTP_STATUS:200'
+
+          echo '=== PDG: global read ==='
+          login pdg PdgPass123! /tmp/pdg.cookies
+          PDG="$(students /tmp/pdg.cookies)"
+          echo "$PDG"
+          check_contains 'PDG student A' "$PDG" '"matricule":"ST-A"'
+          check_contains 'PDG student B' "$PDG" '"matricule":"ST-B"'
+          check_contains 'PDG HTTP status' "$PDG" 'HTTP_STATUS:200'
+
+          echo 'F-03 RUNTIME PROOF: PASS'
+          echo 'Teacher A -> ST-A only: PASS'
+          echo 'Teacher B -> ST-B only: PASS'
+          echo 'Unassigned teacher -> 0 students: PASS'
+          echo 'PDG -> ST-A + ST-B: PASS'
