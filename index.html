@@ -1283,16 +1283,17 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                     );
 
 
-                const photo =
-                    student.photo
-                        ? `
-                            <img
-                                src="${student.photo}"
-                                class="student-photo"
-                                alt="Photo">
-                          `
-                        : "—";
-
+                const photoTd = document.createElement("td");
+                if (estSourceImageSûre(student.photo)) {
+                    const photo = document.createElement("img");
+                    photo.src = student.photo;
+                    photo.className = "student-photo";
+                    photo.alt = "Photo";
+                    photoTd.appendChild(photo);
+                } else {
+                    photoTd.textContent = "—";
+                }
+                row.appendChild(photoTd);
 
                 const sexe =
                     student.sexe === "M"
@@ -1301,63 +1302,42 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                             ? "F — Fille"
                             : "";
 
+                [
+                    index + 1,
+                    student.nom || "",
+                    student.prenom || "",
+                    sexe,
+                    student.dateNaissance || "",
+                    student.classe || "",
+                    student.nisu || "",
+                    student.contact || ""
+                ].forEach(function (value) {
+                    const td = document.createElement("td");
+                    td.textContent = String(value);
+                    row.appendChild(td);
+                });
 
-                row.innerHTML = `
+                const actionsTd = document.createElement("td");
+                const actions = document.createElement("div");
+                actions.className = "actions";
 
-                    <td>
-                        ${index + 1}
-                    </td>
+                [
+                    ["Dossier", "btn-primary", voirDossier],
+                    ["Modifier", "btn-warning", modifierEleve],
+                    ["Supprimer", "btn-danger", supprimerEleve]
+                ].forEach(function (action) {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = action[1];
+                    button.textContent = action[0];
+                    button.addEventListener("click", function () {
+                        action[2](student.id);
+                    });
+                    actions.appendChild(button);
+                });
 
-                    <td>
-                        ${photo}
-                    </td>
-
-                    <td>
-                        ${echapper(student.nom)}
-                    </td>
-
-                    <td>
-                        ${echapper(student.prenom)}
-                    </td>
-
-                    <td>
-                        ${sexe}
-                    </td>
-
-                    <td>
-                        ${echapper(
-                            student.dateNaissance || ""
-                        )}
-                    </td>
-
-                    <td>
-                        ${echapper(
-                            student.classe || ""
-                        )}
-                    </td>
-
-                    <td>
-                        ${echapper(
-                            student.nisu || ""
-                        )}
-                    </td>
-
-                    <td>
-                        ${echapper(
-                            student.contact || ""
-                        )}
-                    </td>
-
-                    <td>
-
-                        <div class="actions">
-
-                            <button
-                                type="button"
-                                class="btn-primary"
-                                onclick="voirDossier('${student.id}')">
-                                Dossier
-                            </button>
+                actionsTd.appendChild(actions);
+                row.appendChild(actionsTd);
 
                             <button
                                 type="button"
@@ -2493,6 +2473,25 @@ Clarodaro, la clarté du savoir!
     /* ==================================================
        PROTECTION HTML
     ================================================== */
+
+
+    function estSourceImageSûre(source) {
+        if (typeof source !== "string" || source.trim() === "") {
+            return false;
+        }
+
+        const value = source.trim();
+
+        if (/^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(value)) {
+            return true;
+        }
+
+        if (/^https:\/\//i.test(value)) {
+            return true;
+        }
+
+        return false;
+    }
 
     function echapper(texte) {
 
