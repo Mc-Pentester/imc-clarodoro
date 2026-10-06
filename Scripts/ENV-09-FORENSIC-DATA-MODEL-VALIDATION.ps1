@@ -585,7 +585,7 @@ foreach ($entity in $ModelEntities.Keys) {
 
             $pattern = [regex]::Escape($alias)
 
-            $regex = New-Object System.Text.RegularExpressions.Regex(
+            $regex = [System.Text.RegularExpressions.Regex]::new(
                 $pattern,
                 [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
             )
@@ -724,7 +724,7 @@ foreach ($field in $FieldCandidates.Keys) {
             $pattern = $alias
 
             try {
-                $regex = New-Object System.Text.RegularExpressions.Regex(
+                $regex = [System.Text.RegularExpressions.Regex]::new(
                     $pattern,
                     [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
                 )
@@ -943,7 +943,7 @@ foreach ($relation in $RelationCandidates) {
         foreach ($pattern in $relation.Patterns) {
 
             try {
-                $regex = New-Object System.Text.RegularExpressions.Regex(
+                $regex = [System.Text.RegularExpressions.Regex]::new(
                     $pattern,
                     [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
                 )
@@ -1034,7 +1034,7 @@ foreach ($source in $SourceRecords) {
 
     foreach ($pattern in $patterns) {
 
-        $regex = New-Object System.Text.RegularExpressions.Regex(
+        $regex = [System.Text.RegularExpressions.Regex]::new(
             $pattern,
             [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
         )
@@ -1098,7 +1098,7 @@ foreach ($source in $SourceRecords) {
 
     foreach ($pattern in $StatusPatterns) {
 
-        $regex = New-Object System.Text.RegularExpressions.Regex(
+        $regex = [System.Text.RegularExpressions.Regex]::new(
             "(?i)(?:$pattern)\s*[:=]\s*['""]([^'""]+)['""]"
         )
 
@@ -1140,7 +1140,7 @@ foreach ($source in $SourceRecords) {
         continue
     }
 
-    $regex = New-Object System.Text.RegularExpressions.Regex(
+    $regex = [System.Text.RegularExpressions.Regex]::new(
         '(?:localStorage|sessionStorage)\.(?:getItem|setItem|removeItem)\s*\(\s*[''"]([^''"]+)[''"]',
         [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
     )
@@ -1243,7 +1243,7 @@ foreach ($rule in $BusinessRulePatterns.Keys) {
 
         foreach ($pattern in $BusinessRulePatterns[$rule]) {
 
-            $regex = New-Object System.Text.RegularExpressions.Regex(
+            $regex = [System.Text.RegularExpressions.Regex]::new(
                 [regex]::Escape($pattern),
                 [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
             )
@@ -1305,7 +1305,7 @@ foreach ($source in $SourceRecords) {
 
     foreach ($pattern in $ConstraintPatterns) {
 
-        $regex = New-Object System.Text.RegularExpressions.Regex(
+        $regex = [System.Text.RegularExpressions.Regex]::new(
             [regex]::Escape($pattern),
             [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
         )
@@ -1460,7 +1460,7 @@ foreach ($source in $SourceRecords) {
 
     foreach ($pattern in $SensitivePatterns) {
 
-        $regex = New-Object System.Text.RegularExpressions.Regex(
+        $regex = [System.Text.RegularExpressions.Regex]::new(
             [regex]::Escape($pattern),
             [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
         )
