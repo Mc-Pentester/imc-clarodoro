@@ -124,6 +124,7 @@ function enforceAuthSessionLifetime(): void
 function requireAuthenticatedUser(PDO $pdo): array
 {
     configureAuthSession();
+    enforceAuthSessionLifetime();
 
     if (empty($_SESSION['user_id'])) {
         apiError(401, 'Authentification requise');
