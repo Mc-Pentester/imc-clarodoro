@@ -190,7 +190,7 @@ $DetectedRelations = New-Object System.Collections.Generic.HashSet[string]
 foreach ($File in $Files) {
     $Content = Get-FileContent $File.FullName
     foreach ($Term in $RelationBaseTerms) {
-        if ($Content -match "$Term" + "_id") {
+        if ($Content -match "${Term}_id") {
             [void]$DetectedRelations.Add($Term)
         }
     }
