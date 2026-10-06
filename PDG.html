@@ -1494,41 +1494,26 @@ async function connecterPDGWrapper() {
 
 async function connecterPDG() {
 
-    const motDePasse =
-        document.getElementById(
-            "motDePasse"
-        ).value;
+    const motDePasse = document.getElementById("motDePasse").value;
 
-    // Vérifier si un mot de passe est configuré
-    const passwordHash = localStorage.getItem('imc_pdg_password_hash');
-    
-    if (!passwordHash) {
-        document.getElementById(
-            "messageErreur"
-        ).textContent =
-            "Aucun mot de passe configuré. Contactez l'administrateur.";
-
+    if (!motDePasse) {
+        document.getElementById("messageErreur").textContent = "Veuillez saisir votre mot de passe.";
         return;
     }
 
-    // Vérification sécurisée du hash avec Web Crypto API
-    const inputHash = await secureHash(motDePasse);
-    
-    if (inputHash !== passwordHash) {
-        document.getElementById(
-            "messageErreur"
-        ).textContent =
-            "Mot de passe incorrect.";
+    try {
+        const utilisateur = await IMCAuth.login({
+            username: "pdg",
+            password: motDePasse
+        });
 
-        return;
-    }
+        if (String(utilisateur.role).toUpperCase() !== "PDG") {
+            await IMCAuth.logout();
+            document.getElementById("messageErreur").textContent = "Accès réservé au PDG.";
+            return;
+        }
 
-    // Créer la session d'authentification
-    IMCAuth.login({
-        userId: "PDG",
-        username: "PDG",
-        role: "PDG"
-    });
+
 
     document
         .getElementById(
