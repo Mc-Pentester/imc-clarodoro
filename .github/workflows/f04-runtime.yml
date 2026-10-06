@@ -1,0 +1,177 @@
+name: F-04 browser runtime XSS proof
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  f04-runtime:
+    name: F-04 browser DOM/XSS runtime
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Start local application server
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8080 >/tmp/imc-http.log 2>&1 &
+          echo $! >/tmp/imc-http.pid
+          sleep 2
+          curl --fail --silent --show-error http://127.0.0.1:8080/index.html >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8080/PDG.html >/dev/null
+
+      - name: Prove F-04 runtime XSS resistance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const context = await browser.newContext();
+
+            const authStub = `
+              (() => {
+                const user = { userId: "runtime-pdg", username: "runtime-pdg", role: "PDG" };
+                window.IMCAuth = Object.freeze({
+                  login: async () => user,
+                  logout: async () => {},
+                  isAuthenticated: () => true,
+                  currentUser: () => user,
+                  requireAuth: () => true,
+                  getSession: () => user,
+                  verifySession: async () => user,
+                  refresh: () => true,
+                  isSessionExpired: () => false,
+                  requireRole: () => true,
+                  hasRole: () => true,
+                  hasPermission: () => true,
+                  requirePermission: () => true
+                });
+              })();
+            `;
+
+            const errors = [];
+            context.on('page', page => {
+              page.on('pageerror', error => errors.push(String(error)));
+            });
+
+            await context.route('**/auth.js', route =>
+              route.fulfill({
+                status: 200,
+                contentType: 'application/javascript',
+                body: authStub
+              })
+            );
+
+            const page = await context.newPage();
+            page.on('pageerror', error => errors.push(String(error)));
+
+            await page.addInitScript(() => {
+              const xss = '<img src=x onerror="window.__f04_xss=1">';
+
+              localStorage.setItem('imc_students', JSON.stringify([{
+                id: 'student-xss',
+                nom: xss,
+                prenom: '<svg onload="window.__f04_xss=2">',
+                sexe: 'M',
+                dateNaissance: '2010-01-01',
+                classe: '<script>window.__f04_xss=3</script>',
+                nisu: xss,
+                contact: xss,
+                anneeScolaire: '2026 - 2027',
+                photo: 'javascript:window.__f04_xss=4'
+              }]));
+
+              localStorage.setItem('imc_personnel', JSON.stringify([{
+                nom: xss,
+                fonction: '<svg onload="window.__f04_xss=5">',
+                identifiant: '<script>window.__f04_xss=6</script>'
+              }]));
+
+              localStorage.setItem('imc_active_year', '2026 - 2027');
+            });
+
+            await page.goto('http://127.0.0.1:8080/index.html', { waitUntil: 'networkidle' });
+            await page.waitForTimeout(500);
+
+            const indexResult = await page.evaluate(() => ({
+              xss: window.__f04_xss || 0,
+              rowText: document.querySelector('#studentsTableBody')?.textContent || '',
+              hasUnsafePhoto: !!document.querySelector('#studentsTableBody img'),
+              photoFallback: document.querySelector('#studentsTableBody td')?.textContent || ''
+            }));
+
+            if (indexResult.xss !== 0) throw new Error('F-04 FAIL: XSS executed on index.html');
+            if (!indexResult.rowText.includes('<img src=x onerror="window.__f04_xss=1">')) {
+              throw new Error('F-04 FAIL: student payload was not rendered as text');
+            }
+            if (indexResult.hasUnsafePhoto) throw new Error('F-04 FAIL: unsafe javascript: photo source was accepted');
+
+            const pdg = await context.newPage();
+            pdg.on('pageerror', error => errors.push(String(error)));
+            await pdg.goto('http://127.0.0.1:8080/PDG.html', { waitUntil: 'networkidle' });
+            await pdg.evaluate(() => afficherGestionPersonnel());
+            await pdg.waitForTimeout(300);
+
+            const pdgResult = await pdg.evaluate(() => ({
+              xss: window.__f04_xss || 0,
+              rowText: document.querySelector('#tableauPersonnelAdmin')?.textContent || '',
+              scriptNodes: document.querySelectorAll('#tableauPersonnelAdmin script').length,
+              imgNodes: document.querySelectorAll('#tableauPersonnelAdmin img').length
+            }));
+
+            if (pdgResult.xss !== 0) throw new Error('F-04 FAIL: XSS executed on PDG.html');
+            if (!pdgResult.rowText.includes('<img src=x onerror="window.__f04_xss=1">')) {
+              throw new Error('F-04 FAIL: personnel payload was not rendered as text');
+            }
+            if (pdgResult.scriptNodes !== 0 || pdgResult.imgNodes !== 0) {
+              throw new Error('F-04 FAIL: executable HTML nodes were created from personnel data');
+            }
+
+            if (errors.length) {
+              throw new Error('F-04 FAIL: unexpected page errors: ' + errors.join(' | '));
+            }
+
+            console.log('F-04 RUNTIME PROOF: PASS');
+            console.log('index.html hostile text payload -> textContent: PASS');
+            console.log('index.html javascript: photo rejected: PASS');
+            console.log('PDG.html hostile personnel payload -> textContent: PASS');
+            console.log('PDG.html executable DOM nodes from hostile data: 0');
+            console.log('No XSS execution observed: PASS');
+
+            await browser.close();
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Stop local application server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/imc-http.pid ]; then
+            kill "$(cat /tmp/imc-http.pid)" || true
+          fi
