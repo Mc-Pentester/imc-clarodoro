@@ -1,4 +1,5 @@
 name: F-04 browser runtime XSS proof
+# Trigger-only validation commit; no runtime behavior change.
 
 on:
   push:
