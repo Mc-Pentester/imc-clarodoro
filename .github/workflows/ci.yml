@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    name: PHP and PowerShell syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: PHP syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          files="$(find . -type f -name '*.php' -not -path './.git/*')"
+          if [ -z "$files" ]; then
+            echo "No PHP files found."
+            exit 0
+          fi
+          while IFS= read -r file; do
+            echo "Checking $file"
+            php -l "$file"
+          done <<< "$files"
+
+      - name: PowerShell syntax check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = Get-ChildItem -Path . -Recurse -File -Filter '*.ps1' |
+            Where-Object { $_.FullName -notmatch '\\.git\\' }
+          foreach ($file in $files) {
+            Write-Host "Checking $($file.FullName)"
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell syntax error in $($file.FullName)"
+            }
+          }
