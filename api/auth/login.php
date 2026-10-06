@@ -190,6 +190,7 @@ $_SESSION['username'] = $user['username'];
 $_SESSION['role_id'] = $user['role_id'];
 $_SESSION['role_name'] = $user['role_name'];
 $_SESSION['authenticated_at'] = time();
+$_SESSION['last_activity_at'] = time();
 
 echo json_encode([
     'success' => true,
