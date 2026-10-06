@@ -461,7 +461,7 @@ else {
 
 Add-Section "12. Recherche de noms de tables PostgreSQL dans le code"
 
-$TablePatterns = @('FROM\s+([a-zA-Z_][a-zA-Z0-9_]*)', 'JOIN\s+([a-zA-Z_][a-zA-Z0-9_]*)', 'INSERT\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_]*)', 'UPDATE\s+([a-zA-Z_][a-zA-Z0-9_]*)', 'DELETE\s+FROM\s+([a-zA-Z_][a-zA-Z0-9_]*)')
+$TablePatterns = @('FROM\s+(\w+)', 'JOIN\s+(\w+)', 'INSERT\s+INTO\s+(\w+)', 'UPDATE\s+(\w+)', 'DELETE\s+FROM\s+(\w+)')
 $DetectedTables = New-Object System.Collections.Generic.HashSet[string]
 
 foreach ($File in $PhpFiles) {
