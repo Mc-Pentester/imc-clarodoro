@@ -211,3 +211,5 @@ jobs:
           echo 'Teacher B -> ST-B only: PASS'
           echo 'Unassigned teacher -> 0 students: PASS'
           echo 'PDG -> ST-A + ST-B: PASS'
+
+# Explicit trigger marker.
