@@ -1099,7 +1099,7 @@ foreach ($source in $SourceRecords) {
     foreach ($pattern in $StatusPatterns) {
 
         $regex = [System.Text.RegularExpressions.Regex]::new(
-            "(?i)(?:$pattern)\s*[:=]\s*['""]([^'""]+)['""]"
+            '(?i)(?:' + $pattern + ')\s*[:=]\s*["'']([^"'']+)["'']'
         )
 
         foreach ($match in $regex.Matches($source.Content)) {
