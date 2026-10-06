@@ -16,26 +16,57 @@ if ($method === 'GET') {
     // Tant que ce périmètre serveur n'existe pas, une lecture globale par un
     // utilisateur non-PDG serait une fuite inter-classe. On échoue fermement
     // plutôt que de retourner tous les élèves.
-    if ($user['role_name'] !== 'PDG') {
-        apiError(403, 'Périmètre élèves non configuré pour ce rôle');
+    if ($user['role_name'] === 'PDG') {
+        $stmt = $pdo->prepare(
+            'SELECT
+                id,
+                matricule,
+                last_name,
+                first_name,
+                date_of_birth,
+                sex,
+                address,
+                phone,
+                status,
+                created_at,
+                updated_at
+             FROM students
+             ORDER BY created_at DESC, id DESC'
+        );
+    } else {
+        // F-03: le périmètre est déterminé exclusivement par la relation
+        // serveur users -> teachers -> teacher_class_subjects -> classes
+        // -> enrollments -> students. Aucun identifiant de classe fourni
+        // par le client n'intervient dans l'autorisation.
+        $stmt = $pdo->prepare(
+            'SELECT DISTINCT
+                s.id,
+                s.matricule,
+                s.last_name,
+                s.first_name,
+                s.date_of_birth,
+                s.sex,
+                s.address,
+                s.phone,
+                s.status,
+                s.created_at,
+                s.updated_at
+             FROM students s
+             INNER JOIN enrollments e
+                ON e.student_id = s.id
+               AND e.status = :enrollment_status
+             INNER JOIN teacher_class_subjects tcs
+                ON tcs.class_id = e.class_id
+               AND tcs.status = :assignment_status
+             INNER JOIN user_teachers ut
+                ON ut.teacher_id = tcs.teacher_id
+               AND ut.user_id = :user_id
+             ORDER BY s.created_at DESC, s.id DESC'
+        );
+        $stmt->bindValue(':enrollment_status', 'ACTIVE');
+        $stmt->bindValue(':assignment_status', 'ACTIVE');
+        $stmt->bindValue(':user_id', $user['id']);
     }
-
-    $stmt = $pdo->prepare(
-        'SELECT
-            id,
-            matricule,
-            last_name,
-            first_name,
-            date_of_birth,
-            sex,
-            address,
-            phone,
-            status,
-            created_at,
-            updated_at
-         FROM students
-         ORDER BY created_at DESC, id DESC'
-    );
 
     $stmt->execute();
     $students = $stmt->fetchAll();
@@ -372,9 +403,41 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
         apiError(422, 'Aucun champ à modifier pour PATCH');
     }
 
-    // Check if student exists
-    $checkStmt = $pdo->prepare('SELECT id FROM students WHERE id = :id LIMIT 1');
-    $checkStmt->execute([':id' => $id]);
+    // F-03: le contrôle d'existence est également borné au périmètre
+    // serveur afin d'éviter qu'un utilisateur puisse modifier un élève
+    // appartenant à une autre classe.
+    if ($user['role_name'] === 'PDG') {
+        $checkStmt = $pdo->prepare(
+            'SELECT id
+             FROM students
+             WHERE id = :id
+             LIMIT 1'
+        );
+        $checkStmt->execute([':id' => $id]);
+    } else {
+        $checkStmt = $pdo->prepare(
+            'SELECT DISTINCT s.id
+             FROM students s
+             INNER JOIN enrollments e
+                ON e.student_id = s.id
+               AND e.status = :enrollment_status
+             INNER JOIN teacher_class_subjects tcs
+                ON tcs.class_id = e.class_id
+               AND tcs.status = :assignment_status
+             INNER JOIN user_teachers ut
+                ON ut.teacher_id = tcs.teacher_id
+               AND ut.user_id = :user_id
+             WHERE s.id = :id
+             LIMIT 1'
+        );
+        $checkStmt->execute([
+            ':enrollment_status' => 'ACTIVE',
+            ':assignment_status' => 'ACTIVE',
+            ':user_id' => $user['id'],
+            ':id' => $id,
+        ]);
+    }
+
     if (!$checkStmt->fetch()) {
         apiError(404, 'Étudiant non trouvé');
     }
