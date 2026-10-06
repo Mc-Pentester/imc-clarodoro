@@ -1513,36 +1513,29 @@ async function connecterPDG() {
             return;
         }
 
+        document.getElementById("zoneConnexion").classList.add("cache");
+        document.getElementById("zonePDG").classList.remove("cache");
+        document.getElementById("messageErreur").textContent = "";
 
-
-    document
-        .getElementById(
-            "zoneConnexion"
-        )
-        .classList.add("cache");
-
-
-    document
-        .getElementById(
-            "zonePDG"
-        )
-        .classList.remove("cache");
-
-
-    chargerAnnees();
-
-    initialiserMoisPaie();
-
-    chargerTableauDeBord();
-
+        chargerAnnees();
+        initialiserMoisPaie();
+        chargerTableauDeBord();
+    } catch (error) {
+        document.getElementById("messageErreur").textContent =
+            error && error.message ? error.message : "Identifiant ou mot de passe incorrect.";
+    }
 }
+
 
 
 /* ============================================================
    DÉCONNEXION
 ============================================================ */
 
-function deconnecterPDG() {
+async function deconnecterPDG() {
+
+    await IMCAuth.logout();
+
 
     document
         .getElementById(
