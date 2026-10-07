@@ -103,7 +103,8 @@ jobs:
           }
 
           logout() {
-            curl -sS -o /tmp/logout-body.json -w '%{http_code}' -c /tmp/f06-cookies.txt -b /tmp/f06-cookies.txt -X POST http://127.0.0.1:8080/api/auth/logout.php
+            local token="$1"
+            curl -sS -o /tmp/logout-body.json -w '%{http_code}' -c /tmp/f06-cookies.txt -b /tmp/f06-cookies.txt -H "X-CSRF-Token: $token" -X POST http://127.0.0.1:8080/api/auth/logout.php
           }
 
           assert_status() {
@@ -124,13 +125,15 @@ jobs:
           echo '=== Login establishes an authenticated session ==='
           STATUS="$(login)"
           assert_status 'login' "$STATUS" "200"
+          CSRF_TOKEN="$(jq -r '.csrfToken' /tmp/login-body.json)"
+          test -n "$CSRF_TOKEN"
 
           echo '=== Fresh session must authenticate ==='
           STATUS="$(me)"
           assert_status 'fresh /me' "$STATUS" "200"
 
           echo '=== Logout must invalidate the session ==='
-          STATUS="$(logout)"
+          STATUS="$(logout "$CSRF_TOKEN")"
           assert_status 'logout' "$STATUS" "200"
           STATUS="$(me)"
           assert_status 'post-logout /me' "$STATUS" "401"
