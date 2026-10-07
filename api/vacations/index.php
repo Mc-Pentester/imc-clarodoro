@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/auth.php';
 header('Content-Type: application/json; charset=utf-8');
+// F-02-B: reference data is server-authoritative.
 $pdo=getDatabaseConnection();$method=$_SERVER['REQUEST_METHOD'];
 if($method==='GET'){requirePermission($pdo,'vacances.read');$s=$pdo->query("SELECT id,name,start_date,end_date,status,created_at,updated_at FROM vacations WHERE status <> 'ARCHIVED' ORDER BY start_date DESC,id DESC");echo json_encode(['success'=>true,'vacations'=>$s->fetchAll()],JSON_UNESCAPED_UNICODE);exit;}
 requirePermission($pdo,$method==='POST'?'vacances.create':'vacances.update');requireCsrfToken();$d=readJsonBody();
