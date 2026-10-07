@@ -3868,6 +3868,15 @@ IMCSecureStorage.ready.then(function(ok){
 });
 
 
+/* F-02-D bridge: expose finance state to the server adapter without
+   making localStorage the source of truth. */
+Object.defineProperties(window, {
+  etudiants: { configurable: true, get: function(){ return etudiants; }, set: function(v){ etudiants = v; } },
+  finances: { configurable: true, get: function(){ return finances; }, set: function(v){ finances = v; } },
+  tarifs: { configurable: true, get: function(){ return tarifs; }, set: function(v){ tarifs = v; } },
+  eleveSelectionne: { configurable: true, get: function(){ return eleveSelectionne; }, set: function(v){ eleveSelectionne = v; } }
+});
+
 </script>
 
 <script src="js/finance-server.js"></script>
