@@ -1055,7 +1055,7 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                     enregistrerEleve
                 );
 
-
+            });
         }
     );
 
@@ -1382,7 +1382,7 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                 [
                     ["Dossier", "btn-primary", voirDossier],
                     ["Modifier", "btn-warning", modifierEleve],
-                    ["Supprimer", "btn-danger", supprimerEleve]
+                    ["Archiver", "btn-danger", supprimerEleve]
                 ].forEach(function (action) {
                     const button = document.createElement("button");
                     button.type = "button";
@@ -1500,35 +1500,6 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
     }
 
     /* ==================================================
-       SUPPRIMER
-    ================================================== */
-
-    function supprimerEleve(id) {
-
-        if (!IMCAuth.requirePermission("eleves.delete")) {
-            alert("Permission refusée.");
-            return;
-        }
-
-        const student =
-            students.find(
-                function (student) {
-                    return student.id === id;
-                }
-            );
-
-
-        if (!student) {
-            return;
-        }
-
-
-        if (
-            !confirm(
-                "Voulez-vous vraiment supprimer " +
-                student.nom +
-                " " +
-                    /* ==================================================
        ARCHIVER — F-02-A
     ================================================== */
 
@@ -1538,10 +1509,14 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             return;
         }
 
-        const student = students.find(function (student) { return student.id === id; });
+        const student = students.find(function (student) {
+            return student.id === id;
+        });
         if (!student) return;
 
-        if (!confirm("Voulez-vous archiver " + student.nom + " " + student.prenom + " ?")) return;
+        if (!confirm("Voulez-vous archiver " + student.nom + " " + student.prenom + " ?")) {
+            return;
+        }
 
         try {
             const response = await fetch(
@@ -1560,7 +1535,9 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             if (!response.ok || !data.success) {
                 throw new Error(data.message || "Échec de l'archivage");
             }
-            students = students.filter(function (item) { return item.id !== id; });
+            students = students.filter(function (item) {
+                return item.id !== id;
+            });
             afficherEleves();
             afficherMessage("L'élève a été archivé.");
         } catch (error) {
@@ -1569,7 +1546,40 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
         }
     }
 
- ).value = "";
+    /* ==================================================
+       NOUVEAU
+    ================================================== */
+
+    function nouvelEleve() {
+
+        annulerFormulaire();
+
+
+        document.getElementById(
+            "studentFormCard"
+        ).scrollIntoView({
+            behavior: "smooth"
+        });
+
+    }
+
+
+    /* ==================================================
+       ANNULER
+    ================================================== */
+
+    function annulerFormulaire() {
+
+        document
+            .getElementById(
+                "studentForm"
+            )
+            .reset();
+
+
+        document.getElementById(
+            "studentId"
+        ).value = "";
 
 
         document.getElementById(
