@@ -1,24 +1,43 @@
 <?php
+declare(strict_types=1);
+
 /**
  * IMC-Clarodoro - Database Configuration
- * ARCH-01-PHP - Foundation
- * 
- * Ce fichier configure la connexion PDO PostgreSQL.
- * Aucune donnée sensible en dur.
- * La configuration provient des variables d'environnement.
+ * F-08-C - Fail closed on missing/invalid database configuration.
+ *
+ * La configuration provient exclusivement des variables d'environnement
+ * (ou du chargeur local config/env.php). Aucun secret ni fallback implicite.
  */
 
 require_once __DIR__ . '/env.php';
 
-function getDatabaseConnection() {
-    // Récupération des variables d'environnement avec valeurs par défaut
-    $host = getenv('DB_HOST') ?: '127.0.0.1';
-    $port = getenv('DB_PORT') ?: '5432';
-    $dbname = getenv('DB_NAME') ?: 'imc_clarodoro';
-    $user = getenv('DB_USER') ?: 'postgres';
-    $password = getenv('DB_PASSWORD') ?: '';
+function getRequiredEnvironmentVariable(string $name): string
+{
+    $value = getenv($name);
 
-    // Construction du DSN PostgreSQL
+    if ($value === false || trim((string) $value) === '') {
+        throw new RuntimeException(
+            'Configuration de base de données manquante: ' . $name
+        );
+    }
+
+    return (string) $value;
+}
+
+function getDatabaseConnection(): PDO
+{
+    $host = getRequiredEnvironmentVariable('DB_HOST');
+    $port = getRequiredEnvironmentVariable('DB_PORT');
+    $dbname = getRequiredEnvironmentVariable('DB_NAME');
+    $user = getRequiredEnvironmentVariable('DB_USER');
+    $password = getRequiredEnvironmentVariable('DB_PASSWORD');
+
+    if (!ctype_digit($port) || (int) $port < 1 || (int) $port > 65535) {
+        throw new RuntimeException(
+            'Configuration de base de données invalide: DB_PORT'
+        );
+    }
+
     $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}";
 
     try {
@@ -28,12 +47,10 @@ function getDatabaseConnection() {
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
 
-        // Configuration UTF-8
         $pdo->exec("SET NAMES 'UTF8'");
 
         return $pdo;
     } catch (PDOException $e) {
-        // Ne jamais exposer le mot de passe ou les détails internes
         throw new RuntimeException(
             'Impossible de se connecter à la base de données',
             0,
