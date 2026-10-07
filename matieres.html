@@ -335,607 +335,173 @@ th {
 <script src="auth.js"></script>
 <script>
 
-// Guard d'authentification
-document.addEventListener("DOMContentLoaded", function() {
-  IMCAuth.requireAuth("personnel.html");
+// Authentification serveur obligatoire.
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await IMCAuth.verifySession();
+    if (!user) {
+        window.location.href = "personnel.html";
+        return;
+    }
+    await chargerMatieres();
 });
-
-const MATIERES_KEY = "imc_matieres";
 
 let matieres = [];
 let indexModification = -1;
 
-
-/* ============================================================
-   CHARGER
-   ============================================================ */
-
-function chargerMatieres() {
-
-    try {
-
-        matieres = JSON.parse(
-            localStorage.getItem(MATIERES_KEY) || "[]"
-        );
-
-        if (!Array.isArray(matieres)) {
-            matieres = [];
-        }
-
-    } catch (e) {
-
-        matieres = [];
-
+async function apiJson(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: "same-origin",
+        headers: { "Accept": "application/json", "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch (_) {}
+    if (!response.ok || !payload || payload.success === false) {
+        throw new Error((payload && payload.message) || "Erreur serveur.");
     }
-
-    afficherMatieres();
+    return payload;
 }
 
-
-/* ============================================================
-   SAUVEGARDER
-   ============================================================ */
-
-function sauvegarderMatieres() {
-
-    localStorage.setItem(
-        MATIERES_KEY,
-        JSON.stringify(matieres)
-    );
+async function chargerMatieres() {
+    try {
+        const payload = await apiJson("/api/subjects/index.php");
+        matieres = Array.isArray(payload.subjects) ? payload.subjects : [];
+        afficherMatieres();
+    } catch (error) {
+        afficherMessage(error.message);
+    }
 }
-
-
-/* ============================================================
-   AFFICHER
-   ============================================================ */
 
 function afficherMatieres() {
-
-    const tbody =
-        document.getElementById(
-            "tableauMatieres"
-        );
-
-    const recherche =
-        document.getElementById(
-            "recherche"
-        ).value
-        .trim()
-        .toLowerCase();
-
-
-    const liste =
-        matieres.filter(
-            matiere =>
-                String(matiere.nom || "")
-                    .toLowerCase()
-                    .includes(recherche)
-        );
-
-
+    const tbody = document.getElementById("tableauMatieres");
+    const recherche = document.getElementById("recherche").value.trim().toLowerCase();
     tbody.innerHTML = "";
-
-
-    if (liste.length === 0) {
-
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="7">
-                    Aucune matière trouvée.
-                </td>
-            </tr>
-        `;
-
+    const liste = matieres.filter(m => String(m.name || "").toLowerCase().includes(recherche));
+    if (!liste.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 7;
+        td.textContent = "Aucune matière trouvée.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
         return;
     }
-
-
-    liste.forEach(
-        (matiere) => {
-
-            const index =
-                matieres.indexOf(
-                    matiere
-                );
-
-            const max =
-                Number(
-                    matiere.pointsMax
-                ) || 10;
-
-
-            tbody.innerHTML += `
-
-                <tr>
-
-                    <td>
-                        ${index + 1}
-                    </td>
-
-                    <td>
-                        ${echapperHTML(
-                            matiere.nom
-                        )}
-                    </td>
-
-                    <td>
-                        ${max}
-                    </td>
-
-                    <td>
-                        0 – ${max}
-                    </td>
-
-                    <td>
-                        0 – ${max}
-                    </td>
-
-                    <td>
-                        0 – ${max}
-                    </td>
-
-                    <td>
-
-                        <div class="actions">
-
-                            <button
-                                class="btn btn-modifier"
-                                onclick="
-                                    modifierMatiere(
-                                        ${index}
-                                    )
-                                "
-                            >
-                                Modifier
-                            </button>
-
-                            <button
-                                class="btn btn-supprimer"
-                                onclick="
-                                    supprimerMatiere(
-                                        ${index}
-                                    )
-                                "
-                            >
-                                Supprimer
-                            </button>
-
-                        </div>
-
-                    </td>
-
-                </tr>
-
-            `;
-
-        }
-    );
-}
-
-
-/* ============================================================
-   AJOUT / MODIFICATION
-   ============================================================ */
-
-document
-    .getElementById("formMatiere")
-    .addEventListener(
-        "submit",
-        function(event) {
-
-            event.preventDefault();
-
-            // Vérifier la permission appropriée selon l'action
-            if (indexModification === -1) {
-                if (!IMCAuth.requirePermission("matieres.create")) {
-                    afficherMessage("Permission refusée pour la création.");
-                    return;
-                }
-            } else {
-                if (!IMCAuth.requirePermission("matieres.update")) {
-                    afficherMessage("Permission refusée pour la modification.");
-                    return;
-                }
-            }
-
-            const nom =
-                document
-                    .getElementById(
-                        "nomMatiere"
-                    )
-                    .value
-                    .trim();
-
-
-            const pointsMax =
-                Number(
-                    document
-                        .getElementById(
-                            "pointsMax"
-                        )
-                        .value
-                );
-
-
-            if (!nom) {
-
-                afficherMessage(
-                    "Veuillez entrer le nom de la matière."
-                );
-
-                return;
-            }
-
-
-            if (
-                !Number.isFinite(pointsMax) ||
-                pointsMax <= 0
-            ) {
-
-                afficherMessage(
-                    "Les Points Max doivent être supérieurs à zéro."
-                );
-
-                return;
-            }
-
-
-            const doublon =
-                matieres.some(
-                    (matiere, index) => {
-
-                        if (
-                            index ===
-                            indexModification
-                        ) {
-                            return false;
-                        }
-
-                        return (
-                            String(
-                                matiere.nom
-                            )
-                            .trim()
-                            .toLowerCase()
-                            ===
-                            nom.toLowerCase()
-                        );
-
-                    }
-                );
-
-
-            if (doublon) {
-
-                afficherMessage(
-                    "Cette matière existe déjà."
-                );
-
-                return;
-            }
-
-
-            if (
-                indexModification === -1
-            ) {
-
-                matieres.push({
-
-                    id:
-                        Date.now(),
-
-                    nom:
-                        nom,
-
-                    pointsMax:
-                        pointsMax
-
-                });
-
-
-                afficherMessage(
-                    "La matière a été ajoutée."
-                );
-
-            } else {
-
-                matieres[
-                    indexModification
-                ].nom =
-                    nom;
-
-                matieres[
-                    indexModification
-                ].pointsMax =
-                    pointsMax;
-
-
-                afficherMessage(
-                    "La matière a été modifiée."
-                );
-
-            }
-
-
-            sauvegarderMatieres();
-
-            annulerModification();
-
-            afficherMatieres();
-
-        }
-    );
-
-
-/* ============================================================
-   MODIFIER
-   ============================================================ */
-
-function modifierMatiere(index) {
-
-    const matiere =
-        matieres[index];
-
-
-    if (!matiere) {
-        return;
-    }
-
-
-    document
-        .getElementById(
-            "nomMatiere"
-        )
-        .value =
-        matiere.nom;
-
-
-    document
-        .getElementById(
-            "pointsMax"
-        )
-        .value =
-        matiere.pointsMax;
-
-
-    indexModification =
-        index;
-
-
-    document
-        .getElementById(
-            "titreFormulaire"
-        )
-        .textContent =
-        "Modifier la matière";
-
-
-    const bouton =
-        document
-            .getElementById(
-                "btnEnregistrer"
-            );
-
-
-    bouton.textContent =
-        "Modifier";
-
-
-    bouton.className =
-        "btn btn-modifier";
-
-
-    document
-        .getElementById(
-            "btnAnnuler"
-        )
-        .style
-        .display =
-        "inline-block";
-
-
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
+    liste.forEach((matiere, index) => {
+        const realIndex = matieres.indexOf(matiere);
+        const max = Number(matiere.coefficient) || 10;
+        const tr = document.createElement("tr");
+        [String(realIndex + 1), matiere.name, String(max), "0 – " + max, "0 – " + max, "0 – " + max].forEach(value => {
+            const td = document.createElement("td");
+            td.textContent = value;
+            tr.appendChild(td);
+        });
+        const td = document.createElement("td");
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        const edit = document.createElement("button");
+        edit.className = "btn btn-modifier";
+        edit.textContent = "Modifier";
+        edit.addEventListener("click", () => modifierMatiere(realIndex));
+        const del = document.createElement("button");
+        del.className = "btn btn-supprimer";
+        del.textContent = "Supprimer";
+        del.addEventListener("click", () => supprimerMatiere(realIndex));
+        actions.append(edit, del);
+        td.appendChild(actions);
+        tr.appendChild(td);
+        tbody.appendChild(tr);
     });
 }
 
+document.getElementById("formMatiere").addEventListener("submit", async function(event) {
+    event.preventDefault();
+    const permission = indexModification === -1 ? "matieres.create" : "matieres.update";
+    if (!IMCAuth.requirePermission(permission)) {
+        afficherMessage("Permission refusée.");
+        return;
+    }
+    const nom = document.getElementById("nomMatiere").value.trim();
+    const pointsMax = Number(document.getElementById("pointsMax").value);
+    if (!nom) return afficherMessage("Veuillez entrer le nom de la matière.");
+    if (!Number.isFinite(pointsMax) || pointsMax <= 0) return afficherMessage("Les Points Max doivent être supérieurs à zéro.");
+    if (matieres.some((m, i) => i !== indexModification && String(m.name).trim().toLowerCase() === nom.toLowerCase())) {
+        return afficherMessage("Cette matière existe déjà.");
+    }
+    try {
+        if (indexModification === -1) {
+            await apiJson("/api/subjects/index.php", {
+                method: "POST",
+                body: JSON.stringify({ name: nom, coefficient: pointsMax })
+            });
+            afficherMessage("La matière a été ajoutée.");
+        } else {
+            const matiere = matieres[indexModification];
+            await apiJson("/api/subjects/index.php?id=" + encodeURIComponent(matiere.id), {
+                method: "PATCH",
+                body: JSON.stringify({ name: nom, coefficient: pointsMax })
+            });
+            afficherMessage("La matière a été modifiée.");
+        }
+        annulerModification();
+        await chargerMatieres();
+    } catch (error) {
+        afficherMessage(error.message);
+    }
+});
 
-/* ============================================================
-   ANNULER
-   ============================================================ */
-
-function annulerModification() {
-
-    indexModification = -1;
-
-
-    document
-        .getElementById(
-            "formMatiere"
-        )
-        .reset();
-
-
-    document
-        .getElementById(
-            "titreFormulaire"
-        )
-        .textContent =
-        "Ajouter une matière";
-
-
-    const bouton =
-        document
-            .getElementById(
-                "btnEnregistrer"
-            );
-
-
-    bouton.textContent =
-        "Ajouter";
-
-
-    bouton.className =
-        "btn btn-ajouter";
-
-
-    document
-        .getElementById(
-            "btnAnnuler"
-        )
-        .style
-        .display =
-        "none";
+function modifierMatiere(index) {
+    const matiere = matieres[index];
+    if (!matiere) return;
+    document.getElementById("nomMatiere").value = matiere.name || "";
+    document.getElementById("pointsMax").value = matiere.coefficient || "";
+    indexModification = index;
+    document.getElementById("titreFormulaire").textContent = "Modifier la matière";
+    const bouton = document.getElementById("btnEnregistrer");
+    bouton.textContent = "Modifier";
+    bouton.className = "btn btn-modifier";
+    document.getElementById("btnAnnuler").style.display = "inline-block";
+    window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function annulerModification() {
+    indexModification = -1;
+    document.getElementById("formMatiere").reset();
+    document.getElementById("titreFormulaire").textContent = "Ajouter une matière";
+    const bouton = document.getElementById("btnEnregistrer");
+    bouton.textContent = "Ajouter";
+    bouton.className = "btn btn-ajouter";
+    document.getElementById("btnAnnuler").style.display = "none";
+}
 
-/* ============================================================
-   SUPPRIMER
-   ============================================================ */
-
-function supprimerMatiere(index) {
-
+async function supprimerMatiere(index) {
     if (!IMCAuth.requirePermission("matieres.delete")) {
         alert("Permission refusée.");
         return;
     }
-
-    const matiere =
-        matieres[index];
-
-
-    if (!matiere) {
-        return;
+    const matiere = matieres[index];
+    if (!matiere || !confirm('Voulez-vous archiver la matière "' + matiere.name + '" ?')) return;
+    try {
+        await apiJson("/api/subjects/index.php?id=" + encodeURIComponent(matiere.id), {
+            method: "PATCH",
+            body: JSON.stringify({ status: "ARCHIVED" })
+        });
+        await chargerMatieres();
+        afficherMessage("La matière a été archivée.");
+    } catch (error) {
+        afficherMessage(error.message);
     }
-
-
-    const confirmer =
-        confirm(
-            `Voulez-vous supprimer la matière "${matiere.nom}" ?`
-        );
-
-
-    if (!confirmer) {
-        return;
-    }
-
-
-    matieres.splice(
-        index,
-        1
-    );
-
-
-    sauvegarderMatieres();
-
-    afficherMatieres();
-
-
-    afficherMessage(
-        "La matière a été supprimée."
-    );
 }
 
+document.getElementById("recherche").addEventListener("input", afficherMatieres);
 
-/* ============================================================
-   RECHERCHE
-   ============================================================ */
-
-document
-    .getElementById(
-        "recherche"
-    )
-    .addEventListener(
-        "input",
-        afficherMatieres
-    );
-
-
-/* ============================================================
-   MESSAGE
-   ============================================================ */
-
-function afficherMessage(
-    texte
-) {
-
-    const message =
-        document.getElementById(
-            "message"
-        );
-
-
-    message.textContent =
-        texte;
-
-
-    message.style.display =
-        "block";
-
-
-    setTimeout(
-        () => {
-
-            message.style.display =
-                "none";
-
-        },
-        2500
-    );
+function afficherMessage(texte) {
+    const message = document.getElementById("message");
+    message.textContent = texte;
+    message.style.display = "block";
+    setTimeout(() => { message.style.display = "none"; }, 2500);
 }
 
-
-/* ============================================================
-   PROTECTION HTML
-   ============================================================ */
-
-function echapperHTML(
-    valeur
-) {
-
-    return String(
-        valeur ?? ""
-    )
-    .replace(
-        /&/g,
-        "&amp;"
-    )
-    .replace(
-        /</g,
-        "&lt;"
-    )
-    .replace(
-        />/g,
-        "&gt;"
-    )
-    .replace(
-        /"/g,
-        "&quot;"
-    )
-    .replace(
-        /'/g,
-        "&#039;"
-    );
-}
-
-
-/* ============================================================
-   NAVIGATION
-   ============================================================ */
-
-function ouvrirPage(page) {
-
-    window.location.href =
-        page;
-}
-
-
-/* ============================================================
-   DÉMARRAGE
-   ============================================================ */
-
-chargerMatieres();
+function ouvrirPage(page) { window.location.href = page; }
 
 </script>
 
