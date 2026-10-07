@@ -47,10 +47,8 @@ jobs:
         run: |
           set -euo pipefail
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/schema.sql
-          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
-          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006200000_normalize_rbac_role_names.sql
-          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261007130000_f02_b_reference_data.sql
-          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261007131000_f02_b_subject_status.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000002001','PDG');
           INSERT INTO permissions(name) VALUES
