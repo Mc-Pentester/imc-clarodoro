@@ -71,6 +71,13 @@ if ($method === 'GET') {
 
     $stmt->execute();
     $students = $stmt->fetchAll();
+    foreach ($students as &$student) {
+        if (isset($student['profile_data']) && is_string($student['profile_data'])) {
+            $decoded = json_decode($student['profile_data'], true);
+            $student['profile_data'] = is_array($decoded) ? $decoded : [];
+        }
+    }
+    unset($student);
 
     echo json_encode([
         'success' => true,
@@ -252,6 +259,10 @@ elseif ($method === 'POST') {
         ]);
 
         $student = $stmt->fetch();
+        if (isset($student['profile_data']) && is_string($student['profile_data'])) {
+            $decoded = json_decode($student['profile_data'], true);
+            $student['profile_data'] = is_array($decoded) ? $decoded : [];
+        }
 
         http_response_code(201);
 
@@ -518,6 +529,10 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
 
         $stmt->execute($params);
         $student = $stmt->fetch();
+        if (isset($student['profile_data']) && is_string($student['profile_data'])) {
+            $decoded = json_decode($student['profile_data'], true);
+            $student['profile_data'] = is_array($decoded) ? $decoded : [];
+        }
 
         http_response_code(200);
 
