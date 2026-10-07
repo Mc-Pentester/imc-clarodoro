@@ -221,7 +221,6 @@
     isAuthenticated: isAuthenticated,
     currentUser: currentUser,
     requireAuth: requireAuth,
-    getSession: getSession,
     verifySession: verifySession,
     refresh: function () { return false; },
     isSessionExpired: function () { return !isAuthenticated(); },
