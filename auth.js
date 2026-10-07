@@ -13,6 +13,8 @@
   const SESSION_KEY = "imc_auth_session";
   let serverUser = null;
   let serverSessionReady = false;
+  let csrfToken = null;
+  const nativeFetch = window.fetch.bind(window);
 
   function getCachedUser() {
     return serverUser ? { ...serverUser } : null;
@@ -31,10 +33,12 @@
     let payload = null;
     try { payload = await response.json(); } catch (error) {}
     if (!response.ok || !payload || !payload.success || !payload.user) {
-      serverUser = null; serverSessionReady = true;
+      serverUser = null; csrfToken = null; serverSessionReady = true;
       throw new Error((payload && payload.message) || "Identifiant ou mot de passe incorrect.");
     }
-    serverUser = { userId: String(payload.user.id), username: String(payload.user.username), role: String(payload.user.role) };
+    csrfToken = payload.csrfToken ? String(payload.csrfToken) : null;
+    csrfToken = payload.csrfToken ? String(payload.csrfToken) : null;
+      serverUser = { userId: String(payload.user.id), username: String(payload.user.username), role: String(payload.user.role) };
     serverSessionReady = true;
     sessionStorage.removeItem(SESSION_KEY);
     return getCachedUser();
@@ -55,12 +59,27 @@
   async function logout() {
     try { await fetch("/api/auth/logout.php", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}" }); }
     catch (error) { console.error("Erreur lors de la déconnexion serveur:", error); }
-    serverUser = null; serverSessionReady = true;
+    serverUser = null; csrfToken = null; serverSessionReady = true;
     sessionStorage.removeItem(SESSION_KEY);
     if (window.IMCSecureStorage && typeof window.IMCSecureStorage.lock === "function") {
       try { window.IMCSecureStorage.lock(); } catch (error) { console.error("Erreur lors du verrouillage du coffre:", error); }
     }
   }
+
+  window.fetch = function (input, init) {
+    const request = new Request(input, init || {});
+    const method = request.method.toUpperCase();
+    const sameOrigin = request.url.startsWith(window.location.origin);
+    const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+    if (sameOrigin && mutation && csrfToken) {
+      const headers = new Headers(request.headers);
+      headers.set('X-CSRF-Token', csrfToken);
+      return nativeFetch(new Request(request, { headers }));
+    }
+
+    return nativeFetch(request);
+  };
 
   function isAuthenticated() { return serverSessionReady && serverUser !== null; }
   function currentUser() { return getCachedUser(); }
