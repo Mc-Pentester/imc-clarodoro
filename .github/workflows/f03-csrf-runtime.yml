@@ -54,6 +54,9 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
             -v ON_ERROR_STOP=1 \
             -f database/schema.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 \
+            -f database/migrations/20261006190000_add_login_rate_limit.sql
 
       - name: Seed F-03 runtime user and permission
         shell: bash
