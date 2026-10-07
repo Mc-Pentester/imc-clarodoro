@@ -89,3 +89,5 @@ jobs:
           PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT name FROM subjects WHERE name='Mathématiques';" | grep -qx 'Mathématiques'
           PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT name FROM vacations WHERE name='Vacances de Noël';" | grep -qx 'Vacances de Noël'
           echo 'F-02-B RUNTIME PROOF: PASS'
+
+# F-02-B: explicit runtime proof retrigger.
