@@ -143,9 +143,9 @@ if ($action === 'create') {
         $roleId = getRoleId($pdo, $roleName);
 
         $userStmt = $pdo->prepare(
-            'INSERT INTO users (username, password_hash, role_id, status)
+            "INSERT INTO users (username, password_hash, role_id, status)
              VALUES (:username, :password_hash, :role_id, 'ACTIVE')
-             RETURNING id'
+             RETURNING id"
         );
         $userStmt->execute([
             ':username' => $username,
@@ -155,11 +155,11 @@ if ($action === 'create') {
         $userId = (string) $userStmt->fetchColumn();
 
         $staffStmt = $pdo->prepare(
-            'INSERT INTO staff
+            "INSERT INTO staff
                 (user_id, first_name, last_name, function_name, class_name, status)
              VALUES
                 (:user_id, :first_name, :last_name, :function_name, :class_name, 'ACTIVE')
-             RETURNING id'
+             RETURNING id"
         );
         $staffStmt->execute([
             ':user_id' => $userId,
@@ -243,7 +243,7 @@ if ($action === 'update') {
         $roleId = getRoleId($pdo, $roleName);
 
         $userUpdate = $pdo->prepare(
-            'UPDATE users
+            "UPDATE users
              SET username = :username,
                  role_id = :role_id,
                  password_hash = CASE
@@ -251,7 +251,7 @@ if ($action === 'update') {
                      ELSE password_hash
                  END,
                  updated_at = NOW()
-             WHERE id = :id'
+             WHERE id = :id"
         );
         $userUpdate->execute([
             ':username' => $username,
@@ -329,16 +329,16 @@ if ($action === 'delete') {
         }
 
         $pdo->prepare(
-            'UPDATE staff
+            "UPDATE staff
              SET status = 'ARCHIVED', updated_at = NOW()
-             WHERE id = :id'
+             WHERE id = :id"
         )->execute([':id' => $staffId]);
 
         if ($staff['user_id']) {
             $pdo->prepare(
-                'UPDATE users
+                "UPDATE users
                  SET status = 'INACTIVE', updated_at = NOW()
-                 WHERE id = :id'
+                 WHERE id = :id"
             )->execute([':id' => $staff['user_id']]);
         }
 
