@@ -44,9 +44,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
-          PGPASSWORD="$DB_PASSWORD" psql \
-            -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" \
-            -d "$DB_NAME" -f database/schema.sql
+          PGPASSWORD="$DB_PASSWORD" psql             -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER"             -d "$DB_NAME" -f database/schema.sql
 
       - name: PHP syntax
         run: php -l config/database.php
@@ -75,13 +73,15 @@ jobs:
             $pdo = getDatabaseConnection();
             $value = $pdo->query("SELECT 1")->fetchColumn();
             if ((int) $value !== 1) {
-                fwrite(STDERR, "ERROR: SELECT 1 did not return 1\n");
+                fwrite(STDERR, "ERROR: SELECT 1 did not return 1
+");
                 exit(1);
             }
-            echo "Database connection: PASS\n";
+            echo "Database connection: PASS
+";
           '
 
       - name: Runtime proof
         run: echo "F-08-C RUNTIME PROOF: PASS"
 
-# F-08-C trigger marker: runtime proof workflow retained; push-triggered execution requested.
+# F-08-C trigger marker: runtime proof workflow retained; second push-triggered execution requested.
