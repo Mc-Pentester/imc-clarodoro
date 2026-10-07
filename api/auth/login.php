@@ -191,6 +191,7 @@ $_SESSION['role_id'] = $user['role_id'];
 $_SESSION['role_name'] = $user['role_name'];
 $_SESSION['authenticated_at'] = time();
 $_SESSION['last_activity_at'] = time();
+$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 
 echo json_encode([
     'success' => true,
@@ -199,4 +200,5 @@ echo json_encode([
         'username' => $user['username'],
         'role' => $user['role_name'],
     ],
+    'csrfToken' => generateCsrfToken(),
 ], JSON_UNESCAPED_UNICODE);
