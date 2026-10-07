@@ -205,9 +205,6 @@ CREATE TABLE teachers (
     email VARCHAR(255),
     phone VARCHAR(50),
 
-    -- F-02-A: staged server-authoritative profile fields not yet normalized.
-    profile_data JSONB NOT NULL DEFAULT '{}'::jsonb,
-
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
