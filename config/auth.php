@@ -1,4 +1,7 @@
 <?php
+
+require_once __DIR__ . '/../middleware/security_headers.php';
+sendApiSecurityHeaders();
 declare(strict_types=1);
 
 require_once __DIR__ . '/database.php';

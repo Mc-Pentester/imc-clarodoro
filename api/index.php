@@ -1,4 +1,7 @@
 <?php
+
+require_once __DIR__ . '/../middleware/security_headers.php';
+sendApiSecurityHeaders();
 /**
  * IMC-Clarodoro - API Index Endpoint
  * ARCH-01-PHP - Foundation
