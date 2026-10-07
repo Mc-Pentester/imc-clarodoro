@@ -85,11 +85,4 @@ WHERE r.name IN ('Directeur', 'Secrétaire')
   AND p.name = 'personnel.read'
 ON CONFLICT DO NOTHING;
 
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM roles WHERE name = 'PDG') THEN
-        RAISE EXCEPTION 'F-02-E: rôle PDG absent';
-    END IF;
-END $$;
-
 COMMIT;
