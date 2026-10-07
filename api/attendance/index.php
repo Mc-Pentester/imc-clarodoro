@@ -27,7 +27,7 @@ function f02cAttendanceScope(array $user, string $alias = 'e'): array
     return [
         ' INNER JOIN teacher_class_subjects scope_tcs
              ON scope_tcs.class_id = ' . $alias . '.class_id
-            AND scope_tcs.status = 'ACTIVE'
+            AND scope_tcs.status = \'ACTIVE\'
           INNER JOIN user_teachers scope_ut
              ON scope_ut.teacher_id = scope_tcs.teacher_id
             AND scope_ut.user_id = :scope_user_id',
@@ -134,7 +134,7 @@ $check = $pdo->prepare(
      FROM enrollments e
      ' . $scopeSql . '
      WHERE e.id = :enrollment_id
-       AND e.status = 'ACTIVE'
+       AND e.status = \'ACTIVE\'
      LIMIT 1'
 );
 $check->execute([':enrollment_id' => $enrollmentId] + $scopeParams);

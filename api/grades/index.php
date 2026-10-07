@@ -190,10 +190,10 @@ $check = $pdo->prepare(
      FROM enrollments e
      INNER JOIN subjects s
         ON s.id = :subject_id
-       AND s.status = 'ACTIVE'
+       AND s.status = \'ACTIVE\'
      ' . $scopeSql . '
      WHERE e.id = :enrollment_id
-       AND e.status = 'ACTIVE'
+       AND e.status = \'ACTIVE\'
      LIMIT 1'
 );
 
