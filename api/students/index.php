@@ -180,10 +180,19 @@ elseif ($method === 'POST') {
         $status = $data['status'];
     }
 
-    $profileData = [];
+    $profileData = (object) [];
     if (array_key_exists('profile_data', $data)) {
         if (!is_array($data['profile_data'])) {
             apiError(422, 'profile_data doit être un objet JSON');
+        }
+        // JSON objects arrive as associative PHP arrays. Reject non-empty JSON arrays,
+        // while normalizing an empty object/array representation to an object so the
+        // PostgreSQL jsonb object constraint remains satisfied.
+        if (array_is_list($data['profile_data']) && $data['profile_data'] !== []) {
+            apiError(422, 'profile_data doit être un objet JSON');
+        }
+        if ($data['profile_data'] === []) {
+            $profileData = (object) [];
         }
         $encodedProfileData = json_encode($data['profile_data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($encodedProfileData === false || strlen($encodedProfileData) > 65536) {
@@ -295,10 +304,19 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
 
     $data = readJsonBody();
 
-    $profileData = [];
+    $profileData = (object) [];
     if (array_key_exists('profile_data', $data)) {
         if (!is_array($data['profile_data'])) {
             apiError(422, 'profile_data doit être un objet JSON');
+        }
+        // JSON objects arrive as associative PHP arrays. Reject non-empty JSON arrays,
+        // while normalizing an empty object/array representation to an object so the
+        // PostgreSQL jsonb object constraint remains satisfied.
+        if (array_is_list($data['profile_data']) && $data['profile_data'] !== []) {
+            apiError(422, 'profile_data doit être un objet JSON');
+        }
+        if ($data['profile_data'] === []) {
+            $profileData = (object) [];
         }
         $encodedProfileData = json_encode($data['profile_data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($encodedProfileData === false || strlen($encodedProfileData) > 65536) {
