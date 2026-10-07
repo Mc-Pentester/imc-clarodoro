@@ -284,6 +284,18 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
 
     $data = readJsonBody();
 
+    $profileData = [];
+    if (array_key_exists('profile_data', $data)) {
+        if (!is_array($data['profile_data'])) {
+            apiError(422, 'profile_data doit être un objet JSON');
+        }
+        $encodedProfileData = json_encode($data['profile_data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($encodedProfileData === false || strlen($encodedProfileData) > 65536) {
+            apiError(422, 'profile_data invalide ou trop volumineux');
+        }
+        $profileData = $data['profile_data'];
+    }
+
     // Refuser les champs générés par le serveur
     $forbiddenFields = ['id', 'created_at', 'updated_at'];
     foreach ($forbiddenFields as $field) {
