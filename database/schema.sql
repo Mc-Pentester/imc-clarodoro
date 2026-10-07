@@ -205,6 +205,9 @@ CREATE TABLE teachers (
     email VARCHAR(255),
     phone VARCHAR(50),
 
+    -- F-02-A: staged server-authoritative profile fields not yet normalized.
+    profile_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+
     status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -380,6 +383,9 @@ CREATE TABLE students (
 
     CONSTRAINT students_matricule_unique
         UNIQUE (matricule),
+
+    CONSTRAINT students_profile_data_object_check
+        CHECK (jsonb_typeof(profile_data) = 'object'),
 
     CONSTRAINT students_status_check
         CHECK (
