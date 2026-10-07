@@ -87,32 +87,32 @@ jobs:
             );
 
             await context.route('**/api/students/index.php', route => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        success: true,
-        students: [{
-          id: 'student-xss',
-          matricule: '<img src=x onerror="window.__f04_xss=1">',
-          last_name: '<img src=x onerror="window.__f04_xss=1">',
-          first_name: '<svg onload="window.__f04_xss=2">',
-          date_of_birth: '2010-01-01',
-          sex: 'M',
-          status: 'ACTIVE',
-          profile_data: {
-            classe: '<script>window.__f04_xss=3</script>',
-            nisu: '<img src=x onerror="window.__f04_xss=7">',
-            contact: '<img src=x onerror="window.__f04_xss=8">',
-            anneeScolaire: '2026 - 2027',
-            photo: 'javascript:window.__f04_xss=4'
-          }
-        }]
-      })
-    });
-  });
+              route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                  success: true,
+                  students: [{
+                    id: 'student-xss',
+                    matricule: '<img src=x onerror="window.__f04_xss=1">',
+                    last_name: '<img src=x onerror="window.__f04_xss=1">',
+                    first_name: '<svg onload="window.__f04_xss=2">',
+                    date_of_birth: '2010-01-01',
+                    sex: 'M',
+                    status: 'ACTIVE',
+                    profile_data: {
+                      classe: '<script>window.__f04_xss=3</script>',
+                      nisu: '<img src=x onerror="window.__f04_xss=7">',
+                      contact: '<img src=x onerror="window.__f04_xss=8">',
+                      anneeScolaire: '2026 - 2027',
+                      photo: 'javascript:window.__f04_xss=4'
+                    }
+                  }]
+                })
+              });
+            });
 
-  await context.route('**/auth.js', route =>
+await context.route('**/auth.js', route =>
               route.fulfill({
                 status: 200,
                 contentType: 'application/javascript',
