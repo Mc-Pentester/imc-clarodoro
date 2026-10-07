@@ -313,311 +313,237 @@
 <script src="auth.js"></script>
 <script>
 
-// Guard d'authentification
-document.addEventListener("DOMContentLoaded", function() {
-  IMCAuth.requireAuth("personnel.html");
+// Authentification serveur obligatoire.
+document.addEventListener("DOMContentLoaded", async function () {
+    if (!IMCAuth.verifySession) return;
+    const user = await IMCAuth.verifySession();
+    if (!user) {
+        window.location.href = "personnel.html";
+        return;
+    }
+    await chargerDonnees();
 });
 
-const CLE_ANNEES = "imc_annees_scolaires";
-const CLE_ANNEE_ACTIVE = "imc_active_year";
+let annees = [];
+let anneeActiveId = "";
+let anneeActive = "";
 
-    let annees = [];
-    let anneeActive = "";
+function ouvrirPage(page) { window.location.href = page; }
 
-    function ouvrirPage(page) {
-        window.location.href = page;
+function afficherMessage(texte, type = "succes") {
+    const message = document.getElementById("message");
+    message.textContent = texte;
+    message.className = "message " + type;
+    message.style.display = "block";
+    setTimeout(() => { message.style.display = "none"; }, 3000);
+}
+
+async function apiJson(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: "same-origin",
+        headers: { "Accept": "application/json", "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch (_) {}
+    if (!response.ok || !payload || payload.success === false) {
+        throw new Error((payload && payload.message) || "Erreur serveur.");
     }
+    return payload;
+}
 
-    function afficherMessage(texte, type = "succes") {
-        const message = document.getElementById("message");
+function labelToDates(label) {
+    const match = String(label).match(/^(\d{4})-(\d{4})$/);
+    if (!match) return null;
+    return { start_date: match[1] + "-09-01", end_date: match[2] + "-08-31" };
+}
 
-        message.textContent = texte;
-        message.className = "message " + type;
-        message.style.display = "block";
-
-        setTimeout(() => {
-            message.style.display = "none";
-        }, 3000);
-    }
-
-    function chargerDonnees() {
-        const anneesEnregistrees = localStorage.getItem(CLE_ANNEES);
-
-        if (anneesEnregistrees) {
-            annees = JSON.parse(anneesEnregistrees);
-        } else {
-            annees = [];
-
-            for (let annee = 2026; annee <= 2040; annee++) {
-                annees.push(annee + "-" + (annee + 1));
-            }
-
-            localStorage.setItem(CLE_ANNEES, JSON.stringify(annees));
-        }
-
-        anneeActive = localStorage.getItem(CLE_ANNEE_ACTIVE);
-
-        if (!anneeActive || !annees.includes(anneeActive)) {
-            anneeActive = annees[0];
-
-            localStorage.setItem(CLE_ANNEE_ACTIVE, anneeActive);
-        }
-
+async function chargerDonnees() {
+    try {
+        const payload = await apiJson("/api/school-years/index.php");
+        annees = Array.isArray(payload.schoolYears) ? payload.schoolYears : [];
+        const active = annees.find(a => a.status === "ACTIVE");
+        anneeActiveId = active ? active.id : (annees[0] ? annees[0].id : "");
+        anneeActive = active ? active.label : (annees[0] ? annees[0].label : "");
         afficherAnnees();
         afficherSelectAnnee();
+    } catch (error) {
+        afficherMessage(error.message, "erreur");
     }
+}
 
-    function afficherSelectAnnee() {
-        const select = document.getElementById("anneeActive");
+function afficherSelectAnnee() {
+    const select = document.getElementById("anneeActive");
+    select.innerHTML = "";
+    annees.forEach(annee => {
+        const option = document.createElement("option");
+        option.value = annee.id;
+        option.textContent = annee.label;
+        option.selected = annee.id === anneeActiveId;
+        select.appendChild(option);
+    });
+}
 
-        select.innerHTML = "";
+function afficherAnnees() {
+    const tbody = document.getElementById("listeAnnees");
+    tbody.innerHTML = "";
+    annees.forEach((annee, index) => {
+        const ligne = document.createElement("tr");
+        if (annee.id === anneeActiveId) ligne.classList.add("active-year");
 
-        annees.forEach(annee => {
-            const option = document.createElement("option");
-
-            option.value = annee;
-            option.textContent = annee;
-
-            if (annee === anneeActive) {
-                option.selected = true;
-            }
-
-            select.appendChild(option);
+        const cells = [
+            String(index + 1),
+            annee.label,
+            annee.status === "ACTIVE" ? "Année active" : (annee.status === "ARCHIVED" ? "Archivée" : "Inactive")
+        ];
+        cells.forEach(value => {
+            const td = document.createElement("td");
+            td.textContent = value;
+            ligne.appendChild(td);
         });
+
+        const actions = document.createElement("td");
+        const selectBtn = document.createElement("button");
+        selectBtn.className = "btn btn-selectionner";
+        selectBtn.textContent = "Sélectionner";
+        selectBtn.disabled = annee.status === "ACTIVE";
+        selectBtn.addEventListener("click", () => rendreActive(annee));
+
+        const editBtn = document.createElement("button");
+        editBtn.className = "btn btn-modifier";
+        editBtn.textContent = "Modifier";
+        editBtn.addEventListener("click", () => modifierAnnee(annee));
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "btn btn-supprimer";
+        deleteBtn.textContent = "Supprimer";
+        deleteBtn.addEventListener("click", () => supprimerAnnee(annee));
+
+        actions.append(selectBtn, editBtn, deleteBtn);
+        ligne.appendChild(actions);
+        tbody.appendChild(ligne);
+    });
+}
+
+async function selectionnerAnnee(id) {
+    const annee = annees.find(item => item.id === id);
+    if (annee) await rendreActive(annee);
+}
+
+async function rendreActive(annee) {
+    if (!annee || annee.status === "ACTIVE") return;
+    if (!IMCAuth.requirePermission("annees.update")) {
+        afficherMessage("Permission refusée.", "erreur");
+        return;
     }
-
-    function afficherAnnees() {
-        const tbody = document.getElementById("listeAnnees");
-
-        tbody.innerHTML = "";
-
-        annees.forEach((annee, index) => {
-            const ligne = document.createElement("tr");
-
-            if (annee === anneeActive) {
-                ligne.classList.add("active-year");
-            }
-
-            ligne.innerHTML = `
-                <td>${index + 1}</td>
-                <td>${annee}</td>
-                <td>
-                    ${
-                        annee === anneeActive
-                            ? "Année active"
-                            : "Inactive"
-                    }
-                </td>
-                <td>
-                    <button
-                        class="btn btn-selectionner"
-                        onclick="rendreActive('${annee}')">
-                        Sélectionner
-                    </button>
-
-                    <button
-                        class="btn btn-modifier"
-                        onclick="modifierAnnee('${annee}')">
-                        Modifier
-                    </button>
-
-                    <button
-                        class="btn btn-supprimer"
-                        onclick="supprimerAnnee('${annee}')">
-                        Supprimer
-                    </button>
-                </td>
-            `;
-
-            tbody.appendChild(ligne);
+    try {
+        const payload = await apiJson("/api/school-years/index.php?id=" + encodeURIComponent(annee.id), {
+            method: "PATCH",
+            body: JSON.stringify({ status: "ACTIVE" })
         });
+        const updated = payload.schoolYear;
+        anneeActiveId = updated.id;
+        anneeActive = updated.label;
+        await chargerDonnees();
+        afficherMessage("L’année scolaire " + updated.label + " est maintenant active.");
+    } catch (error) {
+        afficherMessage(error.message, "erreur");
     }
+}
 
-    function selectionnerAnnee(annee) {
-        if (!annee) {
-            return;
-        }
-
-        rendreActive(annee);
+async function ajouterAnnee() {
+    if (!IMCAuth.requirePermission("annees.create")) {
+        afficherMessage("Permission refusée.", "erreur");
+        return;
     }
-
-    function rendreActive(annee) {
-        if (!annees.includes(annee)) {
-            return;
-        }
-
-        anneeActive = annee;
-
-        localStorage.setItem(CLE_ANNEE_ACTIVE, anneeActive);
-
-        afficherAnnees();
-        afficherSelectAnnee();
-
-        afficherMessage("L’année scolaire " + annee + " est maintenant active.");
+    const champ = document.getElementById("nouvelleAnnee");
+    const valeur = champ.value.trim();
+    if (!/^\d{4}-\d{4}$/.test(valeur)) {
+        afficherMessage("Veuillez saisir une année sous la forme 2041-2042.", "erreur");
+        return;
     }
-
-    function ajouterAnnee() {
-        if (!IMCAuth.requirePermission("annees.create")) {
-            afficherMessage("Permission refusée.", "erreur");
-            return;
-        }
-
-        const champ = document.getElementById("nouvelleAnnee");
-        const valeur = champ.value.trim();
-
-        const formatCorrect = /^\d{4}-\d{4}$/;
-
-        if (!formatCorrect.test(valeur)) {
-            afficherMessage(
-                "Veuillez saisir une année sous la forme 2041-2042.",
-                "erreur"
-            );
-            return;
-        }
-
-        const parties = valeur.split("-");
-        const debut = Number(parties[0]);
-        const fin = Number(parties[1]);
-
-        if (fin !== debut + 1) {
-            afficherMessage(
-                "L’année scolaire doit avoir deux années consécutives.",
-                "erreur"
-            );
-            return;
-        }
-
-        if (annees.includes(valeur)) {
-            afficherMessage(
-                "Cette année scolaire existe déjà.",
-                "erreur"
-            );
-            return;
-        }
-
-        annees.push(valeur);
-        annees.sort();
-
-        localStorage.setItem(CLE_ANNEES, JSON.stringify(annees));
-
+    const [debut, fin] = valeur.split("-").map(Number);
+    if (fin !== debut + 1) {
+        afficherMessage("L’année scolaire doit avoir deux années consécutives.", "erreur");
+        return;
+    }
+    if (annees.some(a => a.label === valeur)) {
+        afficherMessage("Cette année scolaire existe déjà.", "erreur");
+        return;
+    }
+    const dates = labelToDates(valeur);
+    try {
+        await apiJson("/api/school-years/index.php", {
+            method: "POST",
+            body: JSON.stringify({ label: valeur, ...dates, status: annees.length ? "PLANNED" : "ACTIVE" })
+        });
         champ.value = "";
-
-        afficherAnnees();
-        afficherSelectAnnee();
-
+        await chargerDonnees();
         afficherMessage("Année scolaire ajoutée avec succès.");
+    } catch (error) {
+        afficherMessage(error.message, "erreur");
     }
+}
 
-    function modifierAnnee(ancienneAnnee) {
-        if (!IMCAuth.requirePermission("annees.update")) {
-            afficherMessage("Permission refusée.", "erreur");
-            return;
-        }
-
-        const nouvelleAnnee = prompt(
-            "Entrez la nouvelle année scolaire :",
-            ancienneAnnee
-        );
-
-        if (nouvelleAnnee === null) {
-            return;
-        }
-
-        const valeur = nouvelleAnnee.trim();
-        const formatCorrect = /^\d{4}-\d{4}$/;
-
-        if (!formatCorrect.test(valeur)) {
-            afficherMessage(
-                "Format incorrect. Exemple : 2041-2042.",
-                "erreur"
-            );
-            return;
-        }
-
-        const parties = valeur.split("-");
-        const debut = Number(parties[0]);
-        const fin = Number(parties[1]);
-
-        if (fin !== debut + 1) {
-            afficherMessage(
-                "Les deux années doivent être consécutives.",
-                "erreur"
-            );
-            return;
-        }
-
-        if (annees.includes(valeur) && valeur !== ancienneAnnee) {
-            afficherMessage(
-                "Cette année scolaire existe déjà.",
-                "erreur"
-            );
-            return;
-        }
-
-        const position = annees.indexOf(ancienneAnnee);
-
-        if (position === -1) {
-            return;
-        }
-
-        annees[position] = valeur;
-
-        if (anneeActive === ancienneAnnee) {
-            anneeActive = valeur;
-            localStorage.setItem(CLE_ANNEE_ACTIVE, anneeActive);
-        }
-
-        annees.sort();
-
-        localStorage.setItem(CLE_ANNEES, JSON.stringify(annees));
-
-        afficherAnnees();
-        afficherSelectAnnee();
-
+async function modifierAnnee(annee) {
+    if (!IMCAuth.requirePermission("annees.update")) {
+        afficherMessage("Permission refusée.", "erreur");
+        return;
+    }
+    const valeur = prompt("Entrez la nouvelle année scolaire :", annee.label);
+    if (valeur === null) return;
+    const label = valeur.trim();
+    if (!/^\d{4}-\d{4}$/.test(label)) {
+        afficherMessage("Format incorrect. Exemple : 2041-2042.", "erreur");
+        return;
+    }
+    const [debut, fin] = label.split("-").map(Number);
+    if (fin !== debut + 1) {
+        afficherMessage("Les deux années doivent être consécutives.", "erreur");
+        return;
+    }
+    if (annees.some(a => a.label === label && a.id !== annee.id)) {
+        afficherMessage("Cette année scolaire existe déjà.", "erreur");
+        return;
+    }
+    try {
+        await apiJson("/api/school-years/index.php?id=" + encodeURIComponent(annee.id), {
+            method: "PATCH",
+            body: JSON.stringify({ label, ...labelToDates(label) })
+        });
+        await chargerDonnees();
         afficherMessage("Année scolaire modifiée avec succès.");
+    } catch (error) {
+        afficherMessage(error.message, "erreur");
     }
+}
 
-    function supprimerAnnee(annee) {
-        if (!IMCAuth.requirePermission("annees.delete")) {
-            afficherMessage(
-                "Permission refusée.",
-                "erreur"
-            );
-            return;
-        }
-
-        if (annees.length <= 1) {
-            afficherMessage(
-                "Vous devez conserver au moins une année scolaire.",
-                "erreur"
-            );
-            return;
-        }
-
-        const confirmation = confirm(
-            "Voulez-vous vraiment supprimer l’année " + annee + " ?"
-        );
-
-        if (!confirmation) {
-            return;
-        }
-
-        annees = annees.filter(element => element !== annee);
-
-        if (anneeActive === annee) {
-            anneeActive = annees[0];
-            localStorage.setItem(CLE_ANNEE_ACTIVE, anneeActive);
-        }
-
-        localStorage.setItem(CLE_ANNEES, JSON.stringify(annees));
-
-        afficherAnnees();
-        afficherSelectAnnee();
-
-        afficherMessage("Année scolaire supprimée avec succès.");
+async function supprimerAnnee(annee) {
+    if (!IMCAuth.requirePermission("annees.delete")) {
+        afficherMessage("Permission refusée.", "erreur");
+        return;
     }
+    if (annees.length <= 1) {
+        afficherMessage("Vous devez conserver au moins une année scolaire.", "erreur");
+        return;
+    }
+    if (annee.status === "ACTIVE") {
+        afficherMessage("Une année active doit d’abord être remplacée avant archivage.", "erreur");
+        return;
+    }
+    if (!confirm("Voulez-vous vraiment supprimer l’année " + annee.label + " ?")) return;
+    try {
+        await apiJson("/api/school-years/index.php?id=" + encodeURIComponent(annee.id), {
+            method: "PATCH",
+            body: JSON.stringify({ status: "ARCHIVED" })
+        });
+        await chargerDonnees();
+        afficherMessage("Année scolaire archivée.");
+    } catch (error) {
+        afficherMessage(error.message, "erreur");
+    }
+}
 
-    chargerDonnees();
 </script>
 
 </body>
