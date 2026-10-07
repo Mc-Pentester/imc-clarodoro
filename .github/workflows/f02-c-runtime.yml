@@ -49,11 +49,8 @@ jobs:
           set -euo pipefail
           DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
           psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
-          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
-          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261006200000_normalize_rbac_role_names.sql
-          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261007130000_f02_b_reference_data.sql
-          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261007131000_f02_b_subject_status.sql
-          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261007140000_f02_c_results_attendance.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
           psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles(id,name)
           VALUES ('00000000-0000-0000-0000-000000003001','Enseignant')
