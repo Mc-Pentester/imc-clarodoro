@@ -55,15 +55,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      - name: Build database
+      - name: Seed RBAC roles
         run: |
-          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1 -f database/schema.sql
-          php database/migrate.php --apply
-          php database/migrate.php --status
-
-      - name: Seed runtime personnel
-        run: |
-          cat > /tmp/f02e_seed.sql <<'SQL'
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (name, description)
           VALUES
             ('PDG', 'Direction générale'),
@@ -73,7 +67,17 @@ jobs:
             ('Surveillant', 'Surveillance'),
             ('Autre', 'Autre personnel')
           ON CONFLICT (name) DO NOTHING;
+          SQL
 
+      - name: Build database
+        run: |
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
+
+      - name: Seed runtime personnel
+        run: |
+          cat > /tmp/f02e_seed.sql <<'SQL'
           INSERT INTO users (username, password_hash, role_id, status)
           SELECT 'f02e-pdg', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEaPqM8M2u8wQy2FQ6g2W5Q8Yh5K', id, 'ACTIVE'
           FROM roles WHERE name = 'PDG'
