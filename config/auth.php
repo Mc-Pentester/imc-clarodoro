@@ -124,6 +124,35 @@ function enforceAuthSessionLifetime(): void
     $_SESSION['last_activity_at'] = $now;
 }
 
+function generateCsrfToken(): string
+{
+    configureAuthSession();
+
+    if (empty($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+
+    return $_SESSION['csrf_token'];
+}
+
+function requireCsrfToken(): void
+{
+    configureAuthSession();
+
+    $provided = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    $expected = $_SESSION['csrf_token'] ?? '';
+
+    if (
+        !is_string($provided) ||
+        $provided === '' ||
+        !is_string($expected) ||
+        $expected === '' ||
+        !hash_equals($expected, $provided)
+    ) {
+        apiError(403, 'Jeton CSRF invalide');
+    }
+}
+
 function requireAuthenticatedUser(PDO $pdo): array
 {
     configureAuthSession();
