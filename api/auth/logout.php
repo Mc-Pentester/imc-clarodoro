@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 configureAuthSession();
+requireCsrfToken();
 
 $_SESSION = [];
 
