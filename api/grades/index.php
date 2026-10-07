@@ -97,6 +97,7 @@ if ($method === 'GET') {
 
     $enrollmentConditions = ['e.status = :enrollment_status'];
     $enrollmentParams = f02cScope($user, 'e', null)[1];
+    $enrollmentParams[':enrollment_status'] = 'ACTIVE';
     if (isset($_GET['school_year_id'])) {
         $enrollmentConditions[] = 'e.school_year_id = :enrollment_school_year_id';
         $enrollmentParams[':enrollment_school_year_id'] = $_GET['school_year_id'];
