@@ -80,13 +80,15 @@ jobs:
 
       - name: Seed runtime personnel
         run: |
-          cat > /tmp/f02e_seed.sql <<'SQL'
+          PDG_HASH=$(php -r 'echo password_hash("password", PASSWORD_DEFAULT), PHP_EOL;')
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" \
+            -v ON_ERROR_STOP=1 \
+            -v "pdg_hash=$PDG_HASH" <<'SQL'
           INSERT INTO users (username, password_hash, role_id, status)
-          SELECT 'f02e-pdg', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEaPqM8M2u8wQy2FQ6g2W5Q8Yh5K', id, 'ACTIVE'
+          SELECT 'f02e-pdg', :'pdg_hash', id, 'ACTIVE'
           FROM roles WHERE name = 'PDG'
           ON CONFLICT (username) DO NOTHING;
           SQL
-          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1 -f /tmp/f02e_seed.sql
 
       - name: PHP syntax
         run: |
