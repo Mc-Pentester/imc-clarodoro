@@ -1,0 +1,154 @@
+name: F-02-D finance runtime proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/finance/index.php'
+      - 'database/migrations/**'
+      - 'database/schema.sql'
+      - '.github/workflows/f02-d-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  f02-d-runtime:
+    name: F-02-D PostgreSQL finance
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and migrations
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles(id,name)
+          VALUES ('00000000-0000-0000-0000-000000004001','PDG')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO users(id,username,password_hash,role_id,status)
+          VALUES (
+            '00000000-0000-0000-0000-000000004011',
+            'f02d-runtime',
+            crypt('F02D-Test-2026!',gen_salt('bf')),
+            '00000000-0000-0000-0000-000000004001',
+            'ACTIVE'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO levels(id,code,name)
+          VALUES ('00000000-0000-0000-0000-000000004021','F02D','F02D Level')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO classes(id,code,name,level_id,status)
+          VALUES ('00000000-0000-0000-0000-000000004031','F02D-CLASS','F02D Class','00000000-0000-0000-0000-000000004021','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO school_years(id,label,start_date,end_date,status)
+          VALUES ('00000000-0000-0000-0000-000000004041','F02D-2026-2027','2026-09-01','2027-07-15','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO students(id,matricule,last_name,first_name,status)
+          VALUES ('00000000-0000-0000-0000-000000004051','F02D-001','Runtime','Finance','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO enrollments(id,student_id,class_id,school_year_id,status,enrollment_date)
+          VALUES (
+            '00000000-0000-0000-0000-000000004061',
+            '00000000-0000-0000-0000-000000004051',
+            '00000000-0000-0000-0000-000000004031',
+            '00000000-0000-0000-0000-000000004041',
+            'ACTIVE',
+            '2026-09-01'
+          )
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+
+      - name: PHP syntax
+        run: |
+          set -euo pipefail
+          php -l api/finance/index.php
+          php -l config/auth.php
+          php -l database/migrate.php
+
+      - name: Start API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/f02d-api.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove finance authority
+        run: |
+          set -euo pipefail
+          BASE='http://127.0.0.1:8090'
+          COOKIE='/tmp/f02d.cookies'
+
+          set +e
+          HTTP="$(curl -sS -o /tmp/f02d-unauth.json -w '%{http_code}' "$BASE/api/finance/index.php")"
+          set -e
+          test "$HTTP" = "401"
+
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H 'Content-Type: application/json'             -d '{"username":"f02d-runtime","password":"F02D-Test-2026!"}'             "$BASE/api/auth/login.php")"
+
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+
+          INVOICE="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"type":"invoice","enrollment_id":"00000000-0000-0000-0000-000000004061","base_amount":1000,"discount_amount":100,"discount_reason":"F02D runtime","invoice_date":"2026-10-07"}'             "$BASE/api/finance/index.php")"
+
+          INVOICE_ID="$(printf '%s' "$INVOICE" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["invoice"]["id"]??"";')"
+          test -n "$INVOICE_ID"
+          printf '%s' "$INVOICE" | grep -q '"amount":"900.00"'
+
+          PAYMENT="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d "{"type":"payment","invoice_id":"$INVOICE_ID","amount":500,"payment_date":"2026-10-07","method":"Espèces"}"             "$BASE/api/finance/index.php")"
+
+          printf '%s' "$PAYMENT" | grep -q '"invoice_status":"PARTIALLY_PAID"'
+          printf '%s' "$PAYMENT" | grep -q '"balance":400'
+
+          set +e
+          OVERPAY="$(curl -sS -o /tmp/f02d-overpay.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d "{"type":"payment","invoice_id":"$INVOICE_ID","amount":401,"payment_date":"2026-10-07","method":"Espèces"}"             "$BASE/api/finance/index.php")"
+          set -e
+          test "$OVERPAY" = "409"
+          grep -q 'dépasse le solde' /tmp/f02d-overpay.json
+
+          META="$(curl -fsS -b "$COOKIE" "$BASE/api/finance/index.php?school_year_id=00000000-0000-0000-0000-000000004041")"
+          printf '%s' "$META" | grep -q ""id":"$INVOICE_ID""
+          printf '%s' "$META" | grep -q '"paid_amount":"500.00"'
+
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT amount::text FROM invoices WHERE id='$INVOICE_ID';" | grep -qx '900.00'
+
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT COALESCE(SUM(amount),0)::text FROM payments WHERE invoice_id='$INVOICE_ID';" | grep -qx '500.00'
+
+          echo 'F-02-D RUNTIME PROOF: PASS'
