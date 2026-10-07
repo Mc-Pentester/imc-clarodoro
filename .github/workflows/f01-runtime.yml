@@ -1,0 +1,26 @@
+name: F-01 real auth smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  f01-auth-smoke:
+    name: F-01 real auth.js load
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax check
+        run: node --check auth.js
+      - name: Load real auth.js
+        run: node tests/security/f01-auth-smoke.js
