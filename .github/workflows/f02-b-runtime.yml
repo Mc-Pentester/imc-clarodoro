@@ -52,16 +52,11 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261007130000_f02_b_reference_data.sql
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000002001','PDG');
-          INSERT INTO permissions(id,name) VALUES
-            ('00000000-0000-0000-0000-000000002002','annees.read'),
-            ('00000000-0000-0000-0000-000000002003','annees.create'),
-            ('00000000-0000-0000-0000-000000002004','annees.update'),
-            ('00000000-0000-0000-0000-000000002005','matieres.read'),
-            ('00000000-0000-0000-0000-000000002006','matieres.create'),
-            ('00000000-0000-0000-0000-000000002007','matieres.update'),
-            ('00000000-0000-0000-0000-000000002008','vacances.read'),
-            ('00000000-0000-0000-0000-000000002009','vacances.create'),
-            ('00000000-0000-0000-0000-000000002010','vacances.update');
+          INSERT INTO permissions(name) VALUES
+            ('annees.read'),('annees.create'),('annees.update'),
+            ('matieres.read'),('matieres.create'),('matieres.update'),
+            ('vacances.read'),('vacances.create'),('vacances.update')
+          ON CONFLICT (name) DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000002001',id FROM permissions
           WHERE name IN ('annees.read','annees.create','annees.update','matieres.read','matieres.create','matieres.update','vacances.read','vacances.create','vacances.update');
