@@ -2175,6 +2175,11 @@ function enregistrerVersement(){
 
 function supprimerVersement(id){
 
+    if (!IMCAuth.requirePermission("finances.delete")) {
+        afficherMessage("Permission refusée.", "erreur");
+        return;
+    }
+
     if(
         !confirm(
             "Voulez-vous supprimer ce versement ?"
@@ -2568,11 +2573,28 @@ function enregistrerVersementDirect(numero,valeur){
 
     if(!eleveSelectionne)return;
 
-
     let f=
     obtenirFinanceEleve(
         eleveSelectionne
     );
+
+    const versementExistant = trouverVersement(f, numero);
+    const suppression = String(valeur).trim() === "" && !!versementExistant;
+
+    if (suppression) {
+        if (!IMCAuth.requirePermission("finances.delete")) {
+            afficherMessage("Permission refusée.", "erreur");
+            return;
+        }
+    } else if (versementExistant) {
+        if (!IMCAuth.requirePermission("finances.update")) {
+            afficherMessage("Permission refusée.", "erreur");
+            return;
+        }
+    } else if (!IMCAuth.requirePermission("finances.create")) {
+        afficherMessage("Permission refusée.", "erreur");
+        return;
+    }
 
 
     let montant=

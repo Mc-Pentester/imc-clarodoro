@@ -2831,6 +2831,14 @@ function afficherCarnet(
 
 function enregistrerResultats() {
 
+    if (!IMCAuth.requirePermission("resultats.update")) {
+        afficherMessage(
+            "Permission refusée.",
+            "erreur"
+        );
+        return;
+    }
+
     if (!eleveSelectionne) {
 
         afficherMessage(
