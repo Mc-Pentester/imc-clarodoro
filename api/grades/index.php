@@ -113,7 +113,7 @@ if ($method === 'GET') {
          INNER JOIN students s ON s.id = e.student_id
          INNER JOIN classes c ON c.id = e.class_id
          INNER JOIN school_years sy ON sy.id = e.school_year_id
-         ' . f02cScope($user, 'e', 's')[0] . '
+         ' . f02cScope($user, 'e')[0] . '
          WHERE ' . implode(' AND ', $enrollmentConditions) . '
          ORDER BY s.last_name, s.first_name, e.id'
     );
