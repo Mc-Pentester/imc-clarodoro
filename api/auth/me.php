@@ -21,4 +21,5 @@ echo json_encode([
         'username' => $user['username'],
         'role' => $user['role_name'],
     ],
+    'csrfToken' => generateCsrfToken(),
 ], JSON_UNESCAPED_UNICODE);
