@@ -39,4 +39,18 @@ foreach($allowed as $f){if(array_key_exists($f,$data)){if(!is_string($data[$f]))
 if(!$set) apiError(422,'Aucun champ à modifier');
 if(isset($params[':status'])&&!in_array($params[':status'],['PLANNED','ACTIVE','CLOSED','ARCHIVED'],true))apiError(422,'status invalide');
 $set[]='updated_at=NOW()';
-try{$stmt=$pdo->prepare("UPDATE school_years SET ".implode(',',$set)." WHERE id=:id RETURNING id,label,start_date,end_date,status,created_at,updated_at");$stmt->execute($params);$row=$stmt->fetch();if(!$row)apiError(404,'Année scolaire introuvable');echo json_encode(['success'=>true,'schoolYear'=>$row],JSON_UNESCAPED_UNICODE);}catch(PDOException $e){apiError(str_contains($e->getMessage(),'school_years_one_active')?409:500,'Erreur interne du serveur');}
+try {
+    $pdo->beginTransaction();
+    if (isset($params[':status']) && $params[':status'] === 'ACTIVE') {
+        $pdo->exec("UPDATE school_years SET status='CLOSED', updated_at=NOW() WHERE status='ACTIVE' AND id<>".$pdo->quote($id));
+    }
+    $stmt=$pdo->prepare("UPDATE school_years SET ".implode(',',$set)." WHERE id=:id RETURNING id,label,start_date,end_date,status,created_at,updated_at");
+    $stmt->execute($params);
+    $row=$stmt->fetch();
+    if(!$row){$pdo->rollBack();apiError(404,'Année scolaire introuvable');}
+    $pdo->commit();
+    echo json_encode(['success'=>true,'schoolYear'=>$row],JSON_UNESCAPED_UNICODE);
+} catch(PDOException $e) {
+    if($pdo->inTransaction())$pdo->rollBack();
+    apiError(str_contains($e->getMessage(),'school_years_one_active')?409:500,'Erreur interne du serveur');
+}
