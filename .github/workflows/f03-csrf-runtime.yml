@@ -1,0 +1,183 @@
+name: F-03 CSRF runtime proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  f03-csrf-runtime:
+    name: F-03 CSRF protection
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client jq
+
+      - name: Apply schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 \
+            -f database/schema.sql
+
+      - name: Seed F-03 runtime user and permission
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000301', 'PDG');
+
+          INSERT INTO permissions (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000302', 'eleves.create');
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          VALUES (
+            '00000000-0000-0000-0000-000000000301',
+            '00000000-0000-0000-0000-000000000302'
+          );
+
+          INSERT INTO users (id, username, password_hash, role_id)
+          VALUES (
+            '00000000-0000-0000-0000-000000000303',
+            'f03_csrf_user',
+            crypt('CorrectPass123!', gen_salt('bf')),
+            '00000000-0000-0000-0000-000000000301'
+          );
+          SQL
+
+      - name: Start PHP runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8080 -t . > /tmp/imc-php.log 2>&1 &
+          echo $! > /tmp/imc-php.pid
+          for i in {1..20}; do
+            if curl -sS -o /dev/null http://127.0.0.1:8080/api/auth/me.php; then
+              break
+            fi
+            sleep 1
+          done
+          test -f /tmp/imc-php.pid
+
+      - name: Prove F-03 CSRF protection
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          login() {
+            local jar="$1"
+            curl -sS -c "$jar" -b "$jar" \
+              -H 'Content-Type: application/json' \
+              -d '{"username":"f03_csrf_user","password":"CorrectPass123!"}' \
+              http://127.0.0.1:8080/api/auth/login.php
+          }
+
+          status_with_body() {
+            local jar="$1"
+            local token="$2"
+            local body="$3"
+            local output="$4"
+
+            if [ "$token" = "__NONE__" ]; then
+              curl -sS -o "$output" -w '%{http_code}' \
+                -b "$jar" \
+                -H 'Content-Type: application/json' \
+                -d "$body" \
+                http://127.0.0.1:8080/api/students/index.php
+            else
+              curl -sS -o "$output" -w '%{http_code}' \
+                -b "$jar" \
+                -H 'Content-Type: application/json' \
+                -H "X-CSRF-Token: $token" \
+                -d "$body" \
+                http://127.0.0.1:8080/api/students/index.php
+            fi
+          }
+
+          login /tmp/cookie1.txt > /tmp/login1.json
+          login /tmp/cookie2.txt > /tmp/login2.json
+
+          CSRF1="$(jq -r '.csrfToken' /tmp/login1.json)"
+          CSRF2="$(jq -r '.csrfToken' /tmp/login2.json)"
+
+          test -n "$CSRF1"
+          test -n "$CSRF2"
+          test "$CSRF1" != "$CSRF2"
+
+          BODY='{"matricule":"F03-CSRF-001","last_name":"CSRF","first_name":"Proof"}'
+
+          STATUS="$(status_with_body /tmp/cookie1.txt __NONE__ "$BODY" /tmp/no-token.json)"
+          test "$STATUS" = "403"
+          echo "Mutation without CSRF token -> 403: PASS"
+
+          STATUS="$(status_with_body /tmp/cookie1.txt wrong-token "$BODY" /tmp/wrong-token.json)"
+          test "$STATUS" = "403"
+          echo "Mutation with wrong CSRF token -> 403: PASS"
+
+          STATUS="$(status_with_body /tmp/cookie1.txt "$CSRF2" "$BODY" /tmp/cross-session.json)"
+          test "$STATUS" = "403"
+          echo "Token from another session -> 403: PASS"
+
+          STATUS="$(status_with_body /tmp/cookie1.txt "$CSRF1" "$BODY" /tmp/valid.json)"
+          test "$STATUS" = "201"
+          echo "Mutation with valid CSRF token -> 201: PASS"
+
+          STATUS="$(curl -sS -o /tmp/get.json -w '%{http_code}' \
+            -b /tmp/cookie1.txt \
+            http://127.0.0.1:8080/api/students/index.php)"
+          test "$STATUS" = "200"
+          echo "GET without CSRF token -> 200: PASS"
+
+          STATUS="$(curl -sS -o /tmp/logout-no-token.json -w '%{http_code}' \
+            -b /tmp/cookie1.txt \
+            -X POST \
+            http://127.0.0.1:8080/api/auth/logout.php)"
+          test "$STATUS" = "403"
+          echo "Logout without CSRF token -> 403: PASS"
+
+          STATUS="$(curl -sS -o /tmp/logout-valid.json -w '%{http_code}' \
+            -b /tmp/cookie2.txt \
+            -H "X-CSRF-Token: $CSRF2" \
+            -X POST \
+            http://127.0.0.1:8080/api/auth/logout.php)"
+          test "$STATUS" = "200"
+          echo "Logout with valid CSRF token -> 200: PASS"
+
+          echo "F-03 CSRF RUNTIME PROOF: PASS"
