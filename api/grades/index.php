@@ -18,16 +18,20 @@ function f02cUuid(string $name): string
     return $value;
 }
 
-function f02cScope(array $user, string $alias = 'e', string $subjectAlias = 's'): array
+function f02cScope(array $user, string $alias = 'e', ?string $subjectAlias = 's'): array
 {
     if (in_array($user['role_name'], ['PDG', 'Directeur'], true)) {
         return ['', []];
     }
 
+    $subjectJoin = $subjectAlias === null
+        ? ''
+        : ' AND scope_tcs.subject_id = ' . $subjectAlias . '.id';
+
     return [
         ' INNER JOIN teacher_class_subjects scope_tcs
              ON scope_tcs.class_id = ' . $alias . '.class_id
-            AND scope_tcs.subject_id = ' . $subjectAlias . '.id
+            ' . $subjectJoin . '
             AND scope_tcs.status = :scope_assignment_status
           INNER JOIN user_teachers scope_ut
              ON scope_ut.teacher_id = scope_tcs.teacher_id
@@ -92,7 +96,7 @@ if ($method === 'GET') {
     $grades = $stmt->fetchAll();
 
     $enrollmentConditions = ['e.status = :enrollment_status'];
-    $enrollmentParams = $scopeParams;
+    $enrollmentParams = f02cScope($user, 'e', null)[1];
     if (isset($_GET['school_year_id'])) {
         $enrollmentConditions[] = 'e.school_year_id = :enrollment_school_year_id';
         $enrollmentParams[':enrollment_school_year_id'] = $_GET['school_year_id'];
@@ -113,7 +117,7 @@ if ($method === 'GET') {
          INNER JOIN students s ON s.id = e.student_id
          INNER JOIN classes c ON c.id = e.class_id
          INNER JOIN school_years sy ON sy.id = e.school_year_id
-         ' . f02cScope($user, 'e')[0] . '
+         ' . f02cScope($user, 'e', null)[0] . '
          WHERE ' . implode(' AND ', $enrollmentConditions) . '
          ORDER BY s.last_name, s.first_name, e.id'
     );
