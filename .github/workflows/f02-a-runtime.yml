@@ -2,7 +2,7 @@ name: F-02-A student server authority runtime proof
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/f02-a-student-server-authority]
     paths:
       - 'api/students/index.php'
       - 'database/schema.sql'
