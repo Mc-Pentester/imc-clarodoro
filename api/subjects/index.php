@@ -14,5 +14,5 @@ if($method==='POST'){
 }
 $id=$_GET['id']??'';if(!preg_match('/^[0-9a-f-]{36}$/i',$id))apiError(400,'UUID invalide');$set=[];$p=[':id'=>$id];
 foreach(['code','name','description','coefficient','status'] as $f)if(array_key_exists($f,$d)){$set[]="$f=:$f";$p[":$f"]=$d[$f];}
-if(!$set)apiError(422,'Aucun champ à modifier');$set[]='updated_at=NOW()';
-try{$s=$pdo->prepare("UPDATE subjects SET ".implode(',',$set)." WHERE id=:id RETURNING id,code,name,description,coefficient,created_at,updated_at");$s->execute($p);$row=$s->fetch();if(!$row)apiError(404,'Matière introuvable');echo json_encode(['success'=>true,'subject'=>$row],JSON_UNESCAPED_UNICODE);}catch(PDOException $e){apiError(500,'Erreur interne du serveur');}
+if(!$set)apiError(422,'Aucun champ à modifier');if(isset($d['status'])&&!in_array($d['status'],['ACTIVE','INACTIVE','ARCHIVED'],true))apiError(422,'status invalide');$set[]='updated_at=NOW()';
+try{$s=$pdo->prepare("UPDATE subjects SET ".implode(',',$set)." WHERE id=:id RETURNING id,code,name,description,coefficient,status,created_at,updated_at");$s->execute($p);$row=$s->fetch();if(!$row)apiError(404,'Matière introuvable');echo json_encode(['success'=>true,'subject'=>$row],JSON_UNESCAPED_UNICODE);}catch(PDOException $e){apiError(500,'Erreur interne du serveur');}
