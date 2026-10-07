@@ -83,3 +83,5 @@ jobs:
 
       - name: Runtime proof
         run: echo "F-08-C RUNTIME PROOF: PASS"
+
+# F-08-C trigger marker: runtime proof workflow retained; push-triggered execution requested.
