@@ -112,7 +112,7 @@ jobs:
               });
             });
 
-await context.route('**/auth.js', route =>
+            await context.route('**/auth.js', route =>
               route.fulfill({
                 status: 200,
                 contentType: 'application/javascript',
