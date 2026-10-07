@@ -80,6 +80,7 @@ if ($method === 'GET') {
 elseif ($method === 'POST') {
     $pdo = getDatabaseConnection();
     $user = requirePermission($pdo, 'eleves.create');
+    requireCsrfToken();
 
     $data = readJsonBody();
 
@@ -251,6 +252,7 @@ elseif ($method === 'POST') {
 elseif ($method === 'PUT' || $method === 'PATCH') {
     $pdo = getDatabaseConnection();
     $user = requirePermission($pdo, 'eleves.update');
+    requireCsrfToken();
 
     // Validate UUID parameter
     $id = $_GET['id'] ?? '';
