@@ -1,0 +1,141 @@
+name: F-02-E Personnel runtime
+
+on:
+  push:
+    paths:
+      - "api/personnel/**"
+      - "database/migrations/**"
+      - "database/migrate.php"
+      - "database/schema.sql"
+      - "config/**"
+      - "personnel.html"
+      - "js/personnel-server.js"
+      - ".github/workflows/f02-e-runtime.yml"
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d imc_clarodoro"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      AUTH_IDLE_TIMEOUT_SECONDS: 900
+      AUTH_ABSOLUTE_TIMEOUT_SECONDS: 28800
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_pgsql,pgsql
+          coverage: none
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Build database
+        run: |
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
+
+      - name: Seed runtime personnel
+        run: |
+          cat > /tmp/f02e_seed.sql <<'SQL'
+          INSERT INTO roles (name, description)
+          VALUES
+            ('PDG', 'Direction générale'),
+            ('Directeur', 'Direction'),
+            ('Enseignant', 'Enseignement'),
+            ('Secrétaire', 'Administration'),
+            ('Surveillant', 'Surveillance'),
+            ('Autre', 'Autre personnel')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO users (username, password_hash, role_id, status)
+          SELECT 'f02e-pdg', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEaPqM8M2u8wQy2FQ6g2W5Q8Yh5K', id, 'ACTIVE'
+          FROM roles WHERE name = 'PDG'
+          ON CONFLICT (username) DO NOTHING;
+          SQL
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1 -f /tmp/f02e_seed.sql
+
+      - name: PHP syntax
+        run: |
+          find api config database middleware -name "*.php" -print0 | xargs -0 -n1 php -l
+
+      - name: Start PHP API
+        run: |
+          php -S 127.0.0.1:8090 -t . >/tmp/f02e-php.log 2>&1 &
+          echo $! > /tmp/f02e-php.pid
+          sleep 2
+
+      - name: Runtime proof
+        run: |
+          set -euo pipefail
+
+          echo "=== F-02-E AUTH GATE ==="
+          status=$(curl -sS -o /tmp/unauth.json -w "%{http_code}" http://127.0.0.1:8090/api/personnel/index.php)
+          test "$status" = "401"
+          echo "Unauthenticated: PASS"
+
+          echo "=== F-02-E LOGIN ==="
+          login=$(curl -sS -c /tmp/f02e-cookie.txt -H "Content-Type: application/json"             -d '{"username":"f02e-pdg","password":"password"}'             http://127.0.0.1:8090/api/auth/login.php)
+          echo "$login" | grep -q '"success":true'
+          csrf=$(echo "$login" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["csrfToken"];')
+          test -n "$csrf"
+          echo "Login: PASS"
+
+          echo "=== F-02-E CREATE ==="
+          create=$(curl -sS -b /tmp/f02e-cookie.txt -H "X-CSRF-Token: $csrf" -H "Content-Type: application/json"             -d '{"action":"create","name":"Jean Test","role":"Enseignant","class_name":"6e A","username":"f02e-teacher","password":"StrongPass!123"}'             http://127.0.0.1:8090/api/personnel/index.php)
+          echo "$create" | grep -q '"success":true'
+          staff_id=$(echo "$create" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["staffId"];')
+          test -n "$staff_id"
+          echo "Create: PASS"
+
+          echo "=== F-02-E READ ==="
+          read=$(curl -sS -b /tmp/f02e-cookie.txt http://127.0.0.1:8090/api/personnel/index.php)
+          echo "$read" | grep -q 'f02e-teacher'
+          echo "Read: PASS"
+
+          echo "=== F-02-E UPDATE ==="
+          update=$(curl -sS -b /tmp/f02e-cookie.txt -H "X-CSRF-Token: $csrf" -H "Content-Type: application/json"             -d "{"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"Enseignant","class_name":"7e A","username":"f02e-teacher","password":""}"             http://127.0.0.1:8090/api/personnel/index.php)
+          echo "$update" | grep -q '"success":true'
+          echo "Update: PASS"
+
+          echo "=== F-02-E PRIVILEGE ESCALATION ==="
+          escalation=$(curl -sS -o /tmp/escalation.json -w "%{http_code}" -b /tmp/f02e-cookie.txt             -H "X-CSRF-Token: $csrf" -H "Content-Type: application/json"             -d "{"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"PDG","class_name":"7e A","username":"f02e-teacher","password":""}"             http://127.0.0.1:8090/api/personnel/index.php)
+          test "$escalation" = "200"
+          echo "PDG role assignment by PDG: PASS"
+
+          echo "=== F-02-E ARCHIVE ==="
+          archive=$(curl -sS -b /tmp/f02e-cookie.txt -H "X-CSRF-Token: $csrf" -H "Content-Type: application/json"             -d "{"action":"delete","staff_id":"$staff_id"}"             http://127.0.0.1:8090/api/personnel/index.php)
+          echo "$archive" | grep -q '"success":true'
+          echo "Archive: PASS"
+
+          echo "=== F-02-E DB SOURCE OF TRUTH ==="
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1             -c "SELECT first_name,last_name,status FROM staff WHERE id='$staff_id';" | grep -q 'ARCHIVED'
+          echo "PostgreSQL source of truth: PASS"
+
+          echo "F-02-E RUNTIME PROOF: PASS"
