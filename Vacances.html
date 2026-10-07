@@ -1112,9 +1112,6 @@ document.addEventListener("DOMContentLoaded", function() {
    CONFIGURATION
 ===================================================== */
 
-const CLE_VACANCES = "imc_vacances";
-const CLE_ANNEE = "imc_active_year";
-
 let donnees = {};
 let anneeSelectionnee = "2026-2027";
 let indexModification = null;
@@ -1163,43 +1160,55 @@ function ouvrirPage(page) {
    CHARGEMENT
 ===================================================== */
 
-function chargerDonnees() {
+async function apiJson(url, options = {}) {
+    const response = await fetch(url, {
+        credentials: "same-origin",
+        headers: { "Accept": "application/json", "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options
+    });
+    let payload = null;
+    try { payload = await response.json(); } catch (_) {}
+    if (!response.ok || !payload || payload.success === false) {
+        throw new Error((payload && payload.message) || "Erreur serveur.");
+    }
+    return payload;
+}
 
+async function chargerDonnees() {
     try {
+        const years = await apiJson("/api/school-years/index.php");
+        const listeAnnees = Array.isArray(years.schoolYears) ? years.schoolYears : [];
+        const active = listeAnnees.find(a => a.status === "ACTIVE") || listeAnnees[0];
+        anneeSelectionnee = active ? active.label : "2026-2027";
+        window.__anneesServeur = listeAnnees;
 
-        donnees =
-            JSON.parse(
-                localStorage.getItem(CLE_VACANCES)
-            ) || {};
-
-    } catch (erreur) {
-
+        const payload = await apiJson("/api/vacations/index.php");
+        const vacations = Array.isArray(payload.vacations) ? payload.vacations : [];
         donnees = {};
+        vacations.forEach(v => {
+            const label = listeAnnees.find(a =>
+                v.start_date >= a.start_date && v.start_date <= a.end_date
+            )?.label || anneeSelectionnee;
+            if (!donnees[label]) donnees[label] = [];
+            donnees[label].push({
+                id: v.id,
+                nom: v.name,
+                categorie: "vacances",
+                debut: v.start_date,
+                fin: v.end_date,
+                cours: "oui",
+                couleur: "normal",
+                observation: ""
+            });
+        });
 
+        chargerAnnees();
+        afficherListe();
+        afficherCalendrier();
+        afficherAnnee();
+    } catch (error) {
+        afficherMessage(error.message, "erreur");
     }
-
-
-    const anneeActive =
-        localStorage.getItem(CLE_ANNEE);
-
-    if (anneeActive) {
-
-        anneeSelectionnee =
-            anneeActive;
-
-    }
-
-
-    chargerAnnees();
-
-    initialiserDonnees2026();
-
-    afficherListe();
-
-    afficherCalendrier();
-
-    afficherAnnee();
-
 }
 
 
@@ -1208,76 +1217,30 @@ function chargerDonnees() {
 ===================================================== */
 
 function chargerAnnees() {
-
-    const select =
-        document.getElementById(
-            "anneeAcademique"
-        );
-
+    const select = document.getElementById("anneeAcademique");
     select.innerHTML = "";
-
-    for (
-        let annee = 2026;
-        annee <= 2040;
-        annee++
-    ) {
-
-        const valeur =
-            annee + "-" + (annee + 1);
-
-        const option =
-            document.createElement("option");
-
-        option.value = valeur;
-
-        option.textContent = valeur;
-
-        if (
-            valeur ===
-            anneeSelectionnee
-        ) {
-
-            option.selected = true;
-
-        }
-
+    const anneesServeur = Array.isArray(window.__anneesServeur) ? window.__anneesServeur : [];
+    anneesServeur.forEach(annee => {
+        const option = document.createElement("option");
+        option.value = annee.label;
+        option.textContent = annee.label;
+        option.selected = annee.label === anneeSelectionnee;
         select.appendChild(option);
-
-    }
-
+    });
 }
-
 
 /* =====================================================
    CHANGER D'ANNÉE
 ===================================================== */
 
 function changerAnnee() {
-
-    anneeSelectionnee =
-        document.getElementById(
-            "anneeAcademique"
-        ).value;
-
-
-    localStorage.setItem(
-        CLE_ANNEE,
-        anneeSelectionnee
-    );
-
-
+    anneeSelectionnee = document.getElementById("anneeAcademique").value;
     indexModification = null;
-
     nettoyerFormulaire();
-
     afficherAnnee();
-
     afficherListe();
-
     afficherCalendrier();
-
 }
-
 
 /* =====================================================
    AFFICHER ANNÉE
@@ -1310,520 +1273,60 @@ function afficherAnnee() {
 ===================================================== */
 
 function initialiserDonnees2026() {
-
-    if (
-        donnees["2026-2027"] &&
-        donnees["2026-2027"].length > 0
-    ) {
-
-        return;
-
-    }
-
-
-    donnees["2026-2027"] = [
-
-        /* =========================
-           SEPTEMBRE 2026
-        ========================= */
-
-        {
-            nom: "Ouverture des classes",
-            categorie: "fete",
-            debut: "2026-09-07",
-            fin: "2026-09-07",
-            cours: "non",
-            couleur: "normal",
-            observation:
-                "Rentrée scolaire 2026-2027."
-        },
-
-
-        /* =========================
-           OCTOBRE 2026
-        ========================= */
-
-        {
-            nom: "Anniversaire de la mort de Dessalines",
-            categorie: "commemoration",
-            debut: "2026-10-17",
-            fin: "2026-10-17",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Commémoration nationale."
-        },
-
-
-        /* =========================
-           NOVEMBRE 2026
-        ========================= */
-
-        {
-            nom: "La Toussaint",
-            categorie: "ferie",
-            debut: "2026-11-01",
-            fin: "2026-11-01",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Jour férié."
-        },
-
-        {
-            nom: "Jour des Morts",
-            categorie: "ferie",
-            debut: "2026-11-02",
-            fin: "2026-11-02",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Date importante du calendrier scolaire."
-        },
-
-        {
-            nom: "Bataille de Vertières",
-            categorie: "ferie",
-            debut: "2026-11-18",
-            fin: "2026-11-18",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Commémoration de la Bataille de Vertières."
-        },
-
-
-        /* =========================
-           DÉCEMBRE 2026
-        ========================= */
-
-        {
-            nom: "Vacances de fin d'année",
-            categorie: "vacances",
-            debut: "2026-12-21",
-            fin: "2027-01-03",
-            cours: "oui",
-            couleur: "normal",
-            observation:
-                "Fermeture des classes le 21 décembre 2026. Reprise le 4 janvier 2027."
-        },
-
-        {
-            nom: "Noël",
-            categorie: "ferie",
-            debut: "2026-12-25",
-            fin: "2026-12-25",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Fête de Noël."
-        },
-
-
-        /* =========================
-           JANVIER 2027
-        ========================= */
-
-        {
-            nom: "Jour de l'Indépendance / Jour de l'An",
-            categorie: "ferie",
-            debut: "2027-01-01",
-            fin: "2027-01-01",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "1er janvier."
-        },
-
-        {
-            nom: "Jour des Aïeux",
-            categorie: "ferie",
-            debut: "2027-01-02",
-            fin: "2027-01-02",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "2 janvier."
-        },
-
-        {
-            nom: "Reprise des classes",
-            categorie: "fete",
-            debut: "2027-01-04",
-            fin: "2027-01-04",
-            cours: "non",
-            couleur: "normal",
-            observation:
-                "Reprise des cours après les vacances de fin d'année."
-        },
-
-        {
-            nom: "Épiphanie / Jour des Rois",
-            categorie: "fete",
-            debut: "2027-01-06",
-            fin: "2027-01-06",
-            cours: "non",
-            couleur: "normal",
-            observation:
-                "Fête religieuse."
-        },
-
-
-        /* =========================
-           FÉVRIER 2027
-        ========================= */
-
-        {
-            nom: "Fermeture des classes — Carnaval",
-            categorie: "vacances",
-            debut: "2027-02-05",
-            fin: "2027-02-05",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Fermeture des classes avant le Carnaval."
-        },
-
-        {
-            nom: "Carnaval",
-            categorie: "ferie",
-            debut: "2027-02-08",
-            fin: "2027-02-09",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Lundi Gras et Mardi Gras."
-        },
-
-        {
-            nom: "Saint-Valentin",
-            categorie: "fete",
-            debut: "2027-02-14",
-            fin: "2027-02-14",
-            cours: "non",
-            couleur: "normal",
-            observation:
-                "Fête / observance. Pas automatiquement un jour sans cours."
-        },
-
-
-        /* =========================
-           MARS 2027
-        ========================= */
-
-        {
-            nom: "Jeudi Saint",
-            categorie: "ferie",
-            debut: "2027-03-25",
-            fin: "2027-03-25",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Vacances de Pâques."
-        },
-
-        {
-            nom: "Vendredi Saint",
-            categorie: "ferie",
-            debut: "2027-03-26",
-            fin: "2027-03-26",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Vacances de Pâques."
-        },
-
-        {
-            nom: "Pâques",
-            categorie: "fete",
-            debut: "2027-03-28",
-            fin: "2027-03-28",
-            cours: "non",
-            couleur: "normal",
-            observation:
-                "Fête de Pâques."
-        },
-
-
-        /* =========================
-           MAI 2027
-        ========================= */
-
-        {
-            nom: "Fête du Travail",
-            categorie: "ferie",
-            debut: "2027-05-01",
-            fin: "2027-05-01",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Fête du Travail et des Travailleurs."
-        },
-
-        {
-            nom: "Ascension",
-            categorie: "ferie",
-            debut: "2027-05-06",
-            fin: "2027-05-06",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Fête religieuse."
-        },
-
-        {
-            nom: "Jour des Éducateurs",
-            categorie: "commemoration",
-            debut: "2027-05-17",
-            fin: "2027-05-17",
-            cours: "non",
-            couleur: "important",
-            observation:
-                "Journée indiquée dans le calendrier scolaire du MENFP."
-        },
-
-        {
-            nom: "Fête du Drapeau et de l'Université",
-            categorie: "ferie",
-            debut: "2027-05-18",
-            fin: "2027-05-18",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Fête du Drapeau et de l'Université."
-        },
-
-        {
-            nom: "Fête-Dieu",
-            categorie: "ferie",
-            debut: "2027-05-27",
-            fin: "2027-05-27",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Fête-Dieu."
-        },
-
-        {
-            nom: "Fête des Mères",
-            categorie: "fete",
-            debut: "2027-05-30",
-            fin: "2027-05-30",
-            cours: "non",
-            couleur: "normal",
-            observation:
-                "Fête des Mères. Ce n'est pas automatiquement une fermeture scolaire."
-        },
-
-
-        /* =========================
-           JUIN 2027
-        ========================= */
-
-        {
-            nom: "Fête des Pères",
-            categorie: "fete",
-            debut: "2027-06-20",
-            fin: "2027-06-20",
-            cours: "non",
-            couleur: "normal",
-            observation:
-                "Fête des Pères."
-        },
-
-
-        /* =========================
-           JUILLET 2027
-        ========================= */
-
-        {
-            nom: "Début des grandes vacances",
-            categorie: "vacances",
-            debut: "2027-07-02",
-            fin: "2027-08-31",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Fin de l'année scolaire et début des vacances d'été."
-        },
-
-
-        /* =========================
-           AOÛT 2027
-        ========================= */
-
-        {
-            nom: "Assomption",
-            categorie: "ferie",
-            debut: "2027-08-15",
-            fin: "2027-08-15",
-            cours: "oui",
-            couleur: "important",
-            observation:
-                "Jour férié."
-        }
-
-    ];
-
-
-    sauvegarder();
-
+    // Les données initiales sont désormais gérées exclusivement par PostgreSQL.
 }
-
 
 /* =====================================================
    SAUVEGARDE
 ===================================================== */
 
-function sauvegarder() {
-
-    localStorage.setItem(
-        CLE_VACANCES,
-        JSON.stringify(donnees)
-    );
-
+async function sauvegarder() {
+    // Compatibilité : les écritures passent désormais par /api/vacations/index.php.
 }
-
 
 /* =====================================================
    ENREGISTRER
 ===================================================== */
 
-function enregistrerEvenement() {
+async function enregistrerEvenement() {
+    const permission = indexModification === null ? "vacances.create" : "vacances.update";
+    if (!IMCAuth.requirePermission(permission)) {
+        afficherMessage("Permission refusée.", "erreur");
+        return;
+    }
 
-    // Vérifier la permission appropriée selon l'action
-    if (indexModification === null) {
-        if (!IMCAuth.requirePermission("vacances.create")) {
-            afficherMessage("Permission refusée pour la création.", "erreur");
-            return;
+    const nom = document.getElementById("nom").value.trim();
+    const debut = document.getElementById("dateDebut").value;
+    const fin = document.getElementById("dateFin").value;
+
+    if (!nom) return afficherMessage("Veuillez saisir le nom de l'événement.", "erreur");
+    if (!debut || !fin) return afficherMessage("Veuillez saisir les dates.", "erreur");
+    if (debut > fin) return afficherMessage("La date de début ne peut pas être après la date de fin.", "erreur");
+
+    try {
+        if (indexModification === null) {
+            await apiJson("/api/vacations/index.php", {
+                method: "POST",
+                body: JSON.stringify({ name: nom, start_date: debut, end_date: fin })
+            });
+            afficherMessage("Événement enregistré.", "succes");
+        } else {
+            const liste = donnees[anneeSelectionnee] || [];
+            const evenement = liste[indexModification];
+            if (!evenement) return;
+            await apiJson("/api/vacations/index.php?id=" + encodeURIComponent(evenement.id), {
+                method: "PATCH",
+                body: JSON.stringify({ name: nom, start_date: debut, end_date: fin })
+            });
+            afficherMessage("Événement modifié.", "succes");
         }
-    } else {
-        if (!IMCAuth.requirePermission("vacances.update")) {
-            afficherMessage("Permission refusée pour la modification.", "erreur");
-            return;
-        }
+        await chargerDonnees();
+        indexModification = null;
+        nettoyerFormulaire();
+    } catch (error) {
+        afficherMessage(error.message, "erreur");
     }
-
-    const nom =
-        document.getElementById("nom")
-        .value.trim();
-
-    const categorie =
-        document.getElementById("categorie")
-        .value;
-
-    const debut =
-        document.getElementById("dateDebut")
-        .value;
-
-    const fin =
-        document.getElementById("dateFin")
-        .value;
-
-    const cours =
-        document.getElementById("cours")
-        .value;
-
-    const couleur =
-        document.getElementById("couleur")
-        .value;
-
-    const observation =
-        document.getElementById("observation")
-        .value.trim();
-
-
-    if (!nom) {
-
-        afficherMessage(
-            "Veuillez saisir le nom de l'événement.",
-            "erreur"
-        );
-
-        return;
-
-    }
-
-
-    if (!debut || !fin) {
-
-        afficherMessage(
-            "Veuillez saisir les dates.",
-            "erreur"
-        );
-
-        return;
-
-    }
-
-
-    if (debut > fin) {
-
-        afficherMessage(
-            "La date de début ne peut pas être après la date de fin.",
-            "erreur"
-        );
-
-        return;
-
-    }
-
-
-    if (!donnees[anneeSelectionnee]) {
-
-        donnees[anneeSelectionnee] = [];
-
-    }
-
-
-    const evenement = {
-
-        nom,
-        categorie,
-        debut,
-        fin,
-        cours,
-        couleur,
-        observation
-
-    };
-
-
-    if (indexModification === null) {
-
-        donnees[anneeSelectionnee]
-            .push(evenement);
-
-        afficherMessage(
-            "Événement enregistré.",
-            "succes"
-        );
-
-    } else {
-
-        donnees[anneeSelectionnee]
-            [indexModification] = evenement;
-
-        afficherMessage(
-            "Événement modifié.",
-            "succes"
-        );
-
-    }
-
-
-    sauvegarder();
-
-    indexModification = null;
-
-    nettoyerFormulaire();
-
-    afficherListe();
-
-    afficherCalendrier();
-
 }
-
 
 /* =====================================================
    MODIFIER
@@ -1897,47 +1400,27 @@ function modifierEvenement(index) {
    SUPPRIMER
 ===================================================== */
 
-function supprimerEvenement(index) {
-
+async function supprimerEvenement(index) {
     if (!IMCAuth.requirePermission("vacances.delete")) {
         alert("Permission refusée.");
         return;
     }
+    const liste = donnees[anneeSelectionnee] || [];
+    const evenement = liste[index];
+    if (!evenement) return;
+    if (!confirm("Voulez-vous vraiment archiver cet événement ?")) return;
 
-    const liste =
-        donnees[anneeSelectionnee] || [];
-
-    if (!liste[index]) {
-        return;
+    try {
+        await apiJson("/api/vacations/index.php?id=" + encodeURIComponent(evenement.id), {
+            method: "PATCH",
+            body: JSON.stringify({ status: "ARCHIVED" })
+        });
+        await chargerDonnees();
+        afficherMessage("Événement archivé.", "succes");
+    } catch (error) {
+        afficherMessage(error.message, "erreur");
     }
-
-
-    if (
-        !confirm(
-            "Voulez-vous vraiment supprimer cet événement ?"
-        )
-    ) {
-
-        return;
-
-    }
-
-
-    liste.splice(index, 1);
-
-    sauvegarder();
-
-    afficherListe();
-
-    afficherCalendrier();
-
-    afficherMessage(
-        "Événement supprimé.",
-        "succes"
-    );
-
 }
-
 
 /* =====================================================
    ANNULER
@@ -2561,14 +2044,7 @@ function afficherMessage(
    DÉMARRAGE
 ===================================================== */
 
-document.addEventListener(
-    "DOMContentLoaded",
-    function() {
-
-        chargerDonnees();
-
-    }
-);
+document.addEventListener("DOMContentLoaded", function () { chargerDonnees(); });
 
 </script>
 
