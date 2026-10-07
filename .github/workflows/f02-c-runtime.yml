@@ -1,0 +1,190 @@
+name: F-02-C results and attendance runtime proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/grades/index.php'
+      - 'api/attendance/index.php'
+      - 'database/migrations/**'
+      - 'database/schema.sql'
+      - '.github/workflows/f02-c-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  f02-c-runtime:
+    name: F-02-C PostgreSQL results and attendance
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and migrations
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261006200000_normalize_rbac_role_names.sql
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261007130000_f02_b_reference_data.sql
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261007131000_f02_b_subject_status.sql
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/migrations/20261007140000_f02_c_results_attendance.sql
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles(id,name)
+          VALUES ('00000000-0000-0000-0000-000000003001','Enseignant')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO permissions(name)
+          VALUES
+            ('resultats.read'),('resultats.create'),('resultats.update'),
+            ('presences.read'),('presences.create'),('presences.update')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000003001', id
+          FROM permissions
+          WHERE name IN (
+            'resultats.read','resultats.create','resultats.update',
+            'presences.read','presences.create','presences.update'
+          )
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO users(id,username,password_hash,role_id)
+          VALUES (
+            '00000000-0000-0000-0000-000000003011',
+            'f02c-runtime',
+            crypt('F02C-Test-2026!',gen_salt('bf')),
+            '00000000-0000-0000-0000-000000003001'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO teachers(id,first_name,last_name,status)
+          VALUES ('00000000-0000-0000-0000-000000003021','F02C','Teacher','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO user_teachers(user_id,teacher_id)
+          VALUES ('00000000-0000-0000-0000-000000003011','00000000-0000-0000-0000-000000003021')
+          ON CONFLICT (user_id) DO NOTHING;
+
+          INSERT INTO levels(id,code,name)
+          VALUES ('00000000-0000-0000-0000-000000003031','F02C','F02C Level')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO classes(id,code,name,level_id,status)
+          VALUES ('00000000-0000-0000-0000-000000003041','F02C-CLASS','F02C Class','00000000-0000-0000-0000-000000003031','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO school_years(id,label,start_date,end_date,status)
+          VALUES ('00000000-0000-0000-0000-000000003051','F02C-2026-2027','2026-09-01','2027-07-15','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO subjects(id,code,name,coefficient,status)
+          VALUES
+            ('00000000-0000-0000-0000-000000003061','F02C-MATH','F02C Math',2,'ACTIVE'),
+            ('00000000-0000-0000-0000-000000003062','F02C-OTHER','F02C Other',1,'ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO teacher_class_subjects(teacher_id,class_id,subject_id,status)
+          VALUES (
+            '00000000-0000-0000-0000-000000003021',
+            '00000000-0000-0000-0000-000000003041',
+            '00000000-0000-0000-0000-000000003061',
+            'ACTIVE'
+          )
+          ON CONFLICT (teacher_id,class_id,subject_id) DO NOTHING;
+
+          INSERT INTO students(id,matricule,last_name,first_name,status)
+          VALUES ('00000000-0000-0000-0000-000000003071','F02C-001','Runtime','Student','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO enrollments(id,student_id,class_id,school_year_id,status,enrollment_date)
+          VALUES (
+            '00000000-0000-0000-0000-000000003081',
+            '00000000-0000-0000-0000-000000003071',
+            '00000000-0000-0000-0000-000000003041',
+            '00000000-0000-0000-0000-000000003051',
+            'ACTIVE',
+            '2026-09-01'
+          )
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+
+      - name: PHP syntax
+        run: |
+          set -euo pipefail
+          php -l api/grades/index.php
+          php -l api/attendance/index.php
+          php -l config/auth.php
+
+      - name: Start API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/f02c-api.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove PostgreSQL results and attendance authority
+        run: |
+          set -euo pipefail
+          BASE='http://127.0.0.1:8090'
+          COOKIE='/tmp/f02c.cookies'
+
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H 'Content-Type: application/json'             -d '{"username":"f02c-runtime","password":"F02C-Test-2026!"}'             "$BASE/api/auth/login.php")"
+
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+
+          META="$(curl -fsS -b "$COOKIE" "$BASE/api/grades/index.php?school_year_id=00000000-0000-0000-0000-000000003051")"
+          printf '%s' "$META" | grep -q '"enrollment_id":"00000000-0000-0000-0000-000000003081"'
+          printf '%s' "$META" | grep -q '"subject_name":"F02C Math"'
+
+          GRADE="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000003081","subject_id":"00000000-0000-0000-0000-000000003061","grade":17.5,"grade_date":"2026-10-07"}'             "$BASE/api/grades/index.php")"
+          printf '%s' "$GRADE" | grep -q '"grade":"17.50"'
+
+          ATT="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000003081","attendance_date":"2026-10-07","status":"PRESENT","comment":"F02C runtime"}'             "$BASE/api/attendance/index.php")"
+          printf '%s' "$ATT" | grep -q '"status":"PRESENT"'
+
+          set +e
+          DENIED="$(curl -sS -o /tmp/f02c-denied.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000003081","subject_id":"00000000-0000-0000-0000-000000003062","grade":12,"grade_date":"2026-10-07"}'             "$BASE/api/grades/index.php")"
+          set -e
+          test "$DENIED" = "404"
+          grep -q 'hors périmètre' /tmp/f02c-denied.json
+
+          set +e
+          DUP="$(curl -sS -o /tmp/f02c-dup.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000003081","attendance_date":"2026-10-07","status":"LATE"}'             "$BASE/api/attendance/index.php")"
+          set -e
+          test "$DUP" = "409"
+
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT grade::text FROM grades WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND subject_id='00000000-0000-0000-0000-000000003061' AND grade_date='2026-10-07';" | grep -qx '17.50'
+
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT status FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';" | grep -qx 'PRESENT'
+
+          echo 'F-02-C RUNTIME PROOF: PASS'
