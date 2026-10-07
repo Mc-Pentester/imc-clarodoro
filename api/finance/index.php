@@ -150,11 +150,48 @@ if ($method === 'GET') {
     $scheduleStmt = $pdo->prepare($scheduleSql);
     $scheduleStmt->execute($scheduleParams);
 
+    $enrollmentSql = "SELECT
+                          e.id AS enrollment_id,
+                          e.student_id,
+                          e.class_id,
+                          c.name AS class_name,
+                          e.school_year_id,
+                          sy.label AS school_year_label,
+                          s.matricule,
+                          s.last_name,
+                          s.first_name
+                      FROM enrollments e
+                      INNER JOIN students s ON s.id = e.student_id
+                      INNER JOIN classes c ON c.id = e.class_id
+                      INNER JOIN school_years sy ON sy.id = e.school_year_id
+                      WHERE e.status = 'ACTIVE'";
+    $enrollmentParams = [];
+    if ($yearId !== null) {
+        $enrollmentSql .= ' AND e.school_year_id = :enrollment_year_id';
+        $enrollmentParams[':enrollment_year_id'] = $yearId;
+    }
+    if ($studentId !== null) {
+        $enrollmentSql .= ' AND e.student_id = :enrollment_student_id';
+        $enrollmentParams[':enrollment_student_id'] = $studentId;
+    }
+    $enrollmentSql .= ' ORDER BY s.last_name, s.first_name, e.id';
+    $enrollmentStmt = $pdo->prepare($enrollmentSql);
+    $enrollmentStmt->execute($enrollmentParams);
+
+    $schoolYearStmt = $pdo->query(
+        "SELECT id, label, start_date, end_date, status
+         FROM school_years
+         WHERE status IN ('PLANNED','ACTIVE','CLOSED')
+         ORDER BY start_date DESC, id DESC"
+    );
+
     echo json_encode([
         'success' => true,
         'invoices' => $invoices,
         'payments' => $paymentStmt->fetchAll(),
         'schedules' => $scheduleStmt->fetchAll(),
+        'enrollments' => $enrollmentStmt->fetchAll(),
+        'school_years' => $schoolYearStmt->fetchAll(),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
