@@ -1,0 +1,85 @@
+name: F-08-C database configuration runtime proof
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  database-config-runtime:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo, pgsql, pdo_pgsql
+          coverage: none
+
+      - name: Apply schema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          PGPASSWORD="$DB_PASSWORD" psql \
+            -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" \
+            -d "$DB_NAME" -f database/schema.sql
+
+      - name: PHP syntax
+        run: php -l config/database.php
+
+      - name: Missing configuration fails closed
+        run: |
+          set -e
+          if DB_HOST= php -r 'require "config/database.php"; getDatabaseConnection();'; then
+            echo "ERROR: missing DB_HOST was accepted"
+            exit 1
+          fi
+
+      - name: Invalid port fails closed
+        run: |
+          set -e
+          if DB_PORT=invalid php -r 'require "config/database.php"; getDatabaseConnection();'; then
+            echo "ERROR: invalid DB_PORT was accepted"
+            exit 1
+          fi
+
+      - name: Complete configuration connects
+        run: |
+          set -e
+          php -r '
+            require "config/database.php";
+            $pdo = getDatabaseConnection();
+            $value = $pdo->query("SELECT 1")->fetchColumn();
+            if ((int) $value !== 1) {
+                fwrite(STDERR, "ERROR: SELECT 1 did not return 1\n");
+                exit(1);
+            }
+            echo "Database connection: PASS\n";
+          '
+
+      - name: Runtime proof
+        run: echo "F-08-C RUNTIME PROOF: PASS"
