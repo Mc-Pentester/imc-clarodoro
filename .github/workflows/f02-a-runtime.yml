@@ -1,0 +1,145 @@
+name: F-02-A student server authority runtime proof
+
+on:
+  push:
+    branches: [main, feature/f02-a-student-server-authority]
+    paths:
+      - 'api/students/index.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - 'index.html'
+      - '.github/workflows/f02-a-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  f02-a-runtime:
+    name: F-02-A PostgreSQL source of truth
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and required migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006200000_normalize_rbac_role_names.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261007100000_add_student_profile_data.sql
+
+      - name: Seed isolated fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name) VALUES
+            ('00000000-0000-0000-0000-000000001001', 'PDG');
+
+          INSERT INTO permissions (id, name) VALUES
+            ('00000000-0000-0000-0000-000000001002', 'eleves.create'),
+            ('00000000-0000-0000-0000-000000001003', 'eleves.read'),
+            ('00000000-0000-0000-0000-000000001004', 'eleves.update');
+
+          INSERT INTO role_permissions (role_id, permission_id) VALUES
+            ('00000000-0000-0000-0000-000000001001', '00000000-0000-0000-0000-000000001002'),
+            ('00000000-0000-0000-0000-000000001001', '00000000-0000-0000-0000-000000001003'),
+            ('00000000-0000-0000-0000-000000001001', '00000000-0000-0000-0000-000000001004');
+
+          INSERT INTO users (id, username, password_hash, role_id)
+          VALUES (
+            '00000000-0000-0000-0000-000000001005',
+            'f02a-runtime',
+            crypt('F02A-Test-2026!', gen_salt('bf')),
+            '00000000-0000-0000-0000-000000001001'
+          );
+          SQL
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l api/students/index.php
+          php -l config/auth.php
+          php -l config/database.php
+
+      - name: Start PHP API
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/f02a-php.log 2>&1 &
+          echo $! >/tmp/f02a-php.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          test -f /tmp/f02a-php.pid
+
+      - name: Prove server authority and PostgreSQL persistence
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LOGIN="$(curl -fsS -c /tmp/f02a.cookies -b /tmp/f02a.cookies             -H 'Content-Type: application/json'             -d '{"username":"f02a-runtime","password":"F02A-Test-2026!"}'             http://127.0.0.1:8090/api/auth/login.php)"
+
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["csrfToken"] ?? "";')"
+          test -n "$CSRF"
+
+          CREATE="$(curl -fsS -c /tmp/f02a.cookies -b /tmp/f02a.cookies             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"matricule":"F02A-001","last_name":"Serveur","first_name":"Autoritaire","sex":"M","profile_data":{"classe":"7e","anneeScolaire":"2026 - 2027","nisu":"F02A-001","contact":"50900000000"}}'             http://127.0.0.1:8090/api/students/index.php)"
+
+          ID="$(printf '%s' "$CREATE" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["student"]["id"] ?? "";')"
+          test -n "$ID"
+
+          READ="$(curl -fsS -b /tmp/f02a.cookies http://127.0.0.1:8090/api/students/index.php)"
+          printf '%s' "$READ" | grep -q '"matricule":"F02A-001"'
+          printf '%s' "$READ" | grep -q '"first_name":"Autoritaire"'
+          printf '%s' "$READ" | grep -q '"classe":"7e"'
+
+          curl -fsS -b /tmp/f02a.cookies             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -X PATCH             -d '{"profile_data":{"classe":"8e","anneeScolaire":"2026 - 2027","nisu":"F02A-001","contact":"50911111111"}}'             "http://127.0.0.1:8090/api/students/index.php?id=$ID" >/tmp/f02a-update.json
+
+          grep -q '"classe":"8e"' /tmp/f02a-update.json
+
+          DB_VALUE="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT profile_data->>'classe' FROM students WHERE id = '$ID';")"
+          test "$DB_VALUE" = "8e"
+
+          if grep -nE 'localStorage\.(getItem|setItem).*imc_students|STORAGE_KEY' index.html; then
+            echo 'FAIL: browser localStorage remains the student source of truth'
+            exit 1
+          fi
+
+          echo 'F-02-A RUNTIME PROOF: PASS'

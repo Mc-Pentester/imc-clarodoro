@@ -975,7 +975,6 @@ document.addEventListener("DOMContentLoaded", function() {
   IMCAuth.requireAuth("personnel.html");
 });
 
-const STORAGE_KEY = "imc_students";
 const ACTIVE_YEAR_KEY = "imc_active_year";
 
     let students = [];
@@ -1006,9 +1005,15 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
 
             if (!ok) return;
 
-            chargerEleves();
-
             creerAnnees();
+
+            chargerEleves().then(function () {
+                afficherEleves();
+            }).catch(function (error) {
+                console.error(error);
+                afficherMessage("Impossible de charger les élèves depuis le serveur.");
+                afficherEleves();
+            });
 
             document
                 .getElementById("searchStudent")
@@ -1050,11 +1055,7 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                     enregistrerEleve
                 );
 
-
-            afficherEleves();
-
             });
-
         }
     );
 
@@ -1134,38 +1135,95 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
 
 
     /* ==================================================
-       STORAGE
+       SERVER STORAGE — F-02-A
     ================================================== */
 
-    function chargerEleves() {
+    function adapterEleveServeur(student) {
+        const profile = student && student.profile_data && typeof student.profile_data === "object"
+            ? student.profile_data
+            : {};
 
-        try {
+        return {
+            id: student.id,
+            matricule: student.matricule || "",
+            nom: student.last_name || "",
+            prenom: student.first_name || "",
+            sexe: student.sex || "",
+            dateNaissance: student.date_of_birth || "",
+            lieuNaissance: profile.lieuNaissance || "",
+            departement: profile.departement || "",
+            commune: profile.commune || "",
+            sectionCommunale: profile.sectionCommunale || "",
+            classe: profile.classe || "",
+            nisu: profile.nisu || student.matricule || "",
+            contact: profile.contact || student.phone || "",
+            ninuParent: profile.ninuParent || "",
+            documentInscription: profile.documentInscription || "",
+            photo: profile.photo || "",
+            anneeScolaire: profile.anneeScolaire || anneeActuelle(),
+            status: student.status || "ACTIVE"
+        };
+    }
 
-            students =
-                JSON.parse(
-                    localStorage.getItem(
-                        STORAGE_KEY
-                    )
-                ) || [];
-
-        } catch (error) {
-
-            students = [];
-
+    async function chargerEleves() {
+        const response = await fetch("api/students/index.php", {
+            method: "GET",
+            credentials: "same-origin",
+            headers: { "Accept": "application/json" }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || "Erreur de chargement des élèves");
         }
-
+        students = Array.isArray(data.students)
+            ? data.students.map(adapterEleveServeur)
+            : [];
+        return students;
     }
 
+    async function sauvegarderEleveServeur(eleve, id) {
+        const payload = {
+            matricule: eleve.matricule,
+            last_name: eleve.nom,
+            first_name: eleve.prenom,
+            date_of_birth: eleve.dateNaissance || "",
+            sex: eleve.sexe || "",
+            address: "",
+            phone: eleve.contact || "",
+            status: eleve.status || "ACTIVE",
+            profile_data: {
+                lieuNaissance: eleve.lieuNaissance,
+                departement: eleve.departement,
+                commune: eleve.commune,
+                sectionCommunale: eleve.sectionCommunale,
+                classe: eleve.classe,
+                nisu: eleve.nisu,
+                contact: eleve.contact,
+                ninuParent: eleve.ninuParent,
+                documentInscription: eleve.documentInscription,
+                photo: eleve.photo,
+                anneeScolaire: eleve.anneeScolaire
+            }
+        };
 
-    function sauvegarderEleves() {
-
-        localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify(students)
+        const response = await fetch(
+            id ? "api/students/index.php?id=" + encodeURIComponent(id) : "api/students/index.php",
+            {
+                method: id ? "PATCH" : "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                body: JSON.stringify(payload)
+            }
         );
-
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || "Erreur d'enregistrement");
+        }
+        return adapterEleveServeur(data.student);
     }
-
 
     /* ==================================================
        AFFICHER ÉLÈVES
@@ -1324,7 +1382,7 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                 [
                     ["Dossier", "btn-primary", voirDossier],
                     ["Modifier", "btn-warning", modifierEleve],
-                    ["Supprimer", "btn-danger", supprimerEleve]
+                    ["Archiver", "btn-danger", supprimerEleve]
                 ].forEach(function (action) {
                     const button = document.createElement("button");
                     button.type = "button";
@@ -1348,377 +1406,145 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
 
 
     /* ==================================================
-       ENREGISTRER
+       ENREGISTRER — F-02-A
     ================================================== */
 
-    function enregistrerEleve(event) {
-
+    async function enregistrerEleve(event) {
         event.preventDefault();
 
-        const id =
-            document.getElementById(
-                "studentId"
-            ).value;
+        const id = document.getElementById("studentId").value;
+        const permission = id ? "eleves.update" : "eleves.create";
 
-        // Vérifier la permission appropriée selon l'action
-        if (id) {
-            if (!IMCAuth.requirePermission("eleves.update")) {
-                afficherMessage("Permission refusée pour la modification.");
-                return;
-            }
-        } else {
-            if (!IMCAuth.requirePermission("eleves.create")) {
-                afficherMessage("Permission refusée pour la création.");
-                return;
-            }
-        }
-
-
-        const eleve = {
-
-            id:
-                id ||
-                Date.now().toString(),
-
-            nom:
-                document
-                    .getElementById("nom")
-                    .value
-                    .trim(),
-
-            prenom:
-                document
-                    .getElementById("prenom")
-                    .value
-                    .trim(),
-
-            sexe:
-                document
-                    .getElementById("sexe")
-                    .value,
-
-            dateNaissance:
-                document
-                    .getElementById(
-                        "dateNaissance"
-                    )
-                    .value,
-
-            lieuNaissance:
-                document
-                    .getElementById(
-                        "lieuNaissance"
-                    )
-                    .value
-                    .trim(),
-
-            departement:
-                document
-                    .getElementById(
-                        "departement"
-                    )
-                    .value
-                    .trim(),
-
-            commune:
-                document
-                    .getElementById(
-                        "commune"
-                    )
-                    .value
-                    .trim(),
-
-            sectionCommunale:
-                document
-                    .getElementById(
-                        "sectionCommunale"
-                    )
-                    .value
-                    .trim(),
-
-            classe:
-                document
-                    .getElementById(
-                        "classe"
-                    )
-                    .value,
-
-            nisu:
-                document
-                    .getElementById(
-                        "nisu"
-                    )
-                    .value
-                    .trim(),
-
-            contact:
-                document
-                    .getElementById(
-                        "contact"
-                    )
-                    .value
-                    .trim(),
-
-            ninuParent:
-                document
-                    .getElementById(
-                        "ninuParent"
-                    )
-                    .value
-                    .trim(),
-
-            documentInscription:
-                document
-                    .getElementById(
-                        "documentInscription"
-                    )
-                    .value,
-
-            photo:
-                photoActuelle,
-
-            anneeScolaire:
-                anneeActuelle()
-
-        };
-
-
-        if (id) {
-
-            const index =
-                students.findIndex(
-                    function (student) {
-                        return student.id === id;
-                    }
-                );
-
-
-            if (index !== -1) {
-
-                students[index] =
-                    eleve;
-
-            }
-
-        } else {
-
-            students.push(eleve);
-
-        }
-
-
-        sauvegarderEleves();
-
-        afficherEleves();
-
-        afficherMessage(
-            "Les informations de l'élève ont été enregistrées avec succès."
-        );
-
-        annulerFormulaire();
-
-    }
-
-
-    /* ==================================================
-       MODIFIER
-    ================================================== */
-
-    function modifierEleve(id) {
-
-        const student =
-            students.find(
-                function (student) {
-                    return student.id === id;
-                }
-            );
-
-
-        if (!student) {
+        if (!IMCAuth.requirePermission(permission)) {
+            afficherMessage("Permission refusée.");
             return;
         }
 
+        const nisu = document.getElementById("nisu").value.trim();
+        const existing = id ? students.find(function (student) { return student.id === id; }) : null;
 
-        document.getElementById(
-            "studentId"
-        ).value = student.id;
+        const eleve = {
+            matricule: nisu || (existing && existing.matricule) || ("IMC-" + Date.now()),
+            nom: document.getElementById("nom").value.trim(),
+            prenom: document.getElementById("prenom").value.trim(),
+            sexe: document.getElementById("sexe").value,
+            dateNaissance: document.getElementById("dateNaissance").value,
+            lieuNaissance: document.getElementById("lieuNaissance").value.trim(),
+            departement: document.getElementById("departement").value.trim(),
+            commune: document.getElementById("commune").value.trim(),
+            sectionCommunale: document.getElementById("sectionCommunale").value.trim(),
+            classe: document.getElementById("classe").value,
+            nisu: nisu,
+            contact: document.getElementById("contact").value.trim(),
+            ninuParent: document.getElementById("ninuParent").value.trim(),
+            documentInscription: document.getElementById("documentInscription").value,
+            photo: photoActuelle,
+            anneeScolaire: anneeActuelle(),
+            status: "ACTIVE"
+        };
 
-
-        document.getElementById(
-            "nom"
-        ).value =
-            student.nom || "";
-
-
-        document.getElementById(
-            "prenom"
-        ).value =
-            student.prenom || "";
-
-
-        document.getElementById(
-            "sexe"
-        ).value =
-            student.sexe || "";
-
-
-        document.getElementById(
-            "dateNaissance"
-        ).value =
-            student.dateNaissance || "";
-
-
-        document.getElementById(
-            "lieuNaissance"
-        ).value =
-            student.lieuNaissance || "";
-
-
-        document.getElementById(
-            "departement"
-        ).value =
-            student.departement || "";
-
-
-        document.getElementById(
-            "commune"
-        ).value =
-            student.commune || "";
-
-
-        document.getElementById(
-            "sectionCommunale"
-        ).value =
-            student.sectionCommunale || "";
-
-
-        document.getElementById(
-            "classe"
-        ).value =
-            student.classe || "";
-
-
-        document.getElementById(
-            "nisu"
-        ).value =
-            student.nisu || "";
-
-
-        document.getElementById(
-            "contact"
-        ).value =
-            student.contact || "";
-
-
-        document.getElementById(
-            "ninuParent"
-        ).value =
-            student.ninuParent || "";
-
-
-        document.getElementById(
-            "documentInscription"
-        ).value =
-            student.documentInscription || "";
-
-
-        photoActuelle =
-            student.photo || "";
-
-
-        const preview =
-            document.getElementById(
-                "photoPreview"
-            );
-
-
-        if (photoActuelle) {
-
-            preview.src =
-                photoActuelle;
-
-            preview.style.display =
-                "block";
-
-        } else {
-
-            preview.style.display =
-                "none";
-
+        try {
+            const saved = await sauvegarderEleveServeur(eleve, id || null);
+            if (id) {
+                const index = students.findIndex(function (student) { return student.id === id; });
+                if (index !== -1) students[index] = saved;
+            } else {
+                students.unshift(saved);
+            }
+            afficherEleves();
+            afficherMessage("Les informations de l'élève ont été enregistrées avec succès.");
+            annulerFormulaire();
+        } catch (error) {
+            console.error(error);
+            afficherMessage(error.message || "Échec de l'enregistrement.");
         }
-
-
-        document.getElementById(
-            "formTitle"
-        ).textContent =
-            "Modifier l'élève";
-
-
-        document.getElementById(
-            "studentFormCard"
-        ).scrollIntoView({
-            behavior: "smooth"
-        });
-
     }
 
-
     /* ==================================================
-       SUPPRIMER
+       MODIFIER — F-02-A
     ================================================== */
 
-    function supprimerEleve(id) {
+    function modifierEleve(id) {
+        const student = students.find(function (student) {
+            return student.id === id;
+        });
+        if (!student) return;
 
-        if (!IMCAuth.requirePermission("eleves.delete")) {
+        document.getElementById("studentId").value = student.id;
+        document.getElementById("nom").value = student.nom || "";
+        document.getElementById("prenom").value = student.prenom || "";
+        document.getElementById("sexe").value = student.sexe || "";
+        document.getElementById("dateNaissance").value = student.dateNaissance || "";
+        document.getElementById("lieuNaissance").value = student.lieuNaissance || "";
+        document.getElementById("departement").value = student.departement || "";
+        document.getElementById("commune").value = student.commune || "";
+        document.getElementById("sectionCommunale").value = student.sectionCommunale || "";
+        document.getElementById("classe").value = student.classe || "";
+        document.getElementById("nisu").value = student.nisu || "";
+        document.getElementById("contact").value = student.contact || "";
+        document.getElementById("ninuParent").value = student.ninuParent || "";
+        document.getElementById("documentInscription").value = student.documentInscription || "";
+
+        photoActuelle = student.photo || "";
+        const preview = document.getElementById("photoPreview");
+        if (photoActuelle && estSourceImageSûre(photoActuelle)) {
+            preview.src = photoActuelle;
+            preview.style.display = "block";
+        } else {
+            preview.removeAttribute("src");
+            preview.style.display = "none";
+        }
+
+        document.getElementById("formTitle").textContent = "Modifier l'élève";
+        document.getElementById("studentFormCard").scrollIntoView({behavior: "smooth"});
+    }
+
+    /* ==================================================
+       ARCHIVER — F-02-A
+    ================================================== */
+
+    async function supprimerEleve(id) {
+        if (!IMCAuth.requirePermission("eleves.update")) {
             alert("Permission refusée.");
             return;
         }
 
-        const student =
-            students.find(
-                function (student) {
-                    return student.id === id;
-                }
-            );
+        const student = students.find(function (student) {
+            return student.id === id;
+        });
+        if (!student) return;
 
-
-        if (!student) {
+        if (!confirm("Voulez-vous archiver " + student.nom + " " + student.prenom + " ?")) {
             return;
         }
 
-
-        if (
-            !confirm(
-                "Voulez-vous vraiment supprimer " +
-                student.nom +
-                " " +
-                student.prenom +
-                " ?"
-            )
-        ) {
-            return;
-        }
-
-
-        students =
-            students.filter(
-                function (student) {
-                    return student.id !== id;
+        try {
+            const response = await fetch(
+                "api/students/index.php?id=" + encodeURIComponent(id),
+                {
+                    method: "PATCH",
+                    credentials: "same-origin",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
+                    body: JSON.stringify({status: "INACTIVE"})
                 }
             );
-
-
-        sauvegarderEleves();
-
-        afficherEleves();
-
-
-        afficherMessage(
-            "L'élève a été supprimé."
-        );
-
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || "Échec de l'archivage");
+            }
+            students = students.filter(function (item) {
+                return item.id !== id;
+            });
+            afficherEleves();
+            afficherMessage("L'élève a été archivé.");
+        } catch (error) {
+            console.error(error);
+            afficherMessage(error.message || "Échec de l'archivage.");
+        }
     }
-
 
     /* ==================================================
        NOUVEAU

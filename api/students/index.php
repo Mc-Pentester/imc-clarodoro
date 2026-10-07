@@ -27,6 +27,7 @@ if ($method === 'GET') {
                 sex,
                 address,
                 phone,
+                profile_data,
                 status,
                 created_at,
                 updated_at
@@ -172,6 +173,18 @@ elseif ($method === 'POST') {
         $status = $data['status'];
     }
 
+    $profileData = [];
+    if (array_key_exists('profile_data', $data)) {
+        if (!is_array($data['profile_data'])) {
+            apiError(422, 'profile_data doit être un objet JSON');
+        }
+        $encodedProfileData = json_encode($data['profile_data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($encodedProfileData === false || strlen($encodedProfileData) > 65536) {
+            apiError(422, 'profile_data invalide ou trop volumineux');
+        }
+        $profileData = $data['profile_data'];
+    }
+
     // Refuser les champs générés par le serveur
     $forbiddenFields = ['id', 'created_at', 'updated_at'];
     foreach ($forbiddenFields as $field) {
@@ -181,7 +194,7 @@ elseif ($method === 'POST') {
     }
 
     // Refuser les champs inconnus
-    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status'];
+    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data'];
     foreach (array_keys($data) as $field) {
         if (!in_array($field, $allowedFields, true)) {
             apiError(422, "Champ inconnu: $field");
@@ -199,6 +212,7 @@ elseif ($method === 'POST') {
                 sex,
                 address,
                 phone,
+                profile_data,
                 status
             ) VALUES (
                 :matricule,
@@ -208,6 +222,7 @@ elseif ($method === 'POST') {
                 :sex,
                 :address,
                 :phone,
+                CAST(:profile_data AS jsonb),
                 :status
             ) RETURNING
                 id,
@@ -218,6 +233,7 @@ elseif ($method === 'POST') {
                 sex,
                 address,
                 phone,
+                profile_data,
                 status,
                 created_at,
                 updated_at'
@@ -231,6 +247,7 @@ elseif ($method === 'POST') {
             ':sex' => $sex,
             ':address' => $address,
             ':phone' => $phone,
+            ':profile_data' => json_encode($profileData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ':status' => $status,
         ]);
 
@@ -267,6 +284,18 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
 
     $data = readJsonBody();
 
+    $profileData = [];
+    if (array_key_exists('profile_data', $data)) {
+        if (!is_array($data['profile_data'])) {
+            apiError(422, 'profile_data doit être un objet JSON');
+        }
+        $encodedProfileData = json_encode($data['profile_data'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($encodedProfileData === false || strlen($encodedProfileData) > 65536) {
+            apiError(422, 'profile_data invalide ou trop volumineux');
+        }
+        $profileData = $data['profile_data'];
+    }
+
     // Refuser les champs générés par le serveur
     $forbiddenFields = ['id', 'created_at', 'updated_at'];
     foreach ($forbiddenFields as $field) {
@@ -276,7 +305,7 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
     }
 
     // Refuser les champs inconnus
-    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status'];
+    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data'];
     foreach (array_keys($data) as $field) {
         if (!in_array($field, $allowedFields, true)) {
             apiError(422, "Champ inconnu: $field");
@@ -400,6 +429,11 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
         $params[':status'] = $data['status'];
     }
 
+    if (array_key_exists('profile_data', $data)) {
+        $updateFields[] = 'profile_data = CAST(:profile_data AS jsonb)';
+        $params[':profile_data'] = json_encode($profileData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
     // PATCH requires at least one field to update
     if ($method === 'PATCH' && count($updateFields) === 0) {
         apiError(422, 'Aucun champ à modifier pour PATCH');
@@ -476,6 +510,7 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
                 sex,
                 address,
                 phone,
+                profile_data,
                 status,
                 created_at,
                 updated_at"
