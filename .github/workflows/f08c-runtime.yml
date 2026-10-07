@@ -1,17 +1,24 @@
 name: F-08-C database configuration runtime proof
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
-  database-config-runtime:
+  f08c-runtime:
+    name: F-08-C database configuration
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:18
         env:
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: imc_clarodoro
         ports:
@@ -33,55 +40,62 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          extensions: pdo, pgsql, pdo_pgsql
-          coverage: none
+      - name: Install PHP PostgreSQL extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
 
       - name: Apply schema
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
-          PGPASSWORD="$DB_PASSWORD" psql             -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER"             -d "$DB_NAME" -f database/schema.sql
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 \
+            -f database/schema.sql
 
       - name: PHP syntax
+        shell: bash
         run: php -l config/database.php
 
       - name: Missing configuration fails closed
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           if DB_HOST= php -r 'require "config/database.php"; getDatabaseConnection();'; then
             echo "ERROR: missing DB_HOST was accepted"
             exit 1
           fi
+          echo "Missing DB_HOST: PASS"
 
       - name: Invalid port fails closed
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           if DB_PORT=invalid php -r 'require "config/database.php"; getDatabaseConnection();'; then
             echo "ERROR: invalid DB_PORT was accepted"
             exit 1
           fi
+          echo "Invalid DB_PORT: PASS"
 
       - name: Complete configuration connects
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           php -r '
             require "config/database.php";
             $pdo = getDatabaseConnection();
             $value = $pdo->query("SELECT 1")->fetchColumn();
             if ((int) $value !== 1) {
-                fwrite(STDERR, "ERROR: SELECT 1 did not return 1
-");
+                fwrite(STDERR, "ERROR: SELECT 1 did not return 1\n");
                 exit(1);
             }
-            echo "Database connection: PASS
-";
+            echo "Database connection: PASS\n";
           '
 
       - name: Runtime proof
-        run: echo "F-08-C RUNTIME PROOF: PASS"
-
-# F-08-C trigger marker: runtime proof workflow retained; third push-triggered execution requested.
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "F-08-C RUNTIME PROOF: PASS"
