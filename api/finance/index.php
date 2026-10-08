@@ -128,6 +128,55 @@ if ($method === 'GET') {
 if ($method === 'POST') {
     $data = readJsonBody();
     $resource = isset($data['resource']) && is_string($data['resource']) ? $data['resource'] : '';
+    if ($resource === 'tariff') {
+        $user = requirePermission($pdo, 'finances.update');
+        requireCsrfToken();
+        $schoolYearId = financeUuid((string)($data['school_year_id'] ?? ''), 'school_year_id');
+        $classId = financeUuid((string)($data['class_id'] ?? ''), 'class_id');
+        $amount = $data['amount'] ?? null;
+        if (!is_numeric($amount) || (float)$amount < 0) apiError(422, 'amount invalide');
+        foreach (['installment1_amount','installment2_amount','installment3_amount'] as $field) {
+            if (isset($data[$field]) && (!is_numeric($data[$field]) || (float)$data[$field] < 0)) {
+                apiError(422, "$field invalide");
+            }
+        }
+        $stmt = $pdo->prepare(
+            'INSERT INTO finance_tariffs
+                (school_year_id, class_id, amount,
+                 installment1_amount, installment1_label,
+                 installment2_amount, installment2_label,
+                 installment3_amount, installment3_label)
+             VALUES
+                (:school_year_id, :class_id, :amount,
+                 :i1, :l1, :i2, :l2, :i3, :l3)
+             ON CONFLICT (school_year_id, class_id)
+             DO UPDATE SET
+                 amount = EXCLUDED.amount,
+                 installment1_amount = EXCLUDED.installment1_amount,
+                 installment1_label = EXCLUDED.installment1_label,
+                 installment2_amount = EXCLUDED.installment2_amount,
+                 installment2_label = EXCLUDED.installment2_label,
+                 installment3_amount = EXCLUDED.installment3_amount,
+                 installment3_label = EXCLUDED.installment3_label,
+                 updated_at = NOW()
+             RETURNING *'
+        );
+        $stmt->execute([
+            ':school_year_id' => $schoolYearId,
+            ':class_id' => $classId,
+            ':amount' => number_format((float)$amount, 2, '.', ''),
+            ':i1' => number_format((float)($data['installment1_amount'] ?? 0), 2, '.', ''),
+            ':l1' => isset($data['installment1_label']) && is_string($data['installment1_label']) ? trim($data['installment1_label']) : null,
+            ':i2' => number_format((float)($data['installment2_amount'] ?? 0), 2, '.', ''),
+            ':l2' => isset($data['installment2_label']) && is_string($data['installment2_label']) ? trim($data['installment2_label']) : null,
+            ':i3' => number_format((float)($data['installment3_amount'] ?? 0), 2, '.', ''),
+            ':l3' => isset($data['installment3_label']) && is_string($data['installment3_label']) ? trim($data['installment3_label']) : null,
+        ]);
+        http_response_code(201);
+        echo json_encode(['success' => true, 'tariff' => $stmt->fetch()], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     if ($resource === 'invoice') {
         $user = requirePermission($pdo, 'finances.create');
         requireCsrfToken();
