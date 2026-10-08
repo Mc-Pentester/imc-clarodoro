@@ -49,6 +49,7 @@ if ($method === 'GET') {
                 s.sex,
                 s.address,
                 s.phone,
+                s.profile_data->>'classe' AS class_name,
                 s.status,
                 s.created_at,
                 s.updated_at
