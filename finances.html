@@ -1626,7 +1626,9 @@ function imprimerFiche(){
 }
 
 document.addEventListener("DOMContentLoaded",async()=>{
-  if(!IMCAuth.requireAuth("index.html")) return;
+  const authenticated=await IMCAuth.verifySession();
+  if(!authenticated){ window.location.href="index.html"; return; }
+  if(!IMCAuth.requirePermission("finances.read")){ afficherMessage("Permission refusée.","error"); return; }
   document.getElementById("annee").addEventListener("change",async()=>{
     anneeServeurId=document.getElementById("annee").value;
     const y=anneesServeur.find(x=>x.id===anneeServeurId);
