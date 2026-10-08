@@ -4,12 +4,6 @@ name: F-02-C results and attendance runtime proof
 on:
   push:
     branches: [main]
-    paths:
-      - 'api/grades/index.php'
-      - 'api/attendance/index.php'
-      - 'database/migrations/**'
-      - 'database/schema.sql'
-      - '.github/workflows/f02-c-runtime.yml'
   workflow_dispatch:
 
 permissions:
