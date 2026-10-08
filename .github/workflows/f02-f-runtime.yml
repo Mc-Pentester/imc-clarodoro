@@ -101,14 +101,14 @@ jobs:
           INVOICE_ID="$(printf '%s' "$INVOICE" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["invoice"]["id"]??"";')"
           test -n "$INVOICE_ID"
 
-          PAYMENT="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{"resource":"payment","invoice_id":"$INVOICE_ID","amount":1000,"payment_date":"2026-10-08","method":"Espèces"}" "$BASE/api/finance/index.php")"
+          PAYMENT="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{\"resource\":\"payment\",\"invoice_id\":\"$INVOICE_ID\",\"amount\":1000,\"payment_date\":\"2026-10-08\",\"method\":\"Espèces\"}" "$BASE/api/finance/index.php")"
           printf '%s' "$PAYMENT" | grep -q '"balance":1800'
 
           DB_PAID="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COALESCE(SUM(amount),0) FROM payments WHERE invoice_id='$INVOICE_ID';")"
           test "$DB_PAID" = "1000.00"
 
           set +e
-          OVER="$(curl -sS -o /tmp/f02f-over.json -w '%{http_code}' -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{"resource":"payment","invoice_id":"$INVOICE_ID","amount":900,"method":"Espèces"}" "$BASE/api/finance/index.php")"
+          OVER="$(curl -sS -o /tmp/f02f-over.json -w '%{http_code}' -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{\"resource\":\"payment\",\"invoice_id\":\"$INVOICE_ID\",\"amount\":1900,\"method\":\"Espèces\"}" "$BASE/api/finance/index.php")"
           set -e
           echo "F02F OVERPAY STATUS: [$OVER]"
           test "$OVER" = "409"
