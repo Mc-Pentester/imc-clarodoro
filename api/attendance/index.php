@@ -153,16 +153,23 @@ if ($method === 'DELETE') {
     $stmt = $pdo->prepare(
         'DELETE FROM attendance
          WHERE id = :id
-           AND enrollment_id = :enrollment_id'
+           AND enrollment_id = :enrollment_id
+         RETURNING id'
     );
     $stmt->execute([
         ':id' => $id,
         ':enrollment_id' => $enrollmentId,
     ]);
 
+    $deletedRow = $stmt->fetch();
+    if (!$deletedRow) {
+        apiError(404, 'Présence introuvable ou déjà supprimée');
+    }
+
     echo json_encode([
         'success' => true,
         'deleted' => true,
+        'id' => $deletedRow['id'],
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
