@@ -103,7 +103,7 @@ $check = $pdo->prepare(
      FROM enrollments e
      ' . $scopeSql . '
      WHERE e.id = :enrollment_id
-       AND e.status = ''ACTIVE''
+       AND e.status = \'ACTIVE\'
      LIMIT 1'
 );
 $check->execute([':enrollment_id' => $enrollmentId] + $scopeParams);
