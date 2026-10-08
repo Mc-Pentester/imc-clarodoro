@@ -157,7 +157,7 @@ jobs:
 
           META="$(curl -fsS -b "$COOKIE" "$BASE/api/grades/index.php?school_year_id=00000000-0000-0000-0000-000000003051")"
           printf '%s' "$META" | grep -q '"enrollment_id":"00000000-0000-0000-0000-000000003081"'
-          printf '%s' "$META" | grep -q '"subject_name":"F02C Math"'
+          printf '%s' "$META" | grep -q '"code":"F02C-MATH"'
 
           GRADE="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000003081","subject_id":"00000000-0000-0000-0000-000000003061","grade":17.5,"grade_date":"2026-10-07"}'             "$BASE/api/grades/index.php")"
           printf '%s' "$GRADE" | grep -q '"grade":"17.50"'
