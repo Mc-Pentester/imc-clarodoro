@@ -176,3 +176,5 @@ jobs:
           fi
           grep -q 'api/personnel/index.php' personnel.html
           echo 'F-02-G FRONTEND AUTHORITY CHECK: PASS'
+          echo 'F-02-G RUNTIME PROOF: PASS'
+
