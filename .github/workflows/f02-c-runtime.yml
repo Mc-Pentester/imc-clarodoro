@@ -212,3 +212,5 @@ jobs:
           echo 'F02C DELETE PERSISTENCE: PASS'
 
           echo 'F-02-C RUNTIME PROOF: PASS'
+
+# F-02-C runtime verification trigger
