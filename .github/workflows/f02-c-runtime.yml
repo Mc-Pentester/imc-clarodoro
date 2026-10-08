@@ -168,6 +168,12 @@ jobs:
 
           ATT="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000003081","attendance_date":"2026-10-07","status":"PRESENT","comment":"F02C runtime"}'             "$BASE/api/attendance/index.php")"
           printf '%s' "$ATT" | grep -q '"status":"PRESENT"'
+          printf '%s' "$ATT" | grep -q '"enrollment_id":"00000000-0000-0000-0000-000000003081"'
+
+          ATT_CONTEXT="$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$BASE/api/attendance/index.php")"
+          printf '%s' "$ATT_CONTEXT" | grep -q '"enrollments":'
+          printf '%s' "$ATT_CONTEXT" | grep -q '"student_id":"00000000-0000-0000-0000-000000003071"'
+          printf '%s' "$ATT_CONTEXT" | grep -q '"class_name":"F02C Class"'
 
           set +e
           DENIED="$(curl -sS -o /tmp/f02c-denied.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000003081","subject_id":"00000000-0000-0000-0000-000000003062","grade":12,"grade_date":"2026-10-07"}'             "$BASE/api/grades/index.php")"
@@ -183,5 +189,20 @@ jobs:
           PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT grade::text FROM grades WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND subject_id='00000000-0000-0000-0000-000000003061' AND grade_date='2026-10-07';" | grep -qx '17.50'
 
           PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT status FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';" | grep -qx 'PRESENT'
+
+          ATT_ID="$(printf '%s' "$ATT" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["attendance"]["id"]??"";')"
+          test -n "$ATT_ID"
+
+          DELETE_STATUS="$(curl -sS -o /tmp/f02c-delete.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE"             -X DELETE             -H "X-CSRF-Token: $CSRF"             "$BASE/api/attendance/index.php?id=$ATT_ID&enrollment_id=00000000-0000-0000-0000-000000003081")"
+          test "$DELETE_STATUS" = "200"
+          grep -q '"deleted":true' /tmp/f02c-delete.json
+
+          if PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT COUNT(*) FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';" | grep -q '^0
+; then
+            echo 'F02C DELETE PERSISTENCE: PASS'
+          else
+            echo 'F02C DELETE PERSISTENCE: FAIL'
+            exit 1
+          fi
 
           echo 'F-02-C RUNTIME PROOF: PASS'
