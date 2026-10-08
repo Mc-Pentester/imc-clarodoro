@@ -96,13 +96,13 @@ jobs:
           printf '%s' "$TARIFF" | grep -q '"amount":"3000.00"'
 
           INVOICE="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"invoice","student_id":"00000000-0000-0000-0000-000000005071","school_year_id":"00000000-0000-0000-0000-000000005051","amount":3000,"reduction":200,"reduction_reason":"Bourse","invoice_date":"2026-10-08"}' "$BASE/api/finance/index.php")"
-          printf '%s' "$INVOICE" | grep -q '"balance":1800'
+          printf '%s' "$INVOICE" | grep -q '"balance":2800'
 
           INVOICE_ID="$(printf '%s' "$INVOICE" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["invoice"]["id"]??"";')"
           test -n "$INVOICE_ID"
 
           PAYMENT="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{"resource":"payment","invoice_id":"$INVOICE_ID","amount":1000,"payment_date":"2026-10-08","method":"Espèces"}" "$BASE/api/finance/index.php")"
-          printf '%s' "$PAYMENT" | grep -q '"balance":800'
+          printf '%s' "$PAYMENT" | grep -q '"balance":1800'
 
           DB_PAID="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COALESCE(SUM(amount),0) FROM payments WHERE invoice_id='$INVOICE_ID';")"
           test "$DB_PAID" = "1000.00"
@@ -114,7 +114,7 @@ jobs:
           test "$OVER" = "409"
 
           GET="$(curl -fsS -b "$COOKIE" "$BASE/api/finance/index.php?student_id=00000000-0000-0000-0000-000000005071&school_year_id=00000000-0000-0000-0000-000000005051")"
-          printf '%s' "$GET" | grep -q '"balance":800'
+          printf '%s' "$GET" | grep -q '"balance":1800'
           printf '%s' "$GET" | grep -q '"amount":"3000.00"'
 
           echo 'F-02-F RUNTIME PROOF: PASS'
