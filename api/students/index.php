@@ -40,7 +40,7 @@ if ($method === 'GET') {
         // -> enrollments -> students. Aucun identifiant de classe fourni
         // par le client n'intervient dans l'autorisation.
         $stmt = $pdo->prepare(
-            'SELECT DISTINCT
+            "SELECT DISTINCT
                 s.id,
                 s.matricule,
                 s.last_name,
@@ -63,7 +63,7 @@ if ($method === 'GET') {
              INNER JOIN user_teachers ut
                 ON ut.teacher_id = tcs.teacher_id
                AND ut.user_id = :user_id
-             ORDER BY s.created_at DESC, s.id DESC'
+             ORDER BY s.created_at DESC, s.id DESC"
         );
         $stmt->bindValue(':enrollment_status', 'ACTIVE');
         $stmt->bindValue(':assignment_status', 'ACTIVE');
