@@ -112,6 +112,26 @@ jobs:
               });
             });
 
+            await context.route('**/api/personnel/index.php', route => {
+              route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                  success: true,
+                  personnel: [{
+                    id: 'staff-xss',
+                    first_name: '<svg onload="window.__f04_xss=2">',
+                    last_name: '<img src=x onerror="window.__f04_xss=1">',
+                    function_name: '<script>window.__f04_xss=6</script>',
+                    class_name: 'Administration',
+                    phone: '<img src=x onerror="window.__f04_xss=7">',
+                    email: 'xss@example.test',
+                    status: 'ACTIVE'
+                  }]
+                })
+              });
+            });
+
             await context.route('**/auth.js', route =>
               route.fulfill({
                 status: 200,
@@ -137,12 +157,6 @@ jobs:
                 contact: xss,
                 anneeScolaire: '2026 - 2027',
                 photo: 'javascript:window.__f04_xss=4'
-              }]));
-
-              localStorage.setItem('imc_personnel', JSON.stringify([{
-                nom: xss,
-                fonction: '<svg onload="window.__f04_xss=5">',
-                identifiant: '<script>window.__f04_xss=6</script>'
               }]));
 
               localStorage.setItem('imc_active_year', '2026 - 2027');
