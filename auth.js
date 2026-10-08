@@ -48,12 +48,23 @@
     try {
       const response = await fetch("/api/auth/me.php", { method: "GET", credentials: "same-origin", cache: "no-store", headers: { "Accept": "application/json" } });
       const payload = await response.json();
-      if (!response.ok || !payload || !payload.success || !payload.user) { serverUser = null; serverSessionReady = true; return null; }
+      if (!response.ok || !payload || !payload.success || !payload.user) {
+        serverUser = null;
+        csrfToken = null;
+        serverSessionReady = true;
+        return null;
+      }
       serverUser = { userId: String(payload.user.id), username: String(payload.user.username), role: String(payload.user.role) };
+      csrfToken = payload.csrfToken ? String(payload.csrfToken) : null;
       serverSessionReady = true;
       sessionStorage.removeItem(SESSION_KEY);
       return getCachedUser();
-    } catch (error) { serverUser = null; serverSessionReady = true; return null; }
+    } catch (error) {
+      serverUser = null;
+      csrfToken = null;
+      serverSessionReady = true;
+      return null;
+    }
   }
 
   async function logout() {
