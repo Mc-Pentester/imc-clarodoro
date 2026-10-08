@@ -35,22 +35,21 @@ function financeScopeSql(array $user, string $studentColumn = 'i.student_id'): a
 
 function financeInvoice(PDO $pdo, string $invoiceId, array $user, bool $forUpdate = false): array {
     $scope = financeScopeSql($user, 'i.student_id');
-    $sql = 'SELECT i.*, s.matricule, s.last_name, s.first_name,
-                   COALESCE(SUM(p.amount), 0) AS paid_amount,
-                   GREATEST(0, i.amount - i.reduction - COALESCE(SUM(p.amount), 0)) AS balance
-            FROM invoices i
-            INNER JOIN students s ON s.id = i.student_id
-            LEFT JOIN payments p ON p.invoice_id = i.id
-            WHERE i.id = :id' . $scope[0] .
-            ' GROUP BY i.id, s.id' .
-            ($forUpdate ? ' FOR UPDATE' : '');
-    $stmt = $pdo->prepare($sql);
-    $params = [':id' => $invoiceId] + $scope[1];
-    $stmt->execute($params);
+    $lock = $forUpdate ? ' FOR UPDATE' : '';
+    $stmt = $pdo->prepare(
+        'SELECT i.*, s.matricule, s.last_name, s.first_name
+         FROM invoices i
+         INNER JOIN students s ON s.id = i.student_id
+         WHERE i.id = :id' . $scope[0] . $lock
+    );
+    $stmt->execute([':id' => $invoiceId] + $scope[1]);
     $row = $stmt->fetch();
-    if (!$row) {
-        apiError(404, 'Facture introuvable');
-    }
+    if (!$row) apiError(404, 'Facture introuvable');
+    $paidStmt = $pdo->prepare('SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = :invoice_id');
+    $paidStmt->execute([':invoice_id' => $invoiceId]);
+    $paid = (float)$paidStmt->fetchColumn();
+    $row['paid_amount'] = $paid;
+    $row['balance'] = max(0, (float)$row['amount'] - (float)$row['reduction'] - $paid);
     return $row;
 }
 
@@ -203,9 +202,6 @@ if ($method === 'POST') {
                 ':method' => isset($data['method']) && is_string($data['method']) ? trim($data['method']) : '',
                 ':reference' => isset($data['reference']) && is_string($data['reference']) ? trim($data['reference']) : null,
             ]);
-            if (!$data['method'] ?? false) {
-                // unreachable for normal valid requests; retained only as a defensive branch
-            }
 
             $newBalance = $balance - $paymentAmount;
             $newStatus = $newBalance <= 0.00001 ? 'PAID' : 'PARTIALLY_PAID';
