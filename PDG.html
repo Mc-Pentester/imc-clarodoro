@@ -1227,12 +1227,6 @@ const CLE_ANNEE_ACTIVE =
     "imc_active_year";
 
 /*
-   Même clé que personnel.html
-*/
-const CLE_PERSONNEL =
-    "imc_personnel";
-
-/*
    Nouvelle clé pour les paies.
 */
 const CLE_PAIES_PERSONNEL =
@@ -1519,6 +1513,7 @@ async function connecterPDG() {
 
         chargerAnnees();
         initialiserMoisPaie();
+        await chargerPersonnelServeur();
         chargerTableauDeBord();
     } catch (error) {
         document.getElementById("messageErreur").textContent =
@@ -1626,36 +1621,46 @@ function masquerGestionPersonnel() {
     document.getElementById('sectionGestionPersonnel').style.display = 'none';
 }
 
+let personnelServeur = [];
+
+async function chargerPersonnelServeur() {
+    if (!IMCAuth.hasPermission('personnel.read')) {
+        personnelServeur = [];
+        return;
+    }
+    const response = await fetch('/api/personnel/index.php', { credentials:'include', headers:{Accept:'application/json'} });
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(payload.error || 'Impossible de charger le personnel.');
+    personnelServeur = Array.isArray(payload.personnel) ? payload.personnel : [];
+}
+
+function personnelServeurVersAffichage(p) {
+    return {
+        id: String(p.id),
+        nom: [p.first_name, p.last_name].filter(Boolean).join(' '),
+        fonction: p.function_name || p.role_name || '',
+        classe: p.class_name || '',
+        identifiant: p.username || '',
+        salaire: p.salary || 0,
+        salaireMensuel: p.salary || 0
+    };
+}
+
 function chargerListePersonnelAdmin() {
-    const personnel = JSON.parse(localStorage.getItem(CLE_PERSONNEL) || '[]');
     const tbody = document.getElementById('tableauPersonnelAdmin');
+    if (!tbody) return;
     tbody.innerHTML = '';
-
-    personnel.forEach((p, index) => {
+    personnelServeur.forEach(function(raw) {
+        const p = personnelServeurVersAffichage(raw);
         const tr = document.createElement('tr');
-
-        [
-            p.nom || '',
-            p.fonction || '',
-            p.identifiant || ''
-        ].forEach(function (value) {
-            const td = document.createElement('td');
-            td.textContent = String(value);
-            tr.appendChild(td);
+        [p.nom || '', p.fonction || '', p.identifiant || ''].forEach(function(value) {
+            const td = document.createElement('td'); td.textContent = String(value); tr.appendChild(td);
         });
-
         const actionsTd = document.createElement('td');
-        const supprimerButton = document.createElement('button');
-        supprimerButton.type = 'button';
-        supprimerButton.className = 'btn btn-rouge';
-        supprimerButton.textContent = 'Supprimer';
-        supprimerButton.addEventListener('click', function () {
-            supprimerPersonnelAdmin(index);
-        });
-        actionsTd.appendChild(supprimerButton);
-        tr.appendChild(actionsTd);
-
-        tbody.appendChild(tr);
+        const button = document.createElement('button');
+        button.type='button'; button.className='btn btn-rouge'; button.textContent='Archiver';
+        button.addEventListener('click', function(){ supprimerPersonnelAdmin(p.id); });
+        actionsTd.appendChild(button); tr.appendChild(actionsTd); tbody.appendChild(tr);
     });
 }
 
@@ -1719,63 +1724,34 @@ async function ajouterPersonnelAdminWrapper() {
 }
 
 async function ajouterPersonnelAdmin() {
-    const nom = document.getElementById('adminNom').value.trim();
-    const fonction = document.getElementById('adminFonction').value;
-    const classe = document.getElementById('adminClasse').value.trim();
-    const identifiant = document.getElementById('adminIdentifiant').value.trim();
-    const motDePasse = document.getElementById('adminMotDePasse').value;
-
-    if (!nom || !fonction || !identifiant || !motDePasse) {
-        afficherMessageAdmin('Veuillez remplir tous les champs obligatoires.', 'erreur');
-        return;
-    }
-
-    let personnel = JSON.parse(localStorage.getItem(CLE_PERSONNEL) || '[]');
-
-    // Vérifier si l'identifiant existe déjà
-    if (personnel.some(p => String(p.identifiant || '') === identifiant)) {
-        afficherMessageAdmin('Cet identifiant existe déjà.', 'erreur');
-        return;
-    }
-
-    personnel.push({
-        id: Date.now(),
-        nom: nom,
-        fonction: fonction,
-        classe: classe,
-        identifiant: identifiant,
-        motDePasseHash: await secureHash(motDePasse)
-    });
-
-    localStorage.setItem(CLE_PERSONNEL, JSON.stringify(personnel));
-
-    // Vider le formulaire
-    document.getElementById('adminNom').value = '';
-    document.getElementById('adminClasse').value = '';
-    document.getElementById('adminIdentifiant').value = '';
-    document.getElementById('adminMotDePasse').value = '';
-
-    afficherMessageAdmin('Personnel ajouté avec succès.', 'succes');
-    chargerListePersonnelAdmin();
+    if (!IMCAuth.requirePermission('personnel.create')) { afficherMessageAdmin('Permission refusée.', 'erreur'); return; }
+    const nom=document.getElementById('adminNom').value.trim();
+    const fonction=document.getElementById('adminFonction').value;
+    const classe=document.getElementById('adminClasse').value.trim();
+    const identifiant=document.getElementById('adminIdentifiant').value.trim();
+    const motDePasse=document.getElementById('adminMotDePasse').value;
+    if(!nom||!fonction||!identifiant||!motDePasse){afficherMessageAdmin('Veuillez remplir tous les champs obligatoires.','erreur');return;}
+    const parts=nom.split(/\\s+/); const firstName=parts.shift()||nom; const lastName=parts.join(' ')||firstName;
+    try {
+        const csrf=await IMCAuth.getCsrfToken();
+        const response=await fetch('/api/personnel/index.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({first_name:firstName,last_name:lastName,function_name:fonction,class_name:classe,username:identifiant,password:motDePasse,role_name:fonction})});
+        const payload=await response.json(); if(!response.ok||!payload.success) throw new Error(payload.error||'Impossible d’ajouter le personnel.');
+        document.getElementById('adminNom').value=''; document.getElementById('adminClasse').value=''; document.getElementById('adminIdentifiant').value=''; document.getElementById('adminMotDePasse').value='';
+        await chargerPersonnelServeur(); afficherMessageAdmin('Personnel ajouté avec succès.','succes'); chargerListePersonnelAdmin();
+    } catch(error) { afficherMessageAdmin(error.message||'Impossible d’ajouter le personnel.','erreur'); }
 }
 
-function supprimerPersonnelAdmin(index) {
-    if (!IMCAuth.requirePermission("personnel.delete")) {
-        afficherMessageAdmin('Permission refusée.', 'erreur');
-        return;
-    }
-
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce personnel?')) {
-        return;
-    }
-
-    let personnel = JSON.parse(localStorage.getItem(CLE_PERSONNEL) || '[]');
-    personnel.splice(index, 1);
-    localStorage.setItem(CLE_PERSONNEL, JSON.stringify(personnel));
-
-    afficherMessageAdmin('Personnel supprimé avec succès.', 'succes');
-    chargerListePersonnelAdmin();
+async function supprimerPersonnelAdmin(id) {
+    if (!IMCAuth.requirePermission('personnel.delete')) { afficherMessageAdmin('Permission refusée.', 'erreur'); return; }
+    if (!confirm('Êtes-vous sûr de vouloir archiver ce personnel ?')) return;
+    try {
+        const csrf=await IMCAuth.getCsrfToken();
+        const response=await fetch('/api/personnel/index.php',{method:'DELETE',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({id:id})});
+        const payload=await response.json(); if(!response.ok||!payload.success) throw new Error(payload.error||'Impossible d’archiver le personnel.');
+        await chargerPersonnelServeur(); afficherMessageAdmin('Personnel archivé avec succès.','succes'); chargerListePersonnelAdmin();
+    } catch(error) { afficherMessageAdmin(error.message||'Impossible d’archiver le personnel.','erreur'); }
 }
+
 
 function afficherMessageAdmin(texte, type) {
     const message = document.getElementById('messageAdmin');
@@ -2059,25 +2035,7 @@ function calculerFinanceEleve(
 ============================================================ */
 
 function obtenirPersonnel() {
-
-    const personnel =
-        lireJSON(
-            CLE_PERSONNEL,
-            []
-        );
-
-
-    if (
-        !Array.isArray(personnel)
-    ) {
-
-        return [];
-
-    }
-
-
-    return personnel;
-
+    return personnelServeur.map(personnelServeurVersAffichage);
 }
 
 
@@ -3647,7 +3605,7 @@ window.addEventListener(
 
         if (
             event.key ===
-            CLE_PERSONNEL
+            personnelServeur
         ) {
 
             afficherPaie();
