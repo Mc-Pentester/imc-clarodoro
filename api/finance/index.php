@@ -114,6 +114,18 @@ if ($method === 'GET') {
     foreach ($invoices as &$invoice) {
         $invoice['paid_amount'] = (float)$invoice['paid_amount'];
         $invoice['balance'] = (float)$invoice['balance'];
+        $paymentStmt = $pdo->prepare(
+            'SELECT id, amount, payment_date, method, reference
+             FROM payments
+             WHERE invoice_id = :invoice_id
+             ORDER BY payment_date ASC, id ASC'
+        );
+        $paymentStmt->execute([':invoice_id' => $invoice['id']]);
+        $invoice['payments'] = $paymentStmt->fetchAll();
+        foreach ($invoice['payments'] as &$payment) {
+            $payment['amount'] = (float)$payment['amount'];
+        }
+        unset($payment);
     }
     unset($invoice);
 
