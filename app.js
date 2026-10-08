@@ -77,72 +77,90 @@ function calculerPlaces(eleves, controle) {
 
     return places;
 }
-function afficherElevesClasse() {
+async function afficherElevesClasse() {
 
     const classe = document.getElementById('filtreClasse').value;
     const liste = document.getElementById('listeElevesClasse');
+    liste.replaceChildren();
 
-    const eleves = JSON.parse(
-        localStorage.getItem('imc_students') || '[]'
-    );
+    try {
+        const response = await fetch('api/students/index.php', {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        });
+        const payload = await response.json();
 
-    const elevesFiltres = classe === ''
-        ? eleves
-        : eleves.filter(function(eleve) {
-            return String(eleve.classe || '').trim() === classe;
+        if (!response.ok || !payload.success || !Array.isArray(payload.students)) {
+            throw new Error(payload.message || 'Impossible de charger les élèves depuis le serveur.');
+        }
+
+        const eleves = payload.students.map(function(student) {
+            const profile = student && student.profile_data && typeof student.profile_data === 'object'
+                ? student.profile_data
+                : {};
+
+            return {
+                ...student,
+                id: student.id,
+                nom: student.last_name || '',
+                prenom: student.first_name || '',
+                classe: profile.classe || student.class_name || '',
+                sexe: student.sex || ''
+            };
         });
 
-    liste.innerHTML = '';
+        const elevesFiltres = classe === ''
+            ? eleves
+            : eleves.filter(function(eleve) {
+                return String(eleve.classe || '').trim() === classe;
+            });
 
-    if (elevesFiltres.length === 0) {
-        liste.innerHTML = '<p>Aucun élève dans cette classe.</p>';
-        return;
+        if (elevesFiltres.length === 0) {
+            const message = document.createElement('p');
+            message.textContent = classe === ''
+                ? 'Aucun élève disponible.'
+                : 'Aucun élève dans cette classe.';
+            liste.appendChild(message);
+            return;
+        }
+
+        const titre = document.createElement('h3');
+        titre.textContent = classe === ''
+            ? 'Tous les élèves'
+            : 'Élèves de ' + classe;
+        liste.appendChild(titre);
+
+        elevesFiltres.forEach(function(eleve) {
+            const bouton = document.createElement('button');
+            bouton.type = 'button';
+            bouton.className = 'bouton-eleve';
+            bouton.textContent = (eleve.nom || '') + ' ' + (eleve.prenom || '');
+
+            bouton.onclick = function() {
+                const carnet = document.getElementById('carnetEleve');
+
+                if (carnet) {
+                    carnet.style.display = 'block';
+                }
+
+                if (typeof selectionnerEleve === 'function') {
+                    selectionnerEleve(eleve.id);
+                }
+
+                if (carnet) {
+                    carnet.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            };
+
+            liste.appendChild(bouton);
+        });
+    } catch (error) {
+        console.error('Erreur de chargement des élèves depuis l’API :', error);
+        const message = document.createElement('p');
+        message.textContent = error.message || 'Impossible de charger les élèves depuis le serveur.';
+        liste.appendChild(message);
     }
-
-    const titre = document.createElement('h3');
-
-    titre.textContent = classe === ''
-        ? 'Tous les élèves'
-        : 'Élèves de ' + classe;
-
-    liste.appendChild(titre);
-
-    elevesFiltres.forEach(function(eleve) {
-
-        const bouton = document.createElement('button');
-
-        bouton.type = 'button';
-        bouton.className = 'bouton-eleve';
-
-        bouton.textContent =
-            (eleve.nom || '') + ' ' + (eleve.prenom || '');
-
-        bouton.onclick = function() {
-
-            // Afficher le carnet
-            const carnet = document.getElementById('carnetEleve');
-
-            if (carnet) {
-                carnet.style.display = 'block';
-            }
-
-            // Sélectionner l'élève avec la fonction
-            // déjà utilisée par ton carnet
-            if (typeof selectionnerEleve === 'function') {
-                selectionnerEleve(eleve.id);
-            }
-
-            // Aller directement au carnet
-            if (carnet) {
-                carnet.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
-        };
-
-        liste.appendChild(bouton);
-    });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
