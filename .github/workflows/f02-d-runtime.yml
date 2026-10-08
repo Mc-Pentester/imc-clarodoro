@@ -124,7 +124,7 @@ jobs:
           cat /tmp/f02d-dup.json
           test "$DUP" = "409"
 
-          CARNET="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000004081","proprete":"PASS","conduite":"BON","tenue_materiels":"BON","retard":"0","absence":"1","classe_promotion":"F02D-2","classe_refait":"","eleve_remis":"","observation1":"OK","observation2":"","observation3":""}' "$BASE/api/results/index.php")"
+          CARNET="$(curl -fsS -X PUT -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000004081","proprete":"PASS","conduite":"BON","tenue_materiels":"BON","retard":"0","absence":"1","classe_promotion":"F02D-2","classe_refait":"","eleve_remis":"","observation1":"OK","observation2":"","observation3":""}' "$BASE/api/results/index.php")"
           printf '%s' "$CARNET" | grep -q '"proprete":"PASS"'
 
           DB_CARNET="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT proprete FROM result_carnets WHERE enrollment_id='00000000-0000-0000-0000-000000004081';")"
