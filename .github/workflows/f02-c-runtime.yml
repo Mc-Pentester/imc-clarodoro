@@ -193,9 +193,15 @@ jobs:
           grep -q '"deleted":true' /tmp/f02c-delete.json
           grep -q "\"id\":\"$ATT_ID\"" /tmp/f02c-delete.json
 
-          DELETE_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc \
-            "SELECT COUNT(*) FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';")"
-          DELETE_COUNT="$(printf '%s' "$DELETE_COUNT" | tr -d '[:space:]')"
+          set +e
+          DELETE_CHECK="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc \
+            "SELECT COUNT(*) FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';" 2>&1)"
+          DELETE_PSQL_STATUS=$?
+          set -e
+          echo "F02C DELETE CHECK STATUS: [$DELETE_PSQL_STATUS]"
+          echo "F02C DELETE CHECK RAW: [$DELETE_CHECK]"
+          test "$DELETE_PSQL_STATUS" = "0"
+          DELETE_COUNT="$(printf '%s' "$DELETE_CHECK" | tr -d '[:space:]')"
           echo "F02C DELETE ROW COUNT: [$DELETE_COUNT]"
           test "$DELETE_COUNT" = "0"
           echo 'F02C DELETE PERSISTENCE: PASS'
