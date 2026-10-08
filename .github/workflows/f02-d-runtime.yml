@@ -1,0 +1,135 @@
+name: F-02-D results runtime proof
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  f02-d-runtime:
+    name: F-02-D PostgreSQL results authority
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and migrations
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000004001','Enseignant') ON CONFLICT (id) DO NOTHING;
+          INSERT INTO permissions(name) VALUES ('resultats.read'),('resultats.create'),('resultats.update') ON CONFLICT (name) DO NOTHING;
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000004001', id FROM permissions
+          WHERE name IN ('resultats.read','resultats.create','resultats.update') ON CONFLICT DO NOTHING;
+          INSERT INTO users(id,username,password_hash,role_id)
+          VALUES ('00000000-0000-0000-0000-000000004011','f02d-runtime',crypt('F02D-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000004001')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO teachers(id,first_name,last_name,status)
+          VALUES ('00000000-0000-0000-0000-000000004021','F02D','Teacher','ACTIVE') ON CONFLICT (id) DO NOTHING;
+          INSERT INTO user_teachers(user_id,teacher_id)
+          VALUES ('00000000-0000-0000-0000-000000004011','00000000-0000-0000-0000-000000004021') ON CONFLICT (user_id) DO NOTHING;
+          INSERT INTO levels(id,code,name) VALUES ('00000000-0000-0000-0000-000000004031','F02D','F02D Level') ON CONFLICT (id) DO NOTHING;
+          INSERT INTO classes(id,code,name,level_id,status)
+          VALUES ('00000000-0000-0000-0000-000000004041','F02D-CLASS','F02D Class','00000000-0000-0000-0000-000000004031','ACTIVE') ON CONFLICT (id) DO NOTHING;
+          INSERT INTO school_years(id,label,start_date,end_date,status)
+          VALUES ('00000000-0000-0000-0000-000000004051','F02D-2026-2027','2026-09-01','2027-07-15','ACTIVE') ON CONFLICT (id) DO NOTHING;
+          INSERT INTO subjects(id,code,name,coefficient,max_points,status)
+          VALUES ('00000000-0000-0000-0000-000000004061','F02D-MATH','F02D Math',2,20,'ACTIVE') ON CONFLICT (id) DO NOTHING;
+          INSERT INTO teacher_class_subjects(teacher_id,class_id,subject_id,status)
+          VALUES ('00000000-0000-0000-0000-000000004021','00000000-0000-0000-0000-000000004041','00000000-0000-0000-0000-000000004061','ACTIVE')
+          ON CONFLICT (teacher_id,class_id,subject_id) DO NOTHING;
+          INSERT INTO students(id,matricule,last_name,first_name,status)
+          VALUES ('00000000-0000-0000-0000-000000004071','F02D-001','Runtime','Student','ACTIVE') ON CONFLICT (id) DO NOTHING;
+          INSERT INTO enrollments(id,student_id,class_id,school_year_id,status,enrollment_date)
+          VALUES ('00000000-0000-0000-0000-000000004081','00000000-0000-0000-0000-000000004071','00000000-0000-0000-0000-000000004041','00000000-0000-0000-0000-000000004051','ACTIVE','2026-09-01')
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+
+      - name: PHP syntax
+        run: |
+          set -euo pipefail
+          php -l api/grades/index.php
+          php -l api/results/index.php
+          php -l resultats.html >/dev/null 2>&1 || true
+          php -l config/auth.php
+
+      - name: Start API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/f02d-api.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove PostgreSQL results authority
+        run: |
+          set -Eeuo pipefail
+          trap 'rc=$?; echo "::error::F-02-D failed: rc=$rc command=[$BASH_COMMAND]"; cat /tmp/f02d-api.log 2>/dev/null || true; exit $rc' ERR
+          BASE='http://127.0.0.1:8090'
+          COOKIE='/tmp/f02d.cookies'
+
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -d '{"username":"f02d-runtime","password":"F02D-Test-2026!"}' "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+
+          META="$(curl -fsS -b "$COOKIE" "$BASE/api/grades/index.php?school_year_id=00000000-0000-0000-0000-000000004051")"
+          printf '%s' "$META" | grep -q '"code":"F02D-MATH"'
+          printf '%s' "$META" | grep -q '"max_points":"20.00"'
+
+          for control in 1 2 3; do
+            grade=$((15 + control))
+            curl -fsS -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'               -d "{\"enrollment_id\":\"00000000-0000-0000-0000-000000004081\",\"subject_id\":\"00000000-0000-0000-0000-000000004061\",\"assessment_number\":$control,\"grade\":$grade,\"grade_date\":\"2026-10-0$control\"}"               "$BASE/api/grades/index.php" >/tmp/f02d-grade-$control.json
+            grep -q "\"assessment_number\":$control" /tmp/f02d-grade-$control.json
+          done
+
+          COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM grades WHERE enrollment_id='00000000-0000-0000-0000-000000004081';")"
+          test "$COUNT" = "3"
+
+          set +e
+          DUP="$(curl -sS -o /tmp/f02d-dup.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000004081","subject_id":"00000000-0000-0000-0000-000000004061","assessment_number":1,"grade":19,"grade_date":"2026-10-08"}' "$BASE/api/grades/index.php")"
+          set -e
+          echo "F02D DUP STATUS: [$DUP]"
+          cat /tmp/f02d-dup.json
+          test "$DUP" = "409"
+
+          CARNET="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000004081","proprete":"PASS","conduite":"BON","tenue_materiels":"BON","retard":"0","absence":"1","classe_promotion":"F02D-2","classe_refait":"","eleve_remis":"","observation1":"OK","observation2":"","observation3":""}' "$BASE/api/results/index.php")"
+          printf '%s' "$CARNET" | grep -q '"proprete":"PASS"'
+
+          DB_CARNET="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT proprete FROM result_carnets WHERE enrollment_id='00000000-0000-0000-0000-000000004081';")"
+          test "$DB_CARNET" = "PASS"
+
+          GET_CARNET="$(curl -fsS -b "$COOKIE" "$BASE/api/results/index.php?enrollment_id=00000000-0000-0000-0000-000000004081")"
+          printf '%s' "$GET_CARNET" | grep -q '"proprete":"PASS"'
+
+          echo 'F-02-D RUNTIME PROOF: PASS'
