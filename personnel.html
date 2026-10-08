@@ -835,6 +835,9 @@ document.addEventListener("DOMContentLoaded", function() {
 let personnel = [];
 let eleves = [];
 let presences = {};
+let serverPresences = {};
+let attendanceMeta = {};
+let attendanceEnrollments = [];
 let personnelConnecte = null;
 let personnelEnModification = null;
 
@@ -905,7 +908,7 @@ function verifierPersonnelEnregistre(){
   }
 }
 
-function chargerDonnees(){
+async function chargerDonnees(){
 
   try{
     personnel =
@@ -914,23 +917,110 @@ function chargerDonnees(){
     personnel = [];
   }
 
-  try{
-    eleves =
-      JSON.parse(localStorage.getItem(CLE_ELEVES)) || [];
-  }catch(e){
-    eleves = [];
-  }
-
-  try{
-    presences =
-      JSON.parse(localStorage.getItem(CLE_PRESENCES)) || {};
-  }catch(e){
-    presences = {};
-  }
+  eleves = [];
+  presences = {};
+  serverPresences = {};
+  attendanceMeta = {};
+  attendanceEnrollments = [];
 
   chargerPersonnelTableau();
 
-  afficherElevesPersonnel();
+  try{
+    const response = await fetch("/api/attendance/index.php", {
+      method: "GET",
+      credentials: "include",
+      headers: {
+        "Accept": "application/json"
+      }
+    });
+
+    const payload = await response.json();
+
+    if(!response.ok || !payload.success){
+      throw new Error(
+        payload && payload.error
+          ? payload.error
+          : "Impossible de charger les présences."
+      );
+    }
+
+    attendanceEnrollments =
+      Array.isArray(payload.enrollments)
+        ? payload.enrollments
+        : [];
+
+    const parEleve = new Map();
+
+    attendanceEnrollments.forEach(function(enrollment){
+      const studentId = String(enrollment.student_id || "");
+      if(!studentId) return;
+
+      const currentYear =
+        String(enrollment.school_year_label || "") ===
+        String(anneeAcademique);
+
+      if(!parEleve.has(studentId) || currentYear){
+        parEleve.set(studentId, enrollment);
+      }
+    });
+
+    eleves = Array.from(parEleve.values()).map(function(enrollment){
+      return {
+        id: String(enrollment.student_id),
+        nom: String(enrollment.last_name || ""),
+        prenom: String(enrollment.first_name || ""),
+        sexe: enrollment.sex || "",
+        classe: String(
+          enrollment.class_name ||
+          enrollment.class_code ||
+          ""
+        ),
+        enrollment_id: String(enrollment.enrollment_id),
+        school_year_id: String(enrollment.school_year_id || ""),
+        school_year_label: String(enrollment.school_year_label || "")
+      };
+    });
+
+    const attendance =
+      Array.isArray(payload.attendance)
+        ? payload.attendance
+        : [];
+
+    attendance.forEach(function(row){
+      const studentId = String(row.student_id || "");
+      const date = String(row.attendance_date || "");
+      if(!studentId || !date) return;
+
+      const cle =
+        anneeAcademique +
+        "_" +
+        studentId +
+        "_" +
+        date;
+
+      const statut = statutPresenceUi(row.status);
+      if(!statut) return;
+
+      presences[cle] = statut;
+      serverPresences[cle] = statut;
+      attendanceMeta[cle] = {
+        id: String(row.id),
+        enrollment_id: String(row.enrollment_id)
+      };
+    });
+
+    afficherElevesPersonnel();
+  }catch(error){
+    console.error(error);
+    afficherMessage(
+      "messagePresence",
+      error && error.message
+        ? error.message
+        : "Impossible de charger les données serveur.",
+      "erreur"
+    );
+    afficherElevesPersonnel();
+  }
 }
 
 
@@ -1725,6 +1815,30 @@ function formatDateFrancais(date){
    PRESENCES
 ========================================================= */
 
+function statutPresenceApi(statut){
+  const map = {
+    "Présent": "PRESENT",
+    "Absent": "ABSENT",
+    "En retard": "LATE",
+    "Excusé": "EXCUSED"
+  };
+
+  return map[String(statut || "")] || "";
+}
+
+
+function statutPresenceUi(statut){
+  const map = {
+    "PRESENT": "Présent",
+    "ABSENT": "Absent",
+    "LATE": "En retard",
+    "EXCUSED": "Excusé"
+  };
+
+  return map[String(statut || "").toUpperCase()] || "";
+}
+
+
 function obtenirPresence(idEleve,date){
 
   const cle =
@@ -2077,7 +2191,7 @@ function chargerSemainePresence(){
    ENREGISTRER PRESENCES
 ========================================================= */
 
-function enregistrerPresences(){
+async function enregistrerPresences(){
 
   if (!IMCAuth.requirePermission("presences.create")) {
     afficherMessage(
@@ -2088,42 +2202,157 @@ function enregistrerPresences(){
     return;
   }
 
-  try{
+  const dateDebut =
+    document.getElementById("dateDebutSemaine").value;
 
-    localStorage.setItem(
-      CLE_PRESENCES,
-      JSON.stringify(presences)
+  if(!dateDebut){
+    afficherMessage(
+      "messagePresence",
+      "Veuillez sélectionner une semaine.",
+      "erreur"
     );
+    return;
+  }
 
-    const verification =
-      localStorage.getItem(CLE_PRESENCES);
+  try{
+    const lundi = obtenirLundi(dateDebut);
+    const dates = [];
 
-    if(verification === null){
+    for(let i = 0; i < 5; i++){
+      const d = new Date(lundi);
+      d.setDate(lundi.getDate() + i);
+      dates.push(dateISO(d));
+    }
 
-      throw new Error(
-        "La sauvegarde localStorage a échoué."
-      );
+    let changements = 0;
 
+    for(const eleve of eleves){
+      const studentId = obtenirIdEleve(eleve);
+      const enrollmentId = String(eleve.enrollment_id || "");
+
+      if(!enrollmentId) continue;
+
+      for(const date of dates){
+        const cle =
+          anneeAcademique +
+          "_" +
+          studentId +
+          "_" +
+          date;
+
+        const desired = presences[cle] || "";
+        const original = serverPresences[cle] || "";
+
+        if(desired === original) continue;
+
+        const meta = attendanceMeta[cle];
+
+        if(desired === ""){
+          if(meta && meta.id){
+            const response = await fetch(
+              "/api/attendance/index.php?id=" +
+              encodeURIComponent(meta.id) +
+              "&enrollment_id=" +
+              encodeURIComponent(meta.enrollment_id || enrollmentId),
+              {
+                method: "DELETE",
+                credentials: "include",
+                headers: {
+                  "Accept": "application/json"
+                }
+              }
+            );
+
+            const payload = await response.json();
+            if(!response.ok || !payload.success){
+              throw new Error(
+                payload && payload.error
+                  ? payload.error
+                  : "Suppression de présence impossible."
+              );
+            }
+
+            delete attendanceMeta[cle];
+            delete serverPresences[cle];
+          }
+
+          delete presences[cle];
+          changements++;
+          continue;
+        }
+
+        const apiStatus = statutPresenceApi(desired);
+
+        if(!apiStatus){
+          throw new Error("Statut de présence invalide.");
+        }
+
+        const body = {
+          enrollment_id: enrollmentId,
+          attendance_date: date,
+          status: apiStatus,
+          comment: null
+        };
+
+        let url = "/api/attendance/index.php";
+        let method = "POST";
+
+        if(meta && meta.id){
+          url += "?id=" + encodeURIComponent(meta.id);
+          method = "PUT";
+        }
+
+        const response = await fetch(url, {
+          method: method,
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify(body)
+        });
+
+        const payload = await response.json();
+
+        if(!response.ok || !payload.success){
+          throw new Error(
+            payload && payload.error
+              ? payload.error
+              : "Enregistrement de présence impossible."
+          );
+        }
+
+        const saved = payload.attendance || {};
+        serverPresences[cle] = desired;
+        presences[cle] = desired;
+        attendanceMeta[cle] = {
+          id: String(saved.id || (meta && meta.id) || ""),
+          enrollment_id: String(saved.enrollment_id || enrollmentId)
+        };
+
+        changements++;
+      }
     }
 
     afficherMessage(
       "messagePresence",
-      "Les présences ont été enregistrées avec succès.",
+      changements === 0
+        ? "Aucune modification à enregistrer."
+        : changements + " présence(s) enregistrée(s) dans PostgreSQL.",
       "ok"
     );
 
   }catch(erreur){
-
     console.error(erreur);
 
     afficherMessage(
       "messagePresence",
-      "Erreur : les présences n'ont pas pu être enregistrées.",
+      erreur && erreur.message
+        ? erreur.message
+        : "Erreur : les présences n'ont pas pu être enregistrées.",
       "erreur"
     );
-
   }
-
 }
 
 
