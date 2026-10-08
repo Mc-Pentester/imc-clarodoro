@@ -193,16 +193,19 @@ jobs:
           grep -q '"deleted":true' /tmp/f02c-delete.json
           grep -q "\"id\":\"$ATT_ID\"" /tmp/f02c-delete.json
 
-          set +e
-          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc \
+          if ! PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc \
             "SELECT COUNT(*) FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';" \
-            >/tmp/f02c-delete-check.txt 2>&1
-          DELETE_PSQL_STATUS=$?
-          set -e
+            >/tmp/f02c-delete-check.txt 2>&1; then
+            DELETE_PSQL_STATUS=$?
+            echo "F02C DELETE CHECK STATUS: [$DELETE_PSQL_STATUS]"
+            echo "F02C DELETE CHECK RAW:"
+            cat /tmp/f02c-delete-check.txt
+            exit 1
+          fi
+          DELETE_PSQL_STATUS=0
           echo "F02C DELETE CHECK STATUS: [$DELETE_PSQL_STATUS]"
           echo "F02C DELETE CHECK RAW:"
           cat /tmp/f02c-delete-check.txt
-          test "$DELETE_PSQL_STATUS" = "0"
           DELETE_COUNT="$(tr -d '[:space:]' </tmp/f02c-delete-check.txt)"
           echo "F02C DELETE ROW COUNT: [$DELETE_COUNT]"
           test "$DELETE_COUNT" = "0"
