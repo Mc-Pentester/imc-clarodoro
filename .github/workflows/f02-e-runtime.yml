@@ -16,6 +16,7 @@ on:
 jobs:
   runtime:
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:18
@@ -57,11 +58,14 @@ jobs:
 
       - name: Build base schema
         run: |
-          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" \
+            -v ON_ERROR_STOP=1 \
+            -f database/schema.sql
 
       - name: Seed RBAC roles
         run: |
-          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1 <<'SQL'
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" \
+            -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (name, description)
           VALUES
             ('PDG', 'Direction générale'),
@@ -81,12 +85,14 @@ jobs:
       - name: Seed runtime personnel
         run: |
           PDG_HASH=$(php -r 'echo password_hash("password", PASSWORD_DEFAULT), PHP_EOL;')
+
           psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" \
             -v ON_ERROR_STOP=1 \
             -v "pdg_hash=$PDG_HASH" <<'SQL'
           INSERT INTO users (username, password_hash, role_id, status)
           SELECT 'f02e-pdg', :'pdg_hash', id, 'ACTIVE'
-          FROM roles WHERE name = 'PDG'
+          FROM roles
+          WHERE name = 'PDG'
           ON CONFLICT (username) DO NOTHING;
           SQL
 
@@ -105,68 +111,128 @@ jobs:
           set -euo pipefail
 
           echo "=== F-02-E AUTH GATE ==="
-          status=$(curl -sS -o /tmp/unauth.json -w "%{http_code}" http://127.0.0.1:8090/api/personnel/index.php)
+
+          status=$(curl -sS \
+            -o /tmp/unauth.json \
+            -w "%{http_code}" \
+            http://127.0.0.1:8090/api/personnel/index.php)
+
           test "$status" = "401"
+
           echo "Unauthenticated: PASS"
 
           echo "=== F-02-E LOGIN ==="
-          login=$(curl -sS -c /tmp/f02e-cookie.txt -H "Content-Type: application/json"             -d '{"username":"f02e-pdg","password":"password"}'             http://127.0.0.1:8090/api/auth/login.php)
+
+          login=$(curl -sS \
+            -c /tmp/f02e-cookie.txt \
+            -H "Content-Type: application/json" \
+            --data-binary @- \
+            http://127.0.0.1:8090/api/auth/login.php <<'JSON'
+          {"username":"f02e-pdg","password":"password"}
+          JSON
+          )
+
           echo "$login" | grep -q '"success":true'
-          csrf=$(echo "$login" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["csrfToken"];')
+
+          csrf=$(echo "$login" | php -r '
+            $d = json_decode(stream_get_contents(STDIN), true);
+            echo $d["csrfToken"] ?? "";
+          ')
+
           test -n "$csrf"
+
           echo "Login: PASS"
 
           echo "=== F-02-E CREATE ==="
-          create=$(curl -sS -b /tmp/f02e-cookie.txt -H "X-CSRF-Token: $csrf" -H "Content-Type: application/json"             -d '{"action":"create","name":"Jean Test","role":"Enseignant","class_name":"6e A","username":"f02e-teacher","password":"StrongPass!123"}'             http://127.0.0.1:8090/api/personnel/index.php)
+
+          create=$(curl -sS \
+            -b /tmp/f02e-cookie.txt \
+            -H "X-CSRF-Token: $csrf" \
+            -H "Content-Type: application/json" \
+            --data-binary @- \
+            http://127.0.0.1:8090/api/personnel/index.php <<'JSON'
+          {"action":"create","name":"Jean Test","role":"Enseignant","class_name":"6e A","username":"f02e-teacher","password":"StrongPass!123"}
+          JSON
+          )
+
           echo "$create" | grep -q '"success":true'
-          staff_id=$(echo "$create" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["staffId"];')
+
+          staff_id=$(echo "$create" | php -r '
+            $d = json_decode(stream_get_contents(STDIN), true);
+            echo $d["staffId"] ?? "";
+          ')
+
           test -n "$staff_id"
+
           echo "Create: PASS"
 
           echo "=== F-02-E READ ==="
-          read=$(curl -sS -b /tmp/f02e-cookie.txt http://127.0.0.1:8090/api/personnel/index.php)
+
+          read=$(curl -sS \
+            -b /tmp/f02e-cookie.txt \
+            http://127.0.0.1:8090/api/personnel/index.php)
+
           echo "$read" | grep -q 'f02e-teacher'
+
           echo "Read: PASS"
 
           echo "=== F-02-E UPDATE ==="
-          update=$(curl -sS -b /tmp/f02e-cookie.txt \
-  -H "X-CSRF-Token: $csrf" \
-  -H "Content-Type: application/json" \
-  --data-binary @- \
-  http://127.0.0.1:8090/api/personnel/index.php <<JSON
-{"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"Enseignant","class_name":"7e A","username":"f02e-teacher","password":""}
-JSON
-)             http://127.0.0.1:8090/api/personnel/index.php)
+
+          update=$(curl -sS \
+            -b /tmp/f02e-cookie.txt \
+            -H "X-CSRF-Token: $csrf" \
+            -H "Content-Type: application/json" \
+            --data-binary @- \
+            http://127.0.0.1:8090/api/personnel/index.php <<JSON
+          {"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"Enseignant","class_name":"7e A","username":"f02e-teacher","password":""}
+          JSON
+          )
+
           echo "$update" | grep -q '"success":true'
+
           echo "Update: PASS"
 
           echo "=== F-02-E PRIVILEGE ESCALATION ==="
-          escalation=$(curl -sS -o /tmp/escalation.json -w "%{http_code}" \
-  -b /tmp/f02e-cookie.txt \
-  -H "X-CSRF-Token: $csrf" \
-  -H "Content-Type: application/json" \
-  --data-binary @- \
-  http://127.0.0.1:8090/api/personnel/index.php <<JSON
-{"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"PDG","class_name":"7e A","username":"f02e-teacher","password":""}
-JSON
-)             http://127.0.0.1:8090/api/personnel/index.php)
+
+          escalation=$(curl -sS \
+            -o /tmp/escalation.json \
+            -w "%{http_code}" \
+            -b /tmp/f02e-cookie.txt \
+            -H "X-CSRF-Token: $csrf" \
+            -H "Content-Type: application/json" \
+            --data-binary @- \
+            http://127.0.0.1:8090/api/personnel/index.php <<JSON
+          {"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"PDG","class_name":"7e A","username":"f02e-teacher","password":""}
+          JSON
+          )
+
           test "$escalation" = "200"
+
           echo "PDG role assignment by PDG: PASS"
 
           echo "=== F-02-E ARCHIVE ==="
-          archive=$(curl -sS -b /tmp/f02e-cookie.txt \
-  -H "X-CSRF-Token: $csrf" \
-  -H "Content-Type: application/json" \
-  --data-binary @- \
-  http://127.0.0.1:8090/api/personnel/index.php <<JSON
-{"action":"delete","staff_id":"$staff_id"}
-JSON
-)             http://127.0.0.1:8090/api/personnel/index.php)
+
+          archive=$(curl -sS \
+            -b /tmp/f02e-cookie.txt \
+            -H "X-CSRF-Token: $csrf" \
+            -H "Content-Type: application/json" \
+            --data-binary @- \
+            http://127.0.0.1:8090/api/personnel/index.php <<JSON
+          {"action":"delete","staff_id":"$staff_id"}
+          JSON
+          )
+
           echo "$archive" | grep -q '"success":true'
+
           echo "Archive: PASS"
 
           echo "=== F-02-E DB SOURCE OF TRUTH ==="
-          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" -v ON_ERROR_STOP=1             -c "SELECT first_name,last_name,status FROM staff WHERE id='$staff_id';" | grep -q 'ARCHIVED'
+
+          psql "host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER password=$DB_PASSWORD" \
+            -v ON_ERROR_STOP=1 \
+            -c "SELECT first_name,last_name,status FROM staff WHERE id='$staff_id';" \
+            | grep -q 'ARCHIVED'
+
           echo "PostgreSQL source of truth: PASS"
 
           echo "F-02-E RUNTIME PROOF: PASS"
