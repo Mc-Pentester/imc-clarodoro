@@ -129,17 +129,39 @@ jobs:
           echo "Read: PASS"
 
           echo "=== F-02-E UPDATE ==="
-          update=$(curl -sS -b /tmp/f02e-cookie.txt -H "X-CSRF-Token: $csrf" -H "Content-Type: application/json"             -d "{"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"Enseignant","class_name":"7e A","username":"f02e-teacher","password":""}"             http://127.0.0.1:8090/api/personnel/index.php)
+          update=$(curl -sS -b /tmp/f02e-cookie.txt \
+  -H "X-CSRF-Token: $csrf" \
+  -H "Content-Type: application/json" \
+  --data-binary @- \
+  http://127.0.0.1:8090/api/personnel/index.php <<JSON
+{"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"Enseignant","class_name":"7e A","username":"f02e-teacher","password":""}
+JSON
+)             http://127.0.0.1:8090/api/personnel/index.php)
           echo "$update" | grep -q '"success":true'
           echo "Update: PASS"
 
           echo "=== F-02-E PRIVILEGE ESCALATION ==="
-          escalation=$(curl -sS -o /tmp/escalation.json -w "%{http_code}" -b /tmp/f02e-cookie.txt             -H "X-CSRF-Token: $csrf" -H "Content-Type: application/json"             -d "{"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"PDG","class_name":"7e A","username":"f02e-teacher","password":""}"             http://127.0.0.1:8090/api/personnel/index.php)
+          escalation=$(curl -sS -o /tmp/escalation.json -w "%{http_code}" \
+  -b /tmp/f02e-cookie.txt \
+  -H "X-CSRF-Token: $csrf" \
+  -H "Content-Type: application/json" \
+  --data-binary @- \
+  http://127.0.0.1:8090/api/personnel/index.php <<JSON
+{"action":"update","staff_id":"$staff_id","name":"Jean Updated","role":"PDG","class_name":"7e A","username":"f02e-teacher","password":""}
+JSON
+)             http://127.0.0.1:8090/api/personnel/index.php)
           test "$escalation" = "200"
           echo "PDG role assignment by PDG: PASS"
 
           echo "=== F-02-E ARCHIVE ==="
-          archive=$(curl -sS -b /tmp/f02e-cookie.txt -H "X-CSRF-Token: $csrf" -H "Content-Type: application/json"             -d "{"action":"delete","staff_id":"$staff_id"}"             http://127.0.0.1:8090/api/personnel/index.php)
+          archive=$(curl -sS -b /tmp/f02e-cookie.txt \
+  -H "X-CSRF-Token: $csrf" \
+  -H "Content-Type: application/json" \
+  --data-binary @- \
+  http://127.0.0.1:8090/api/personnel/index.php <<JSON
+{"action":"delete","staff_id":"$staff_id"}
+JSON
+)             http://127.0.0.1:8090/api/personnel/index.php)
           echo "$archive" | grep -q '"success":true'
           echo "Archive: PASS"
 
