@@ -1612,9 +1612,14 @@ async function configurerMotDePasse() {
    GESTION DU PERSONNEL (Admin)
 ============================================================ */
 
-function afficherGestionPersonnel() {
+async function afficherGestionPersonnel() {
     document.getElementById('sectionGestionPersonnel').style.display = 'block';
-    chargerListePersonnelAdmin();
+    try {
+        await chargerPersonnelServeur();
+        chargerListePersonnelAdmin();
+    } catch (error) {
+        afficherMessageAdmin(error.message || 'Impossible de charger le personnel.', 'erreur');
+    }
 }
 
 function masquerGestionPersonnel() {
