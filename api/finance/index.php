@@ -117,10 +117,40 @@ if ($method === 'GET') {
     }
     unset($invoice);
 
+    $studentWhere = '';
+    $studentParams = [];
+    if ($schoolYearId !== null) {
+        $studentWhere = ' AND e.school_year_id = :students_school_year_id';
+        $studentParams[':students_school_year_id'] = $schoolYearId;
+    }
+
+    $studentsScope = financeScopeSql($user, 's.id');
+    $studentsStmt = $pdo->prepare(
+        'SELECT DISTINCT
+            s.id,
+            s.matricule,
+            s.last_name,
+            s.first_name,
+            e.class_id,
+            c.code AS class_code,
+            c.name AS class_name,
+            e.school_year_id
+         FROM students s
+         INNER JOIN enrollments e
+            ON e.student_id = s.id
+           AND e.status = ' + "'ACTIVE'" + $studentWhere + '
+         INNER JOIN classes c ON c.id = e.class_id
+         WHERE 1=1' . $studentsScope[0] . '
+         ORDER BY s.last_name, s.first_name, s.id'
+    );
+    $studentsStmt->execute($studentParams + $studentsScope[1]);
+    $students = $studentsStmt->fetchAll();
+
     echo json_encode([
         'success' => true,
         'invoices' => $invoices,
         'tariffs' => $tariffsStmt->fetchAll(),
+        'students' => $students,
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
