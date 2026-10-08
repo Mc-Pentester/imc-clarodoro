@@ -102,8 +102,8 @@ if ($method === 'GET') {
          INNER JOIN school_years sy ON sy.id = e.school_year_id
          ' . $scopeSql . '
          WHERE e.status = \'ACTIVE\'
-           AND s.status = \'ACTIVE\'
-           AND c.status = \'ACTIVE\'
+           AND s.status = 'ACTIVE'
+           AND c.status = 'ACTIVE'
          ORDER BY sy.start_date DESC, c.name ASC, s.last_name ASC, s.first_name ASC'
     );
     $enrollmentStmt->execute($scopeParams);
@@ -138,7 +138,7 @@ if ($method === 'DELETE') {
          ' . $scopeSql . '
          WHERE a.id = :id
            AND a.enrollment_id = :enrollment_id
-           AND e.status = 'ACTIVE'
+           AND e.status = \'ACTIVE\'
          LIMIT 1'
     );
     $check->execute([
@@ -178,3 +178,90 @@ foreach (['id', 'student_id', 'class_id', 'school_year_id', 'created_at', 'updat
     if (array_key_exists($field, $data)) {
         apiError(422, 'Le champ ' . $field . ' est calculé par le serveur');
     }
+}
+
+$enrollmentId = $data['enrollment_id'] ?? '';
+$date = $data['attendance_date'] ?? date('Y-m-d');
+$status = $data['status'] ?? '';
+$comment = $data['comment'] ?? null;
+
+if (!is_string($enrollmentId) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $enrollmentId)) {
+    apiError(422, 'enrollment_id UUID invalide');
+}
+if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+    apiError(422, 'attendance_date invalide');
+}
+if (!is_string($status) || !in_array($status, ['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'], true)) {
+    apiError(422, 'status invalide');
+}
+if ($comment !== null && !is_string($comment)) {
+    apiError(422, 'comment invalide');
+}
+
+[$scopeSql, $scopeParams] = f02cAttendanceScope($user);
+$check = $pdo->prepare(
+    'SELECT e.id
+     FROM enrollments e
+     ' . $scopeSql . '
+     WHERE e.id = :enrollment_id
+       AND e.status = \'ACTIVE\'
+     LIMIT 1'
+);
+$check->execute([':enrollment_id' => $enrollmentId] + $scopeParams);
+
+if (!$check->fetch()) {
+    apiError(404, 'Inscription hors périmètre');
+}
+
+try {
+    if ($method === 'POST') {
+        $stmt = $pdo->prepare(
+            'INSERT INTO attendance (
+                enrollment_id, attendance_date, status, comment
+             )
+             VALUES (:enrollment_id, :attendance_date, :status, :comment)
+             RETURNING id, enrollment_id, attendance_date,
+                       status, comment, created_at, updated_at'
+        );
+        $stmt->execute([
+            ':enrollment_id' => $enrollmentId,
+            ':attendance_date' => $date,
+            ':status' => $status,
+            ':comment' => $comment,
+        ]);
+        http_response_code(201);
+    } else {
+        $id = f02cAttendanceUuid('id');
+        $stmt = $pdo->prepare(
+            'UPDATE attendance a
+             SET status = :status,
+                 comment = :comment,
+                 updated_at = NOW()
+             WHERE a.id = :id
+               AND a.enrollment_id = :enrollment_id
+             RETURNING a.id, a.enrollment_id, a.attendance_date,
+                       a.status, a.comment, a.created_at, a.updated_at'
+        );
+        $stmt->execute([
+            ':id' => $id,
+            ':enrollment_id' => $enrollmentId,
+            ':status' => $status,
+            ':comment' => $comment,
+        ]);
+    }
+
+    $row = $stmt->fetch();
+    if (!$row) {
+        apiError(404, 'Présence introuvable ou hors périmètre');
+    }
+
+    echo json_encode([
+        'success' => true,
+        'attendance' => $row,
+    ], JSON_UNESCAPED_UNICODE);
+} catch (PDOException $e) {
+    if (str_contains($e->getMessage(), 'attendance_unique')) {
+        apiError(409, 'Une présence existe déjà pour cette inscription et cette date');
+    }
+    apiError(500, 'Erreur interne du serveur');
+}
