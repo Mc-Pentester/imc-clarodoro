@@ -142,8 +142,37 @@ if ($method === 'GET') {
     exit;
 }
 
+if ($method === 'DELETE') {
+    $user = requirePermission($pdo, 'resultats.update');
+    requireCsrfToken();
+    $id = f02cUuid('id');
+
+    [$scopeSql, $scopeParams] = f02cScope($user, 'e', 's');
+    $stmt = $pdo->prepare(
+        'DELETE FROM grades g
+         USING enrollments e, subjects s
+         ' . $scopeSql . '
+         WHERE g.id = :id
+           AND g.enrollment_id = e.id
+           AND g.subject_id = s.id
+         RETURNING g.id'
+    );
+    $stmt->execute([':id' => $id] + $scopeParams);
+    $row = $stmt->fetch();
+    if (!$row) {
+        apiError(404, 'Résultat introuvable ou hors périmètre');
+    }
+
+    echo json_encode([
+        'success' => true,
+        'deleted' => true,
+        'id' => $row['id'],
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if (!in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
-    header('Allow: GET, POST, PUT, PATCH');
+    header('Allow: GET, POST, PUT, PATCH, DELETE');
     apiError(405, 'Méthode HTTP non autorisée');
 }
 
