@@ -1,0 +1,167 @@
+name: F-02-G personnel runtime proof
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  f02-g-runtime:
+    name: F-02-G PostgreSQL personnel authority
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and migrations
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+
+      - name: Seed F-02-G RBAC runtime actors
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles(id,name)
+          VALUES
+            ('00000000-0000-0000-0000-000000007001','PDG'),
+            ('00000000-0000-0000-0000-000000007002','Directeur')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO permissions(name)
+          VALUES
+            ('personnel.read'),
+            ('personnel.create'),
+            ('personnel.update'),
+            ('personnel.delete')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000007001', id
+          FROM permissions
+          WHERE name LIKE 'personnel.%'
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000007002', id
+          FROM permissions
+          WHERE name = 'personnel.read'
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO users(id,username,password_hash,role_id,status)
+          VALUES
+            ('00000000-0000-0000-0000-000000007011','f02g-pdg',crypt('F02G-PDG-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007001','ACTIVE'),
+            ('00000000-0000-0000-0000-000000007012','f02g-directeur',crypt('F02G-DIR-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007002','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+
+      - name: PHP syntax
+        run: |
+          set -euo pipefail
+          php -l api/personnel/index.php
+          php -l config/auth.php
+          echo 'F-02-G PHP SYNTAX: PASS'
+
+      - name: Start API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/f02g-api.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove PostgreSQL personnel authority and RBAC
+        run: |
+          set -Eeuo pipefail
+          trap 'rc=$?; echo "::error::F-02-G failed: rc=$rc command=[$BASH_COMMAND]"; cat /tmp/f02g-api.log 2>/dev/null || true; exit $rc' ERR
+
+          BASE='http://127.0.0.1:8090'
+          PDG_COOKIE='/tmp/f02g-pdg.cookies'
+          DIR_COOKIE='/tmp/f02g-dir.cookies'
+
+          PDG_LOGIN="$(curl -fsS -c "$PDG_COOKIE" -b "$PDG_COOKIE" -H 'Content-Type: application/json' -d '{"username":"f02g-pdg","password":"F02G-PDG-2026!"}' "$BASE/api/auth/login.php")"
+          PDG_CSRF="$(printf '%s' "$PDG_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$PDG_CSRF"
+
+          CREATE="$(curl -fsS -X POST -c "$PDG_COOKIE" -b "$PDG_COOKIE"             -H "X-CSRF-Token: $PDG_CSRF"             -H 'Content-Type: application/json'             -d '{"first_name":"F02G","last_name":"Personnel","function_name":"Directeur","class_name":"Administration","phone":"50900000000","email":"f02g.personnel@example.test","username":"f02g-staff","password":"F02G-Staff-2026!","role_name":"Directeur"}'             "$BASE/api/personnel/index.php")"
+
+          STAFF_ID="$(printf '%s' "$CREATE" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["id"]??"";')"
+          test -n "$STAFF_ID"
+
+          GET="$(curl -fsS -b "$PDG_COOKIE" "$BASE/api/personnel/index.php")"
+          printf '%s' "$GET" | grep -q '"username":"f02g-staff"'
+          printf '%s' "$GET" | grep -q '"status":"ACTIVE"'
+          if printf '%s' "$GET" | grep -q 'password_hash'; then
+            echo 'FAIL: personnel API exposes password hash'
+            exit 1
+          fi
+
+          DB_STATUS="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT s.status || '|' || u.status FROM staff s JOIN users u ON u.id=s.user_id WHERE s.id='$STAFF_ID';")"
+          test "$DB_STATUS" = 'ACTIVE|ACTIVE'
+
+          DIR_LOGIN="$(curl -fsS -c "$DIR_COOKIE" -b "$DIR_COOKIE" -H 'Content-Type: application/json' -d '{"username":"f02g-directeur","password":"F02G-DIR-2026!"}' "$BASE/api/auth/login.php")"
+          DIR_CSRF="$(printf '%s' "$DIR_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$DIR_CSRF"
+
+          set +e
+          FORBIDDEN="$(curl -sS -o /tmp/f02g-forbidden.json -w '%{http_code}' -X POST -c "$DIR_COOKIE" -b "$DIR_COOKIE"             -H "X-CSRF-Token: $DIR_CSRF"             -H 'Content-Type: application/json'             -d '{"first_name":"Denied","last_name":"Create","username":"f02g-denied","password":"F02G-Denied-2026!","role_name":"Directeur"}'             "$BASE/api/personnel/index.php")"
+          set -e
+          echo "F02G CREATE WITHOUT PERMISSION STATUS: [$FORBIDDEN]"
+          test "$FORBIDDEN" = '403'
+
+          UPDATE="$(curl -fsS -X PUT -c "$PDG_COOKIE" -b "$PDG_COOKIE"             -H "X-CSRF-Token: $PDG_CSRF"             -H 'Content-Type: application/json'             -d "{"id":"$STAFF_ID","first_name":"F02G-Updated","last_name":"Personnel","function_name":"Directeur","class_name":"Administration","phone":"50911111111","email":"f02g.updated@example.test"}"             "$BASE/api/personnel/index.php")"
+          printf '%s' "$UPDATE" | grep -q '"success":true'
+
+          UPDATED_DB="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT first_name || '|' || phone FROM staff WHERE id='$STAFF_ID';")"
+          test "$UPDATED_DB" = 'F02G-Updated|50911111111'
+
+          DELETE="$(curl -fsS -X DELETE -c "$PDG_COOKIE" -b "$PDG_COOKIE"             -H "X-CSRF-Token: $PDG_CSRF"             -H 'Content-Type: application/json'             -d "{"id":"$STAFF_ID"}"             "$BASE/api/personnel/index.php")"
+          printf '%s' "$DELETE" | grep -q '"success":true'
+
+          ARCHIVED_DB="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT s.status || '|' || u.status FROM staff s JOIN users u ON u.id=s.user_id WHERE s.id='$STAFF_ID';")"
+          test "$ARCHIVED_DB" = 'ARCHIVED|INACTIVE'
+
+          echo 'F-02-G SERVER + RBAC + POSTGRESQL AUTHORITY PROOF: PASS'
+
+      - name: Frontend authority guard
+        run: |
+          set -euo pipefail
+          if grep -nE 'localStorage\.(getItem|setItem|removeItem).*imc_personnel|IMCSecureStorage\.(getItem|setItem|removeItem).*imc_personnel' personnel.html PDG.html; then
+            echo 'FAIL: personnel browser storage remains a source of truth'
+            exit 1
+          fi
+          grep -q 'api/personnel/index.php' personnel.html
+          echo 'F-02-G FRONTEND AUTHORITY CHECK: PASS'
