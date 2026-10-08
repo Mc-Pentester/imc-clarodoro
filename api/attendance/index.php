@@ -102,8 +102,8 @@ if ($method === 'GET') {
          INNER JOIN school_years sy ON sy.id = e.school_year_id
          ' . $scopeSql . '
          WHERE e.status = \'ACTIVE\'
-           AND s.status = 'ACTIVE'
-           AND c.status = 'ACTIVE'
+           AND s.status = \'ACTIVE\'
+           AND c.status = \'ACTIVE\'
          ORDER BY sy.start_date DESC, c.name ASC, s.last_name ASC, s.first_name ASC'
     );
     $enrollmentStmt->execute($scopeParams);
