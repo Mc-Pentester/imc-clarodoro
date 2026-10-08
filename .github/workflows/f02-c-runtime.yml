@@ -178,17 +178,33 @@ jobs:
 
           set +e
           DUP="$(curl -sS -o /tmp/f02c-dup.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE"             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"enrollment_id":"00000000-0000-0000-0000-000000003081","attendance_date":"2026-10-07","status":"LATE"}'             "$BASE/api/attendance/index.php")"
+          DUP_CURL_STATUS=$?
           set -e
+          echo "DUP STATUS: [$DUP]"
+          echo "DUP CURL EXIT: [$DUP_CURL_STATUS]"
+          echo "DUP BODY:"
+          cat /tmp/f02c-dup.json
           test "$DUP" = "409"
 
-          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT grade::text FROM grades WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND subject_id='00000000-0000-0000-0000-000000003061' AND grade_date='2026-10-07';" | grep -qx '17.50'
+          GRADE_SQL_RESULT="$(
+            PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc               "SELECT grade::text FROM grades WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND subject_id='00000000-0000-0000-0000-000000003061' AND grade_date='2026-10-07';"
+          )"
+          echo "GRADE SQL RESULT: [$GRADE_SQL_RESULT]"
+          test "$GRADE_SQL_RESULT" = "17.50"
 
-          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT status FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';" | grep -qx 'PRESENT'
+          ATTENDANCE_SQL_RESULT="$(
+            PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc               "SELECT status FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';"
+          )"
+          echo "ATTENDANCE SQL RESULT: [$ATTENDANCE_SQL_RESULT]"
+          test "$ATTENDANCE_SQL_RESULT" = "PRESENT"
 
           ATT_ID="$(printf '%s' "$ATT" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["attendance"]["id"]??"";')"
           test -n "$ATT_ID"
 
           DELETE_STATUS="$(curl -sS -o /tmp/f02c-delete.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE"             -X DELETE             -H "X-CSRF-Token: $CSRF"             "$BASE/api/attendance/index.php?id=$ATT_ID&enrollment_id=00000000-0000-0000-0000-000000003081")"
+          echo "DELETE STATUS: [$DELETE_STATUS]"
+          echo "DELETE BODY:"
+          cat /tmp/f02c-delete.json
           test "$DELETE_STATUS" = "200"
           grep -q '"deleted":true' /tmp/f02c-delete.json
           grep -q "\"id\":\"$ATT_ID\"" /tmp/f02c-delete.json
