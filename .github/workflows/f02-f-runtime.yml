@@ -65,11 +65,17 @@ jobs:
           ON CONFLICT (id) DO NOTHING;
           SQL
 
-      - name: PHP syntax
+      - name: PHP syntax and finance frontend authority
         run: |
           set -euo pipefail
           php -l api/finance/index.php
           php -l config/auth.php
+          if grep -nE 'localStorage\\.(getItem|setItem|removeItem).*imc_(students|finances|tarifs|active_year)' finances.html; then
+            echo 'FAIL: finances.html still uses browser storage as finance source of truth'
+            exit 1
+          fi
+          grep -q 'api/finance/index.php' finances.html
+          echo 'F-02-F FRONTEND AUTHORITY CHECK: PASS'
 
       - name: Start API
         run: |
@@ -116,5 +122,7 @@ jobs:
           GET="$(curl -fsS -b "$COOKIE" "$BASE/api/finance/index.php?student_id=00000000-0000-0000-0000-000000005071&school_year_id=00000000-0000-0000-0000-000000005051")"
           printf '%s' "$GET" | grep -q '"balance":1800'
           printf '%s' "$GET" | grep -q '"amount":"3000.00"'
+          printf '%s' "$GET" | grep -q '"students":'
+          printf '%s' "$GET" | grep -q '"payments":'
 
-          echo 'F-02-F RUNTIME PROOF: PASS'
+          echo 'F-02-F SERVER + FRONTEND AUTHORITY PROOF: PASS'
