@@ -150,7 +150,7 @@ if ($method === 'GET') {
          FROM students s
          INNER JOIN enrollments e
             ON e.student_id = s.id
-           AND e.status = ' + "'ACTIVE'" + $studentWhere + '
+           AND e.status = \'ACTIVE\'' . $studentWhere . '
          INNER JOIN classes c ON c.id = e.class_id
          WHERE 1=1' . $studentsScope[0] . '
          ORDER BY s.last_name, s.first_name, s.id'
