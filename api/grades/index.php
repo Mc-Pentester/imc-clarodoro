@@ -82,6 +82,8 @@ if ($method === 'GET') {
             s.code AS subject_code,
             s.name AS subject_name,
             s.coefficient,
+            s.max_points,
+            g.assessment_number,
             g.grade,
             g.grade_date,
             g.created_at,
@@ -150,7 +152,7 @@ requireCsrfToken();
 $data = readJsonBody();
 
 foreach (array_keys($data) as $field) {
-    if (!in_array($field, ['enrollment_id', 'subject_id', 'grade', 'grade_date'], true)) {
+    if (!in_array($field, ['enrollment_id', 'subject_id', 'grade', 'grade_date', 'assessment_number'], true)) {
         apiError(422, 'Champ inconnu: ' . $field);
     }
 }
@@ -177,6 +179,15 @@ if (!isset($data['grade']) || !is_numeric($data['grade'])) {
 $grade = (float) $data['grade'];
 if (!is_finite($grade) || $grade < 0 || $grade > 100) {
     apiError(422, 'grade doit être compris entre 0 et 100');
+}
+
+$assessmentNumber = $data['assessment_number'] ?? 1;
+if (!is_int($assessmentNumber) && !(is_string($assessmentNumber) && ctype_digit($assessmentNumber))) {
+    apiError(422, 'assessment_number invalide');
+}
+$assessmentNumber = (int) $assessmentNumber;
+if ($assessmentNumber < 1 || $assessmentNumber > 3) {
+    apiError(422, 'assessment_number doit être compris entre 1 et 3');
 }
 
 $gradeDate = $data['grade_date'] ?? date('Y-m-d');
@@ -213,14 +224,15 @@ try {
     if ($method === 'POST') {
         $stmt = $pdo->prepare(
             'INSERT INTO grades (enrollment_id, subject_id, grade, grade_date)
-             VALUES (:enrollment_id, :subject_id, :grade, :grade_date)
-             RETURNING id, enrollment_id, subject_id, grade, grade_date, created_at, updated_at'
+             VALUES (:enrollment_id, :subject_id, :grade, :grade_date, :assessment_number)
+             RETURNING id, enrollment_id, subject_id, assessment_number, grade, grade_date, created_at, updated_at'
         );
         $stmt->execute([
             ':enrollment_id' => $enrollmentId,
             ':subject_id' => $subjectId,
             ':grade' => $grade,
             ':grade_date' => $gradeDate,
+            ':assessment_number' => $assessmentNumber,
         ]);
         http_response_code(201);
     } else {
@@ -229,12 +241,13 @@ try {
             'UPDATE grades g
              SET grade = :grade,
                  grade_date = :grade_date,
+                 assessment_number = :assessment_number,
                  updated_at = NOW()
              WHERE g.id = :id
                AND g.enrollment_id = :enrollment_id
                AND g.subject_id = :subject_id
              RETURNING g.id, g.enrollment_id, g.subject_id,
-                       g.grade, g.grade_date, g.created_at, g.updated_at'
+                       g.assessment_number, g.grade, g.grade_date, g.created_at, g.updated_at'
         );
         $stmt->execute([
             ':id' => $id,
@@ -242,6 +255,7 @@ try {
             ':subject_id' => $subjectId,
             ':grade' => $grade,
             ':grade_date' => $gradeDate,
+            ':assessment_number' => $assessmentNumber,
         ]);
     }
 
@@ -254,6 +268,9 @@ try {
         'success' => true,
         'grade' => $row,
     ], JSON_UNESCAPED_UNICODE);
-} catch (PDOException) {
+} catch (PDOException $e) {
+    if ($e->getCode() === '23505') {
+        apiError(409, 'Résultat déjà enregistré pour cette matière et ce contrôle');
+    }
     apiError(500, 'Erreur interne du serveur');
 }
