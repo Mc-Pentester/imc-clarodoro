@@ -145,7 +145,8 @@ jobs:
 
       - name: Prove PostgreSQL results and attendance authority
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
+          trap 'rc=$?; echo "::error::F-02-C failed: rc=$rc command=[$BASH_COMMAND]"; echo "::error::API log:"; cat /tmp/f02c-api.log 2>/dev/null || true; exit $rc' ERR
           BASE='http://127.0.0.1:8090'
           COOKIE='/tmp/f02c.cookies'
 
