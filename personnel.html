@@ -811,7 +811,6 @@ th{
 
 </div>
 
-<script src="secure-storage.js"></script>
 <script src="auth.js"></script>
 <script>
 
@@ -844,53 +843,34 @@ let personnelEnModification = null;
 let classePresenceSelectionnee = "";
 let elevePresenceSelectionne = null;
 
-const CLE_PERSONNEL = "imc_personnel";
 const CLE_ELEVES = "imc_students";
 const CLE_PRESENCES = "imc_presences";
 const CLE_ANNEE = "imc_active_year";
 
-let anneeAcademique =
-  localStorage.getItem(CLE_ANNEE) || "2026-2027";
+let anneeAcademique = "2026-2027";
 
 
 /* =========================================================
    INITIALISATION
 ========================================================= */
 
-document.addEventListener("DOMContentLoaded", function(){
-
-  IMCSecureStorage.ready.then(function(ok){
-
-  if(!ok) return;
-
-  chargerDonnees();
-
-  document.getElementById("anneeRapportMensuel").value =
-    new Date().getFullYear();
-
-  document.getElementById("moisRapportMensuel").value =
-    String(new Date().getMonth() + 1);
-
-  document.getElementById("dateRapportJournalier").value =
-    dateISO(new Date());
-
-  document.getElementById("dateRapportHebdomadaire").value =
-    dateISO(obtenirLundi(new Date()));
-
-  document.getElementById("dateDebutSemaine").value =
-    dateISO(obtenirLundi(new Date()));
-
-  document.getElementById("anneeAcademique").textContent =
-    anneeAcademique;
-
-  document.getElementById("anneeAcademiquePresence").textContent =
-    anneeAcademique;
-
-  // Vérifier si du personnel est enregistré
-  verifierPersonnelEnregistre();
-
-  });
-
+document.addEventListener("DOMContentLoaded", async function(){
+  try {
+    const authenticated = await IMCAuth.verifySession();
+    if (!authenticated) return;
+    await chargerDonnees();
+    document.getElementById("anneeRapportMensuel").value = new Date().getFullYear();
+    document.getElementById("moisRapportMensuel").value = String(new Date().getMonth() + 1);
+    document.getElementById("dateRapportJournalier").value = dateISO(new Date());
+    document.getElementById("dateRapportHebdomadaire").value = dateISO(obtenirLundi(new Date()));
+    document.getElementById("dateDebutSemaine").value = dateISO(obtenirLundi(new Date()));
+    document.getElementById("anneeAcademique").textContent = anneeAcademique;
+    document.getElementById("anneeAcademiquePresence").textContent = anneeAcademique;
+    verifierPersonnelEnregistre();
+  } catch (error) {
+    console.error(error);
+    afficherMessage("messagePresence", error.message || "Impossible d'initialiser la page.", "erreur");
+  }
 });
 
 
@@ -908,117 +888,54 @@ function verifierPersonnelEnregistre(){
   }
 }
 
-async function chargerDonnees(){
-
-  try{
-    personnel =
-      JSON.parse(localStorage.getItem(CLE_PERSONNEL)) || [];
-  }catch(e){
+async function chargerPersonnelDepuisAPI(){
+  if (!IMCAuth.hasPermission("personnel.read")) {
     personnel = [];
+    chargerPersonnelTableau();
+    return;
   }
+  const response = await fetch("/api/personnel/index.php", { credentials:"include", headers:{Accept:"application/json"} });
+  const payload = await response.json();
+  if (!response.ok || !payload.success) throw new Error(payload.error || "Impossible de charger le personnel.");
+  personnel = Array.isArray(payload.personnel) ? payload.personnel.map(function(p){
+    return {
+      id:String(p.id), nom:[p.first_name,p.last_name].filter(Boolean).join(" "), fonction:p.function_name || p.role_name || "",
+      classe:p.class_name || "", identifiant:p.username || "", email:p.email || "", phone:p.phone || "",
+      userId:p.user_id || null, role:p.role_name || ""
+    };
+  }) : [];
+  chargerPersonnelTableau();
+}
 
+async function chargerDonnees(){
   eleves = [];
   presences = {};
   serverPresences = {};
   attendanceMeta = {};
   attendanceEnrollments = [];
-
-  chargerPersonnelTableau();
-
-  try{
-    const response = await fetch("/api/attendance/index.php", {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        "Accept": "application/json"
-      }
-    });
-
+  try { await chargerPersonnelDepuisAPI(); } catch(error) {
+    personnel = [];
+    chargerPersonnelTableau();
+    afficherMessage("messagePersonnel", error.message || "Impossible de charger le personnel.", "erreur");
+  }
+  try {
+    const response = await fetch("/api/attendance/index.php", { method:"GET", credentials:"include", headers:{Accept:"application/json"} });
     const payload = await response.json();
-
-    if(!response.ok || !payload.success){
-      throw new Error(
-        payload && payload.error
-          ? payload.error
-          : "Impossible de charger les présences."
-      );
-    }
-
-    attendanceEnrollments =
-      Array.isArray(payload.enrollments)
-        ? payload.enrollments
-        : [];
-
+    if(!response.ok || !payload.success) throw new Error(payload.error || "Impossible de charger les présences.");
+    attendanceEnrollments = Array.isArray(payload.enrollments) ? payload.enrollments : [];
     const parEleve = new Map();
-
     attendanceEnrollments.forEach(function(enrollment){
-      const studentId = String(enrollment.student_id || "");
-      if(!studentId) return;
-
-      const currentYear =
-        String(enrollment.school_year_label || "") ===
-        String(anneeAcademique);
-
-      if(!parEleve.has(studentId) || currentYear){
-        parEleve.set(studentId, enrollment);
-      }
+      const studentId=String(enrollment.student_id||""); if(!studentId) return;
+      const currentYear=String(enrollment.school_year_label||"")===String(anneeAcademique);
+      if(!parEleve.has(studentId)||currentYear) parEleve.set(studentId,enrollment);
     });
-
-    eleves = Array.from(parEleve.values()).map(function(enrollment){
-      return {
-        id: String(enrollment.student_id),
-        nom: String(enrollment.last_name || ""),
-        prenom: String(enrollment.first_name || ""),
-        sexe: enrollment.sex || "",
-        classe: String(
-          enrollment.class_name ||
-          enrollment.class_code ||
-          ""
-        ),
-        enrollment_id: String(enrollment.enrollment_id),
-        school_year_id: String(enrollment.school_year_id || ""),
-        school_year_label: String(enrollment.school_year_label || "")
-      };
-    });
-
-    const attendance =
-      Array.isArray(payload.attendance)
-        ? payload.attendance
-        : [];
-
-    attendance.forEach(function(row){
-      const studentId = String(row.student_id || "");
-      const date = String(row.attendance_date || "");
-      if(!studentId || !date) return;
-
-      const cle =
-        anneeAcademique +
-        "_" +
-        studentId +
-        "_" +
-        date;
-
-      const statut = statutPresenceUi(row.status);
-      if(!statut) return;
-
-      presences[cle] = statut;
-      serverPresences[cle] = statut;
-      attendanceMeta[cle] = {
-        id: String(row.id),
-        enrollment_id: String(row.enrollment_id)
-      };
-    });
-
+    eleves=Array.from(parEleve.values()).map(function(enrollment){return {id:String(enrollment.student_id),nom:String(enrollment.last_name||""),prenom:String(enrollment.first_name||""),sexe:enrollment.sex||"",classe:String(enrollment.class_name||enrollment.class_code||""),enrollment_id:String(enrollment.enrollment_id),school_year_id:String(enrollment.school_year_id||""),school_year_label:String(enrollment.school_year_label||"")};});
+    const attendance=Array.isArray(payload.attendance)?payload.attendance:[];
+    attendance.forEach(function(row){const studentId=String(row.student_id||"");const date=String(row.attendance_date||"");if(!studentId||!date)return;const cle=anneeAcademique+"_"+studentId+"_"+date;const statut=statutPresenceUi(row.status);if(!statut)return;presences[cle]=statut;serverPresences[cle]=statut;attendanceMeta[cle]={id:String(row.id),enrollment_id:String(row.enrollment_id)};});
     afficherElevesPersonnel();
-  }catch(error){
+  } catch(error) {
     console.error(error);
-    afficherMessage(
-      "messagePresence",
-      error && error.message
-        ? error.message
-        : "Impossible de charger les données serveur.",
-      "erreur"
-    );
+    afficherMessage("messagePresence", error.message || "Impossible de charger les données serveur.", "erreur");
     afficherElevesPersonnel();
   }
 }
@@ -1036,27 +953,6 @@ function ouvrirPage(page){
 /* =========================================================
    CONNEXION
 ========================================================= */
-
-// Fonction de hashage sécurisée avec Web Crypto API (SHA-256)
-async function secureHash(str) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-}
-
-// Fonction de hashage simple (fallback pour compatibilité)
-function simpleHash(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return hash.toString(16);
-}
 
 async function connecterPersonnelWrapper() {
   await connecterPersonnel();
@@ -1080,14 +976,7 @@ async function connecterPersonnel(){
 
     // Les données locales ne servent plus à authentifier l'utilisateur.
     // Elles peuvent seulement compléter l'affichage historique de la page.
-    personnelConnecte = personnel.find(function(p) {
-      return String(p.identifiant || "") === identifiant;
-    }) || {
-      id: utilisateur.userId,
-      nom: utilisateur.username,
-      fonction: utilisateur.role,
-      identifiant: utilisateur.username
-    };
+    personnelConnecte = personnel.find(function(p) { return String(p.identifiant || "") === identifiant; }) || { id: utilisateur.userId, nom: utilisateur.username, fonction: utilisateur.role, identifiant: utilisateur.username, classe: "" };
 
     document.getElementById("sectionConnexion").classList.add("hidden");
     document.getElementById("interfacePersonnel").classList.remove("hidden");
@@ -1123,93 +1012,1767 @@ function deconnecterPersonnel() {
 ========================================================= */
 
  async function ajouterPersonnel(){
+  if (!IMCAuth.requirePermission("personnel.create")) { afficherMessage("messagePersonnel","Permission refusée.","erreur"); return; }
+  const nom=document.getElementById("personnelNom").value.trim();
+  const fonction=document.getElementById("personnelFonction").value;
+  const classe=document.getElementById("personnelClasse").value.trim();
+  const identifiant=document.getElementById("personnelIdentifiant").value.trim();
+  const motDePasse=document.getElementById("personnelMotDePasse").value;
+  if(!nom||!fonction||!identifiant||!motDePasse){afficherMessage("messagePersonnel","Veuillez remplir les champs obligatoires.","erreur");return;}
+  const parts=nom.split(/\\s+/); const firstName=parts.shift()||nom; const lastName=parts.join(" ")||firstName;
+  try{
+    const csrf=await IMCAuth.getCsrfToken();
+    const response=await fetch("/api/personnel/index.php",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify({first_name:firstName,last_name:lastName,function_name:fonction,class_name:classe,username:identifiant,password:motDePasse,role_name:fonction})});
+    const payload=await response.json(); if(!response.ok||!payload.success) throw new Error(payload.error||"Impossible d'ajouter le personnel.");
+    await chargerPersonnelDepuisAPI(); viderFormulairePersonnel(); afficherMessage("messagePersonnel","Personnel ajouté avec succès.","ok");
+  }catch(error){afficherMessage("messagePersonnel",error.message||"Impossible d'ajouter le personnel.","erreur");}
+}
 
-  if (!IMCAuth.requirePermission("personnel.create")) {
+
+
+function chargerPersonnelTableau(){
+
+  const tbody =
+    document.getElementById("tableauPersonnel");
+
+  if(!tbody) return;
+
+  tbody.innerHTML = "";
+
+  personnel.forEach(function(p){
+
+    const tr =
+      document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${echapperHTML(p.nom)}</td>
+      <td>${echapperHTML(p.fonction)}</td>
+      <td>${echapperHTML(p.classe || "")}</td>
+      <td>${echapperHTML(p.identifiant)}</td>
+      <td class="no-print">
+        <button
+          type="button"
+          class="btn btn-warning"
+          onclick="modifierPersonnel('${p.id}')">
+          Modifier
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-danger"
+          onclick="supprimerPersonnel('${p.id}')">
+          Supprimer
+        </button>
+      </td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+
+function basculerMotDePasse(id, bouton){
+  const champ = document.getElementById(id);
+  if(!champ) return;
+
+  if(champ.type === "password"){
+    champ.type = "text";
+    bouton.textContent = "🙈";
+    bouton.setAttribute("aria-label", "Masquer le mot de passe");
+  }else{
+    champ.type = "password";
+    bouton.textContent = "👁";
+    bouton.setAttribute("aria-label", "Afficher le mot de passe");
+  }
+}
+
+function estPDG(){
+  const user = IMCAuth.currentUser();
+  return !!user && String(user.role || "").trim().toLowerCase() === "pdg";
+}
+
+function modifierPersonnel(id){
+  const p=personnel.find(function(x){return String(x.id)===String(id);}); if(!p)return;
+  personnelEnModification=p;
+  document.getElementById("modNom").value=p.nom||""; document.getElementById("modFonction").value=p.fonction||""; document.getElementById("modClasse").value=p.classe||""; document.getElementById("modIdentifiant").value=p.identifiant||""; document.getElementById("modMotDePasse").value="";
+  const champIdentifiant=document.getElementById("modIdentifiant"), champMotDePasse=document.getElementById("modMotDePasse"), infoAcces=document.getElementById("infoModificationAcces");
+  champIdentifiant.readOnly=!estPDG(); champMotDePasse.readOnly=!estPDG();
+  if(infoAcces) infoAcces.textContent=estPDG()?"Le PDG peut modifier cet identifiant et ce mot de passe.":"Seul le PDG peut modifier l’identifiant et le mot de passe.";
+  document.getElementById("zoneModificationPersonnel").classList.remove("hidden");
+}
+
+
+
+ async function enregistrerModificationPersonnel(){
+  if(!IMCAuth.requirePermission("personnel.update")){afficherMessage("messagePersonnel","Permission refusée.","erreur");return;}
+  if(!personnelEnModification)return;
+  const nom=document.getElementById("modNom").value.trim(); const fonction=document.getElementById("modFonction").value; const classe=document.getElementById("modClasse").value.trim();
+  if(!nom||!fonction){afficherMessage("messagePersonnel","Nom et fonction sont obligatoires.","erreur");return;}
+  const parts=nom.split(/\\s+/); const firstName=parts.shift()||nom; const lastName=parts.join(" ")||firstName;
+  const body={id:personnelEnModification.id,first_name:firstName,last_name:lastName,function_name:fonction,class_name:classe};
+  if(estPDG()){body.username=document.getElementById("modIdentifiant").value.trim(); const password=document.getElementById("modMotDePasse").value; if(password)body.password=password;}
+  try{const csrf=await IMCAuth.getCsrfToken();const response=await fetch("/api/personnel/index.php",{method:"PUT",credentials:"include",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify(body)});const payload=await response.json();if(!response.ok||!payload.success)throw new Error(payload.error||"Impossible de modifier le personnel.");await chargerPersonnelDepuisAPI();afficherMessage("messagePersonnel","Modification enregistrée.","ok");annulerModificationPersonnel();}catch(error){afficherMessage("messagePersonnel",error.message||"Impossible de modifier le personnel.","erreur");}
+}
+
+
+
+function annulerModificationPersonnel(){
+
+  personnelEnModification = null;
+
+  document.getElementById("zoneModificationPersonnel")
+    .classList.add("hidden");
+}
+
+
+async function supprimerPersonnel(id){
+  if(!IMCAuth.requirePermission("personnel.delete")){afficherMessage("messagePersonnel","Permission refusée.","erreur");return;}
+  if(!confirm("Voulez-vous archiver ce personnel ?"))return;
+  try{const csrf=await IMCAuth.getCsrfToken();const response=await fetch("/api/personnel/index.php",{method:"DELETE",credentials:"include",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify({id:id})});const payload=await response.json();if(!response.ok||!payload.success)throw new Error(payload.error||"Impossible d’archiver le personnel.");await chargerPersonnelDepuisAPI();afficherMessage("messagePersonnel","Personnel archivé.","ok");}catch(error){afficherMessage("messagePersonnel",error.message||"Impossible d’archiver le personnel.","erreur");}
+}
+
+
+
+function viderFormulairePersonnel(){
+
+  document.getElementById("personnelNom").value = "";
+  document.getElementById("personnelFonction").value = "";
+  document.getElementById("personnelClasse").value = "";
+  document.getElementById("personnelIdentifiant").value = "";
+  document.getElementById("personnelMotDePasse").value = "";
+}
+
+
+/* =========================================================
+   INFORMATIONS ENSEIGNANT
+========================================================= */
+
+function afficherInformationsEnseignant(){
+
+  const user = IMCAuth.currentUser();
+  if(!user) return;
+
+  /*
+    Si c'est un enseignant avec une classe,
+    cette classe peut être présélectionnée.
+  */
+  if(user.role === "Enseignant" &&
+     personnelConnecte && personnelConnecte.classe){
+
+    classePresenceSelectionnee =
+      personnelConnecte.classe;
+
+    document.getElementById("classePresencePersonnel").value =
+      personnelConnecte.classe;
+  }
+
+  afficherClassesPersonnelPresence();
+  afficherElevesPersonnel();
+  chargerSemainePresence();
+}
+
+
+/* =========================================================
+   CLASSES
+========================================================= */
+
+function obtenirClasses(){
+  const ensemble=new Set();
+  eleves.forEach(function(eleve){const classe=String(eleve.classe||"").trim();if(classe)ensemble.add(classe);});
+  personnel.forEach(function(p){const classe=String(p.classe||"").trim();if(classe)ensemble.add(classe);});
+  return Array.from(ensemble).sort(function(a,b){return a.localeCompare(b);});
+}
+
+
+function afficherClassesPersonnelPresence(){
+
+  const box =
+    document.getElementById(
+      "listeClassesPersonnelPresence"
+    );
+
+  box.innerHTML = "";
+
+  const classes = obtenirClasses();
+
+  const classeSelectionnee =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  classes.forEach(function(classe){
+
+    const bouton =
+      document.createElement("button");
+
+    bouton.type = "button";
+
+    bouton.className =
+      "class-button" +
+      (classeSelectionnee === classe
+        ? " selected"
+        : "");
+
+    bouton.textContent = classe;
+
+    bouton.onclick = function(){
+      selectionnerClassePersonnelPresence(classe);
+    };
+
+    box.appendChild(bouton);
+
+  });
+
+  document
+    .getElementById("btnToutesClassesPersonnel")
+    .classList
+    .toggle(
+      "selected",
+      !classeSelectionnee
+    );
+}
+
+
+function afficherToutesLesClassesPersonnel(){
+
+  document.getElementById(
+    "classePresencePersonnel"
+  ).value = "";
+
+  classePresenceSelectionnee = "";
+  elevePresenceSelectionne = null;
+
+  document
+    .getElementById("listeClassesPersonnelPresence")
+    .classList
+    .remove("hidden");
+
+  document
+    .getElementById("elevePresenceSelectionne")
+    .classList
+    .add("hidden");
+
+  afficherClassesPersonnelPresence();
+  afficherElevesPersonnel();
+  chargerSemainePresence();
+}
+
+
+function selectionnerClassePersonnelPresence(classe){
+
+  classePresenceSelectionnee = classe;
+
+  document.getElementById(
+    "classePresencePersonnel"
+  ).value = classe;
+
+  elevePresenceSelectionne = null;
+
+  document
+    .getElementById("listeClassesPersonnelPresence")
+    .classList
+    .remove("hidden");
+
+  afficherClassesPersonnelPresence();
+  afficherElevesPersonnel();
+  chargerSemainePresence();
+
+  document
+    .getElementById("listeElevesPersonnelSection")
+    .scrollIntoView({
+      behavior:"smooth"
+    });
+}
+
+
+/* =========================================================
+   ELEVES
+========================================================= */
+
+function obtenirNomEleve(eleve){
+
+  return (
+    String(eleve.nom || "") +
+    " " +
+    String(eleve.prenom || "")
+  ).trim();
+}
+
+
+function obtenirIdEleve(eleve){
+
+  return String(
+    eleve.id ||
+    eleve.identifiant ||
+    (eleve.nom + "_" + eleve.prenom)
+  );
+}
+
+
+function obtenirSexeEleve(eleve){
+
+  const sexe =
+    String(
+      eleve.sexe ||
+      eleve.genre ||
+      eleve.gender ||
+      ""
+    ).toLowerCase()
+    .trim();
+
+  if(
+    sexe === "f" ||
+    sexe === "fille" ||
+    sexe === "féminin" ||
+    sexe === "feminin" ||
+    sexe === "female"
+  ){
+    return "F";
+  }
+
+  if(
+    sexe === "m" ||
+    sexe === "garçon" ||
+    sexe === "garcon" ||
+    sexe === "masculin" ||
+    sexe === "male"
+  ){
+    return "M";
+  }
+
+  return "";
+}
+
+
+function afficherElevesPersonnel(){
+
+  const liste =
+    document.getElementById(
+      "listeElevesPersonnel"
+    );
+
+  if(!liste) return;
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  liste.innerHTML = "";
+
+  let resultat =
+    eleves.filter(function(eleve){
+
+      return !classe ||
+             String(eleve.classe || "") === classe;
+
+    });
+
+  resultat.sort(function(a,b){
+
+    return obtenirNomEleve(a)
+      .localeCompare(obtenirNomEleve(b));
+
+  });
+
+  if(!resultat.length){
+
+    liste.innerHTML =
+      "<p>Aucun élève trouvé.</p>";
+
+    return;
+  }
+
+  resultat.forEach(function(eleve){
+
+    const bouton =
+      document.createElement("button");
+
+    bouton.type = "button";
+
+    if(
+      elevePresenceSelectionne &&
+      obtenirIdEleve(eleve) ===
+      obtenirIdEleve(elevePresenceSelectionne)
+    ){
+      bouton.classList.add("selected");
+    }
+
+    bouton.textContent =
+      obtenirNomEleve(eleve) +
+      " — " +
+      String(eleve.classe || "");
+
+    bouton.onclick = function(){
+
+      selectionnerElevePersonnelPresence(eleve);
+
+    };
+
+    liste.appendChild(bouton);
+
+  });
+}
+
+
+function selectionnerElevePersonnelPresence(eleve){
+
+  elevePresenceSelectionne = eleve;
+
+  afficherElevesPersonnel();
+
+  const box =
+    document.getElementById(
+      "elevePresenceSelectionne"
+    );
+
+  box.textContent =
+    "Élève sélectionné : " +
+    obtenirNomEleve(eleve);
+
+  box.classList.remove("hidden");
+
+  chargerSemainePresence();
+
+  box.scrollIntoView({
+    behavior:"smooth"
+  });
+}
+
+
+/* =========================================================
+   DATES
+========================================================= */
+
+function obtenirLundi(date){
+
+  const d = new Date(date);
+
+  d.setHours(0,0,0,0);
+
+  const jour = d.getDay();
+
+  const difference =
+    jour === 0 ? -6 : 1 - jour;
+
+  d.setDate(d.getDate() + difference);
+
+  return d;
+}
+
+
+function dateISO(date){
+
+  const d = new Date(date);
+
+  const annee = d.getFullYear();
+
+  const mois =
+    String(d.getMonth()+1).padStart(2,"0");
+
+  const jour =
+    String(d.getDate()).padStart(2,"0");
+
+  return annee + "-" + mois + "-" + jour;
+}
+
+
+function formatDateFrancais(date){
+
+  const jours = [
+    "Dimanche",
+    "Lundi",
+    "Mardi",
+    "Mercredi",
+    "Jeudi",
+    "Vendredi",
+    "Samedi"
+  ];
+
+  const mois = [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre"
+  ];
+
+  const d = new Date(date);
+
+  return
+    jours[d.getDay()] +
+    " " +
+    d.getDate() +
+    " " +
+    mois[d.getMonth()] +
+    " " +
+    d.getFullYear();
+}
+
+
+/* =========================================================
+   PRESENCES
+========================================================= */
+
+function statutPresenceApi(statut){
+  const map = {
+    "Présent": "PRESENT",
+    "Absent": "ABSENT",
+    "En retard": "LATE",
+    "Excusé": "EXCUSED"
+  };
+
+  return map[String(statut || "")] || "";
+}
+
+
+function statutPresenceUi(statut){
+  const map = {
+    "PRESENT": "Présent",
+    "ABSENT": "Absent",
+    "LATE": "En retard",
+    "EXCUSED": "Excusé"
+  };
+
+  return map[String(statut || "").toUpperCase()] || "";
+}
+
+
+function obtenirPresence(idEleve,date){
+
+  const cle =
+    anneeAcademique +
+    "_" +
+    idEleve +
+    "_" +
+    date;
+
+  return presences[cle] || "";
+}
+
+
+function modifierCasePresence(idEleve,date,statut){
+
+  if (!IMCAuth.requirePermission("presences.create")) {
+    return;
+  }
+
+  const cle =
+    anneeAcademique +
+    "_" +
+    idEleve +
+    "_" +
+    date;
+
+  if(statut === ""){
+
+    delete presences[cle];
+
+  }else{
+
+    presences[cle] = statut;
+
+  }
+
+  /*
+    On ne reconstruit PAS le tableau ici.
+    Cela évite que la case disparaisse pendant
+    le clic de l'utilisateur.
+  */
+  mettreAJourResumeSemaine();
+}
+
+
+function gererCasePresence(caseCochee){
+
+  const idEleve =
+    caseCochee.dataset.id;
+
+  const date =
+    caseCochee.dataset.date;
+
+  const statut =
+    caseCochee.dataset.statut;
+
+  const cellule =
+    caseCochee.closest("td");
+
+  if(!cellule) return;
+
+  const cases =
+    cellule.querySelectorAll(
+      'input[type="checkbox"]'
+    );
+
+  cases.forEach(function(c){
+
+    if(c !== caseCochee){
+      c.checked = false;
+    }
+
+  });
+
+  if(caseCochee.checked){
+
+    modifierCasePresence(
+      idEleve,
+      date,
+      statut
+    );
+
+  }else{
+
+    /*
+      Si l'utilisateur décoche la case,
+      on supprime la présence du jour.
+    */
+    modifierCasePresence(
+      idEleve,
+      date,
+      ""
+    );
+
+  }
+
+  const ligne =
+    caseCochee.closest("tr");
+
+  if(ligne){
+
+    const statutCell =
+      ligne.querySelector(
+        ".presence-statut"
+      );
+
+    if(statutCell){
+
+      const autreCase =
+        cellule.querySelector(
+          'input[data-statut="Absent"]'
+        );
+
+      const casePresent =
+        cellule.querySelector(
+          'input[data-statut="Présent"]'
+        );
+
+      if(
+        casePresent &&
+        casePresent.checked
+      ){
+
+        statutCell.textContent =
+          "Présent";
+
+      }else if(
+        autreCase &&
+        autreCase.checked
+      ){
+
+        statutCell.textContent =
+          "Absent";
+
+      }else{
+
+        statutCell.textContent =
+          "—";
+
+      }
+
+    }
+
+  }
+
+}
+
+
+/* =========================================================
+   TABLEAU HEBDOMADAIRE
+========================================================= */
+
+function chargerSemainePresence(){
+
+  const container =
+    document.getElementById(
+      "tableauPresenceContainer"
+    );
+
+  if(!container) return;
+
+  const dateDebut =
+    document.getElementById(
+      "dateDebutSemaine"
+    ).value;
+
+  if(!dateDebut){
+
+    container.innerHTML =
+      "<p>Veuillez sélectionner une date.</p>";
+
+    return;
+  }
+
+  const lundi =
+    obtenirLundi(dateDebut);
+
+  const dates = [];
+
+  for(let i=0;i<5;i++){
+
+    const d = new Date(lundi);
+
+    d.setDate(
+      lundi.getDate()+i
+    );
+
+    dates.push(dateISO(d));
+
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  let elevesAffiches =
+    eleves.filter(function(eleve){
+
+      return !classe ||
+        String(eleve.classe || "") === classe;
+
+    });
+
+  elevesAffiches.sort(function(a,b){
+
+    return obtenirNomEleve(a)
+      .localeCompare(obtenirNomEleve(b));
+
+  });
+
+  if(!elevesAffiches.length){
+
+    container.innerHTML =
+      "<p>Aucun élève dans cette classe.</p>";
+
+    mettreAJourResumeSemaine();
+
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Élève</th>
+  `;
+
+  dates.forEach(function(date){
+
+    const d =
+      new Date(date + "T00:00:00");
+
+    html += `
+      <th>
+        ${d.toLocaleDateString("fr-FR",{
+          weekday:"long"
+        })}
+        <br>
+        ${d.toLocaleDateString("fr-FR")}
+      </th>
+    `;
+
+  });
+
+  html += `
+          <th>Résumé</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  elevesAffiches.forEach(function(eleve){
+
+    const id =
+      obtenirIdEleve(eleve);
+
+    html += `
+      <tr data-eleve="${echapperHTML(id)}">
+
+        <td>
+          <strong>
+            ${echapperHTML(obtenirNomEleve(eleve))}
+          </strong>
+          <br>
+          <small>
+            ${echapperHTML(eleve.classe || "")}
+          </small>
+        </td>
+    `;
+
+    dates.forEach(function(date){
+
+      const presence =
+        obtenirPresence(id,date);
+
+      html += `
+        <td>
+          <div class="presence-case">
+
+            <label class="presence-option">
+              <input
+                type="checkbox"
+                data-id="${echapperHTML(id)}"
+                data-date="${date}"
+                data-statut="Présent"
+                onchange="gererCasePresence(this)"
+                ${presence === "Présent" ? "checked" : ""}>
+              Présent
+            </label>
+
+            <label class="presence-option">
+              <input
+                type="checkbox"
+                data-id="${echapperHTML(id)}"
+                data-date="${date}"
+                data-statut="Absent"
+                onchange="gererCasePresence(this)"
+                ${presence === "Absent" ? "checked" : ""}>
+              Absent
+            </label>
+
+          </div>
+        </td>
+      `;
+
+    });
+
+    let absences = 0;
+    let presents = 0;
+
+    dates.forEach(function(date){
+
+      const p =
+        obtenirPresence(id,date);
+
+      if(p === "Absent"){
+        absences++;
+      }
+
+      if(p === "Présent"){
+        presents++;
+      }
+
+    });
+
+    html += `
+      <td class="presence-statut">
+        ${presents} présent(s)<br>
+        ${absences} absent(s)
+      </td>
+    `;
+
+    html += `</tr>`;
+
+  });
+
+  html += `
+      </tbody>
+    </table>
+  `;
+
+  container.innerHTML = html;
+
+  mettreAJourResumeSemaine();
+}
+
+
+/* =========================================================
+   ENREGISTRER PRESENCES
+========================================================= */
+
+async function enregistrerPresences(){
+
+  if (!IMCAuth.requirePermission("presences.create")) {
     afficherMessage(
-      "messagePersonnel",
+      "messagePresence",
       "Permission refusée.",
       "erreur"
     );
     return;
   }
 
-  const nom =
-    document.getElementById("personnelNom")
-    .value.trim();
+  const dateDebut =
+    document.getElementById("dateDebutSemaine").value;
 
-  const fonction =
-    document.getElementById("personnelFonction")
-    .value;
+  if(!dateDebut){
+    afficherMessage(
+      "messagePresence",
+      "Veuillez sélectionner une semaine.",
+      "erreur"
+    );
+    return;
+  }
+
+  try{
+    const lundi = obtenirLundi(dateDebut);
+    const dates = [];
+
+    for(let i = 0; i < 5; i++){
+      const d = new Date(lundi);
+      d.setDate(lundi.getDate() + i);
+      dates.push(dateISO(d));
+    }
+
+    let changements = 0;
+
+    for(const eleve of eleves){
+      const studentId = obtenirIdEleve(eleve);
+      const enrollmentId = String(eleve.enrollment_id || "");
+
+      if(!enrollmentId) continue;
+
+      for(const date of dates){
+        const cle =
+          anneeAcademique +
+          "_" +
+          studentId +
+          "_" +
+          date;
+
+        const desired = presences[cle] || "";
+        const original = serverPresences[cle] || "";
+
+        if(desired === original) continue;
+
+        const meta = attendanceMeta[cle];
+
+        if(desired === ""){
+          if(meta && meta.id){
+            const response = await fetch(
+              "/api/attendance/index.php?id=" +
+              encodeURIComponent(meta.id) +
+              "&enrollment_id=" +
+              encodeURIComponent(meta.enrollment_id || enrollmentId),
+              {
+                method: "DELETE",
+                credentials: "include",
+                headers: {
+                  "Accept": "application/json"
+                }
+              }
+            );
+
+            const payload = await response.json();
+            if(!response.ok || !payload.success){
+              throw new Error(
+                payload && payload.error
+                  ? payload.error
+                  : "Suppression de présence impossible."
+              );
+            }
+
+            delete attendanceMeta[cle];
+            delete serverPresences[cle];
+          }
+
+          delete presences[cle];
+          changements++;
+          continue;
+        }
+
+        const apiStatus = statutPresenceApi(desired);
+
+        if(!apiStatus){
+          throw new Error("Statut de présence invalide.");
+        }
+
+        const body = {
+          enrollment_id: enrollmentId,
+          attendance_date: date,
+          status: apiStatus,
+          comment: null
+        };
+
+        let url = "/api/attendance/index.php";
+        let method = "POST";
+
+        if(meta && meta.id){
+          url += "?id=" + encodeURIComponent(meta.id);
+          method = "PUT";
+        }
+
+        const response = await fetch(url, {
+          method: method,
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify(body)
+        });
+
+        const payload = await response.json();
+
+        if(!response.ok || !payload.success){
+          throw new Error(
+            payload && payload.error
+              ? payload.error
+              : "Enregistrement de présence impossible."
+          );
+        }
+
+        const saved = payload.attendance || {};
+        serverPresences[cle] = desired;
+        presences[cle] = desired;
+        attendanceMeta[cle] = {
+          id: String(saved.id || (meta && meta.id) || ""),
+          enrollment_id: String(saved.enrollment_id || enrollmentId)
+        };
+
+        changements++;
+      }
+    }
+
+    afficherMessage(
+      "messagePresence",
+      changements === 0
+        ? "Aucune modification à enregistrer."
+        : changements + " présence(s) enregistrée(s) dans PostgreSQL.",
+      "ok"
+    );
+
+  }catch(erreur){
+    console.error(erreur);
+
+    afficherMessage(
+      "messagePresence",
+      erreur && erreur.message
+        ? erreur.message
+        : "Erreur : les présences n'ont pas pu être enregistrées.",
+      "erreur"
+    );
+  }
+}
+
+
+/* =========================================================
+   RESUME HEBDOMADAIRE
+========================================================= */
+
+function mettreAJourResumeSemaine(){
+
+  const box =
+    document.getElementById(
+      "resumeSemaine"
+    );
+
+  if(!box) return;
+
+  const dateDebut =
+    document.getElementById(
+      "dateDebutSemaine"
+    ).value;
+
+  if(!dateDebut){
+
+    box.innerHTML = "";
+
+    return;
+  }
+
+  const lundi =
+    obtenirLundi(dateDebut);
+
+  const dates = [];
+
+  for(let i=0;i<5;i++){
+
+    const d = new Date(lundi);
+
+    d.setDate(
+      lundi.getDate()+i
+    );
+
+    dates.push(dateISO(d));
+
+  }
 
   const classe =
-    document.getElementById("personnelClasse")
-    .value.trim();
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
 
-  const identifiant =
-    document.getElementById("personnelIdentifiant")
-    .value.trim();
+  const liste =
+    eleves.filter(function(eleve){
 
-  const motDePasse =
-    document.getElementById("personnelMotDePasse")
-    .value;
+      return !classe ||
+        String(eleve.classe || "") === classe;
 
-  if(!nom || !fonction || !identifiant || !motDePasse){
-
-    afficherMessage(
-      "messagePersonnel",
-      "Veuillez remplir les champs obligatoires.",
-      "erreur"
-    );
-
-    return;
-  }
-
-  const existe =
-    personnel.some(function(p){
-      return String(p.identifiant || "") === identifiant;
     });
 
-  if(existe){
+  let total = liste.length;
+  let absents = 0;
+  let presents = 0;
 
-    afficherMessage(
-      "messagePersonnel",
-      "Cet identifiant existe déjà.",
-      "erreur"
+  liste.forEach(function(eleve){
+
+    const id =
+      obtenirIdEleve(eleve);
+
+    let aEteAbsent = false;
+    let aEtePresent = false;
+
+    dates.forEach(function(date){
+
+      const p =
+        obtenirPresence(id,date);
+
+      if(p === "Absent"){
+        aEteAbsent = true;
+      }
+
+      if(p === "Présent"){
+        aEtePresent = true;
+      }
+
+    });
+
+    if(aEteAbsent){
+      absents++;
+    }
+
+    if(aEtePresent){
+      presents++;
+    }
+
+  });
+
+  box.innerHTML = `
+    <div class="resume-item">
+      Effectif total
+      <span>${total}</span>
+    </div>
+
+    <div class="resume-item">
+      Présents
+      <span>${presents}</span>
+    </div>
+
+    <div class="resume-item">
+      Absents
+      <span>${absents}</span>
+    </div>
+
+    <div class="resume-item">
+      Non renseignés
+      <span>${Math.max(0,total-presents-absents)}</span>
+    </div>
+  `;
+}
+
+
+/* =========================================================
+   CALCUL STATISTIQUES
+========================================================= */
+
+function obtenirStatistiquesPourDates(
+  dates,
+  classe
+){
+
+  const liste =
+    eleves.filter(function(eleve){
+
+      return !classe ||
+        String(eleve.classe || "") === classe;
+
+    });
+
+  const statistiques = {
+
+    totalEleves: liste.length,
+
+    fillesTotal:0,
+    garconsTotal:0,
+    sexeNonPrecise:0,
+
+    fillesAbsentes:0,
+    garconsAbsents:0,
+    sexeNonPreciseAbsents:0,
+
+    fillesPresentes:0,
+    garconsPresentes:0,
+    sexeNonPrecisePresentes:0,
+
+    totalAbsences:0,
+    totalPresences:0
+
+  };
+
+  liste.forEach(function(eleve){
+
+    const sexe =
+      obtenirSexeEleve(eleve);
+
+    if(sexe === "F"){
+      statistiques.fillesTotal++;
+    }else if(sexe === "M"){
+      statistiques.garconsTotal++;
+    }else{
+      statistiques.sexeNonPrecise++;
+    }
+
+    let absent = false;
+    let present = false;
+
+    dates.forEach(function(date){
+
+      const id =
+        obtenirIdEleve(eleve);
+
+      const p =
+        obtenirPresence(id,date);
+
+      if(p === "Absent"){
+
+        statistiques.totalAbsences++;
+        absent = true;
+
+        if(sexe === "F"){
+          statistiques.fillesAbsentes++;
+        }else if(sexe === "M"){
+          statistiques.garconsAbsents++;
+        }else{
+          statistiques.sexeNonPreciseAbsents++;
+        }
+
+      }
+
+      if(p === "Présent"){
+
+        statistiques.totalPresences++;
+        present = true;
+
+        if(sexe === "F"){
+          statistiques.fillesPresentes++;
+        }else if(sexe === "M"){
+          statistiques.garconsPresentes++;
+        }else{
+          statistiques.sexeNonPrecisePresentes++;
+        }
+
+      }
+
+    });
+
+  });
+
+  /*
+    Pour les rapports d'effectif,
+    on calcule l'effectif restant à partir
+    de l'effectif total et du nombre d'élèves
+    absents.
+
+    Exemple :
+    35 élèves - 8 absents = 27 présents.
+  */
+
+  statistiques.effectifApresAbsences =
+    Math.max(
+      0,
+      statistiques.totalEleves -
+      statistiques.fillesAbsentes -
+      statistiques.garconsAbsents -
+      statistiques.sexeNonPreciseAbsents
+    );
+
+  return statistiques;
+}
+
+
+/* =========================================================
+   RAPPORT JOURNALIER
+========================================================= */
+
+function genererRapportJournalier(){
+
+  const date =
+    document.getElementById(
+      "dateRapportJournalier"
+    ).value;
+
+  if(!date){
+
+    alert("Veuillez sélectionner une date.");
+
+    return;
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  const stats =
+    obtenirStatistiquesPourDates(
+      [date],
+      classe
+    );
+
+  afficherRapport(
+    "Rapport journalier",
+    date,
+    date,
+    classe,
+    stats
+  );
+
+}
+
+
+/* =========================================================
+   RAPPORT HEBDOMADAIRE
+========================================================= */
+
+function genererRapportHebdomadaire(){
+
+  const date =
+    document.getElementById(
+      "dateRapportHebdomadaire"
+    ).value;
+
+  if(!date){
+
+    alert("Veuillez sélectionner une date.");
+
+    return;
+  }
+
+  const lundi =
+    obtenirLundi(date);
+
+  const dates = [];
+
+  for(let i=0;i<5;i++){
+
+    const d = new Date(lundi);
+
+    d.setDate(
+      lundi.getDate()+i
+    );
+
+    dates.push(dateISO(d));
+
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  const stats =
+    obtenirStatistiquesPourDates(
+      dates,
+      classe
+    );
+
+  afficherRapport(
+    "Rapport hebdomadaire",
+    dates[0],
+    dates[4],
+    classe,
+    stats
+  );
+
+}
+
+
+/* =========================================================
+   RAPPORT MENSUEL
+========================================================= */
+
+function genererRapportMensuel(){
+
+  const mois =
+    parseInt(
+      document.getElementById(
+        "moisRapportMensuel"
+      ).value,
+      10
+    );
+
+  const annee =
+    parseInt(
+      document.getElementById(
+        "anneeRapportMensuel"
+      ).value,
+      10
+    );
+
+  if(!mois || !annee){
+
+    alert(
+      "Veuillez sélectionner le mois et l'année."
     );
 
     return;
   }
 
-  personnel.push({
-    id:Date.now(),
-    nom:nom,
-    fonction:fonction,
-    classe:classe,
-    identifiant:identifiant,
-    motDePasseHash:await secureHash(motDePasse)
+  /*
+    IMPORTANT :
+    Le mois commence à 1 dans le select,
+    mais JavaScript utilise 0 à 11.
+  */
+
+  const dernierJour =
+    new Date(
+      annee,
+      mois,
+      0
+    ).getDate();
+
+  const dates = [];
+
+  for(
+    let jour = 1;
+    jour <= dernierJour;
+    jour++
+  ){
+
+    const d =
+      new Date(
+        annee,
+        mois - 1,
+        jour
+      );
+
+    dates.push(
+      dateISO(d)
+    );
+
+  }
+
+  const classe =
+    document.getElementById(
+      "classePresencePersonnel"
+    ).value;
+
+  const stats =
+    obtenirStatistiquesPourDates(
+      dates,
+      classe
+    );
+
+  afficherRapport(
+    "Rapport mensuel",
+    dates[0],
+    dates[dates.length-1],
+    classe,
+    stats
+  );
+
+}
+
+
+/* =========================================================
+   AFFICHAGE RAPPORT
+========================================================= */
+
+function afficherRapport(
+  titre,
+  dateDebut,
+  dateFin,
+  classe,
+  stats
+){
+
+  const resultat =
+    document.getElementById(
+      "rapportResultat"
+    );
+
+  const contenu =
+    document.getElementById(
+      "contenuRapport"
+    );
+
+  let periode = "";
+
+  if(dateDebut === dateFin){
+
+    periode =
+      formaterDateComplete(dateDebut);
+
+  }else{
+
+    periode =
+      formaterDateComplete(dateDebut) +
+      " au " +
+      formaterDateComplete(dateFin);
+
+  }
+
+  const nomClasse =
+    classe || "Toutes les classes";
+
+  const totalAbsents =
+    stats.fillesAbsentes +
+    stats.garconsAbsents +
+    stats.sexeNonPreciseAbsents;
+
+  /*
+    EFFECTIF RESTANT :
+    total élèves - total absents.
+  */
+  const effectifRestant =
+    Math.max(
+      0,
+      stats.totalEleves - totalAbsents
+    );
+
+  /*
+    Si le sexe est connu, on affiche
+    filles et garçons.
+  */
+  contenu.innerHTML = `
+
+    <div class="rapport-entete">
+
+      <h2>${echapperHTML(titre)}</h2>
+
+      <strong>
+        Année académique :
+        ${echapperHTML(anneeAcademique)}
+      </strong>
+
+      <br>
+
+      <strong>
+        Classe :
+        ${echapperHTML(nomClasse)}
+      </strong>
+
+      <br>
+
+      <span>
+        Période :
+        ${echapperHTML(periode)}
+      </span>
+
+    </div>
+
+    <div class="rapport-statistiques">
+
+      <div class="rapport-stat">
+        <strong>Effectif total</strong>
+        ${stats.totalEleves}
+      </div>
+
+      <div class="rapport-stat">
+        <strong>Total absents</strong>
+        ${totalAbsents}
+      </div>
+
+      <div class="rapport-stat">
+        <strong>Total présents</strong>
+        ${effectifRestant}
+      </div>
+
+      <div class="rapport-stat">
+        <strong>Non renseignés</strong>
+        ${Math.max(
+          0,
+          stats.totalEleves -
+          effectifRestant -
+          totalAbsents
+        )}
+      </div>
+
+    </div>
+
+    <table>
+
+      <thead>
+        <tr>
+          <th>Catégorie</th>
+          <th>Effectif</th>
+          <th>Absents</th>
+          <th>Présents / restant</th>
+        </tr>
+      </thead>
+
+      <tbody>
+
+        <tr>
+          <td>Filles</td>
+          <td>${stats.fillesTotal}</td>
+          <td>${stats.fillesAbsentes}</td>
+          <td>
+            ${Math.max(
+              0,
+              stats.fillesTotal -
+              stats.fillesAbsentes
+            )}
+          </td>
+        </tr>
+
+        <tr>
+          <td>Garçons</td>
+          <td>${stats.garconsTotal}</td>
+          <td>${stats.garconsAbsents}</td>
+          <td>
+            ${Math.max(
+              0,
+              stats.garconsTotal -
+              stats.garconsAbsents
+            )}
+          </td>
+        </tr>
+
+        ${
+          stats.sexeNonPrecise > 0
+          ? `
+          <tr>
+            <td>Sexe non précisé</td>
+            <td>${stats.sexeNonPrecise}</td>
+            <td>${stats.sexeNonPreciseAbsents}</td>
+            <td>
+              ${Math.max(
+                0,
+                stats.sexeNonPrecise -
+                stats.sexeNonPreciseAbsents
+              )}
+            </td>
+          </tr>
+          `
+          : ""
+        }
+
+        <tr>
+          <th>TOTAL</th>
+          <th>${stats.totalEleves}</th>
+          <th>${totalAbsents}</th>
+          <th>${effectifRestant}</th>
+        </tr>
+
+      </tbody>
+
+    </table>
+
+    <div style="
+      margin-top:15px;
+      padding:12px;
+      border:1px solid #aaa;
+      border-radius:8px;
+      background:#f8f9f9;
+      text-align:center;
+      font-weight:bold;
+    ">
+
+      Effectif total :
+      ${stats.totalEleves}
+      &nbsp; − &nbsp;
+      Total absents :
+      ${totalAbsents}
+      &nbsp; = &nbsp;
+      Effectif restant :
+      ${effectifRestant}
+
+    </div>
+
+  `;
+
+  resultat.classList.remove("hidden");
+
+  resultat.scrollIntoView({
+    behavior:"smooth"
   });
+}
 
-  sauvegarderPersonnel();
 
-  viderFormulairePersonnel();
+/* =========================================================
+   DATE RAPPORT
+========================================================= */
 
-  afficherMessage(
-    "messagePersonnel",
-    "Personnel ajouté avec succès.",
-    "ok"
+function formaterDateComplete(date){
+
+  const d =
+    new Date(date + "T00:00:00");
+
+  return d.toLocaleDateString(
+    "fr-FR",
+    {
+      day:"2-digit",
+      month:"long",
+      year:"numeric"
+    }
   );
 }
 
 
-function sauvegarderPersonnel(){
+/* =========================================================
+   UTILITAIRES
+========================================================= */
 
-  localStorage.setItem(
-    CLE_PERSONNEL,
-    JSON.stringify(personnel)
+function afficherMessage(
+  id,
+  texte,
+  type
+){
+
+  const element =
+    document.getElementById(id);
+
+  if(!element) return;
+
+  element.textContent = texte;
+
+  element.className =
+    "message " +
+    (type || "ok");
+
+  clearTimeout(
+    element._timerMessage
   );
 
-  chargerPersonnelTableau();
+  element._timerMessage =
+    setTimeout(function(){
+
+      element.classList.remove(
+        "ok",
+        "erreur"
+      );
+
+      element.style.display = "none";
+
+    },5000);
+
+  element.style.display = "block";
 }
+
+
+function echapperHTML(valeur){
+
+  return String(valeur ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+</script>
+
+</body>
+</html>
+
 
 
 function chargerPersonnelTableau(){
