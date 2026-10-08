@@ -197,8 +197,8 @@ jobs:
           test "$DELETE_STATUS" = "200"
           grep -q '"deleted":true' /tmp/f02c-delete.json
 
-          if PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc             "SELECT COUNT(*) FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';" | grep -q '^0
-; then
+          if PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc \
+            "SELECT COUNT(*) FROM attendance WHERE enrollment_id='00000000-0000-0000-0000-000000003081' AND attendance_date='2026-10-07';" | grep -qx '0'; then
             echo 'F02C DELETE PERSISTENCE: PASS'
           else
             echo 'F02C DELETE PERSISTENCE: FAIL'
