@@ -127,7 +127,7 @@ if ($method === 'GET') {
     $enrollmentStmt->execute($enrollmentParams);
 
     $subjectStmt = $pdo->query(
-        "SELECT id, code, name, coefficient
+        "SELECT id, code, name, coefficient, max_points
          FROM subjects
          WHERE status = 'ACTIVE'
          ORDER BY name ASC, id ASC"
@@ -223,7 +223,7 @@ if (!$check->fetch()) {
 try {
     if ($method === 'POST') {
         $stmt = $pdo->prepare(
-            'INSERT INTO grades (enrollment_id, subject_id, grade, grade_date)
+            'INSERT INTO grades (enrollment_id, subject_id, grade, grade_date, assessment_number)
              VALUES (:enrollment_id, :subject_id, :grade, :grade_date, :assessment_number)
              RETURNING id, enrollment_id, subject_id, assessment_number, grade, grade_date, created_at, updated_at'
         );
