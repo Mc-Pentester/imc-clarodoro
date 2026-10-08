@@ -142,13 +142,23 @@ jobs:
           echo "F02G CREATE WITHOUT PERMISSION STATUS: [$FORBIDDEN]"
           test "$FORBIDDEN" = '403'
 
-          UPDATE="$(curl -fsS -X PUT -c "$PDG_COOKIE" -b "$PDG_COOKIE"             -H "X-CSRF-Token: $PDG_CSRF"             -H 'Content-Type: application/json'             -d "{"id":"$STAFF_ID","first_name":"F02G-Updated","last_name":"Personnel","function_name":"Directeur","class_name":"Administration","phone":"50911111111","email":"f02g.updated@example.test"}"             "$BASE/api/personnel/index.php")"
+          UPDATE="$(curl -fsS -X PUT \
+            -c "$PDG_COOKIE" -b "$PDG_COOKIE" \
+            -H "X-CSRF-Token: $PDG_CSRF" \
+            -H 'Content-Type: application/json' \
+            --data "$(printf '{"id":"%s","first_name":"F02G-Updated","last_name":"Personnel","function_name":"Directeur","class_name":"Administration","phone":"50911111111","email":"f02g.updated@example.test"}' "$STAFF_ID")" \
+            "$BASE/api/personnel/index.php")"
           printf '%s' "$UPDATE" | grep -q '"success":true'
 
           UPDATED_DB="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT first_name || '|' || phone FROM staff WHERE id='$STAFF_ID';")"
           test "$UPDATED_DB" = 'F02G-Updated|50911111111'
 
-          DELETE="$(curl -fsS -X DELETE -c "$PDG_COOKIE" -b "$PDG_COOKIE"             -H "X-CSRF-Token: $PDG_CSRF"             -H 'Content-Type: application/json'             -d "{"id":"$STAFF_ID"}"             "$BASE/api/personnel/index.php")"
+          DELETE="$(curl -fsS -X DELETE \
+            -c "$PDG_COOKIE" -b "$PDG_COOKIE" \
+            -H "X-CSRF-Token: $PDG_CSRF" \
+            -H 'Content-Type: application/json' \
+            --data "$(printf '{"id":"%s"}' "$STAFF_ID")" \
+            "$BASE/api/personnel/index.php")"
           printf '%s' "$DELETE" | grep -q '"success":true'
 
           ARCHIVED_DB="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT s.status || '|' || u.status FROM staff s JOIN users u ON u.id=s.user_id WHERE s.id='$STAFF_ID';")"
