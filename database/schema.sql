@@ -180,6 +180,8 @@ CREATE TABLE subjects (
 
     coefficient NUMERIC(8,2),
 
+    max_points NUMERIC(8,2) NOT NULL DEFAULT 100,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -193,7 +195,10 @@ CREATE TABLE subjects (
         CHECK (
             coefficient IS NULL
             OR coefficient > 0
-        )
+        ),
+
+    CONSTRAINT subjects_max_points_check
+        CHECK (max_points > 0)
 );
 
 CREATE TABLE teachers (
@@ -515,11 +520,16 @@ CREATE TABLE grades (
 
     grade_date DATE NOT NULL DEFAULT CURRENT_DATE,
 
+    assessment_number SMALLINT NOT NULL DEFAULT 1,
+
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT grades_grade_check
         CHECK (grade >= 0),
+
+    CONSTRAINT grades_assessment_number_check
+        CHECK (assessment_number BETWEEN 1 AND 3),
 
     CONSTRAINT grades_enrollment_fk
         FOREIGN KEY (enrollment_id)
@@ -531,6 +541,9 @@ CREATE TABLE grades (
         REFERENCES subjects(id)
         ON DELETE RESTRICT
 );
+
+CREATE UNIQUE INDEX grades_enrollment_subject_assessment_unique
+    ON grades(enrollment_id, subject_id, assessment_number);
 
 -- ============================================================
 -- ATTENDANCE
