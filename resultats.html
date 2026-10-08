@@ -1078,7 +1078,6 @@ body {
 </section>
 
 
-<script src="secure-storage.js"></script>
 <script src="auth.js"></script>
 <script>
 
@@ -1091,16 +1090,13 @@ document.addEventListener("DOMContentLoaded", function() {
    STOCKAGE
 ========================================================= */
 
-const CLE_ELEVES = "imc_students";
-const CLE_MATIERES = "imc_matieres";
-const CLE_RESULTATS = "imc_resultats";
-const CLE_ANNEE = "imc_active_year";
-
-
 let eleves = [];
 let matieres = [];
 let resultats = {};
-
+let gradeMeta = {};
+let carnetMeta = {};
+let anneesServeur = [];
+let anneeServeurId = "";
 let eleveSelectionne = null;
 
 
@@ -1193,49 +1189,80 @@ const lignes = [
    CHARGEMENT
 ========================================================= */
 
-function chargerDonnees() {
+async function chargerDonnees() {
 
-    try {
-
-        eleves =
-            JSON.parse(
-                localStorage.getItem(CLE_ELEVES) || "[]"
-            );
-
-    } catch (e) {
-
+    if (!anneeServeurId) {
         eleves = [];
-
-    }
-
-
-    try {
-
-        matieres =
-            JSON.parse(
-                localStorage.getItem(CLE_MATIERES) || "[]"
-            );
-
-    } catch (e) {
-
         matieres = [];
-
-    }
-
-
-    try {
-
-        resultats =
-            JSON.parse(
-                localStorage.getItem(CLE_RESULTATS) || "{}"
-            );
-
-    } catch (e) {
-
         resultats = {};
-
+        gradeMeta = {};
+        carnetMeta = {};
+        return;
     }
 
+    const response = await fetch(
+        "/api/grades/index.php?school_year_id=" +
+        encodeURIComponent(anneeServeurId),
+        { method: "GET", credentials: "same-origin", headers: { "Accept": "application/json" } }
+    );
+
+    const payload = await response.json();
+
+    if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Impossible de charger les résultats.");
+    }
+
+    matieres = (payload.subjects || []).map(function(subject) {
+        return {
+            id: subject.id,
+            nom: subject.name,
+            code: subject.code,
+            pointsMax: Number(subject.max_points || 100),
+            coefficient: subject.coefficient
+        };
+    });
+
+    eleves = (payload.enrollments || []).map(function(enrollment) {
+        return {
+            id: enrollment.student_id,
+            enrollmentId: enrollment.enrollment_id,
+            nom: enrollment.last_name,
+            prenom: enrollment.first_name,
+            classe: enrollment.class_name,
+            sexe: "",
+            schoolYearId: enrollment.school_year_id
+        };
+    });
+
+    resultats = {};
+    gradeMeta = {};
+
+    (payload.grades || []).forEach(function(grade) {
+        const studentId = String(grade.student_id);
+        const yearLabel = String(
+            (anneesServeur.find(function(y) {
+                return String(y.id) === String(grade.school_year_id);
+            }) || {}).label || document.getElementById("annee").value
+        );
+        const control = Number(grade.assessment_number || 1);
+
+        if (!resultats[studentId]) resultats[studentId] = {};
+        if (!resultats[studentId][yearLabel]) resultats[studentId][yearLabel] = {};
+        if (!resultats[studentId][yearLabel]["controle" + control]) {
+            resultats[studentId][yearLabel]["controle" + control] = {};
+        }
+
+        resultats[studentId][yearLabel]["controle" + control][String(grade.subject_id)] =
+            Number(grade.grade);
+
+        gradeMeta[
+            studentId + "|" + String(grade.school_year_id) + "|" +
+            control + "|" + String(grade.subject_id)
+        ] = {
+            id: String(grade.id),
+            enrollmentId: String(grade.enrollment_id)
+        };
+    });
 }
 
 
@@ -1243,50 +1270,39 @@ function chargerDonnees() {
    ANNÉES SCOLAIRES
 ========================================================= */
 
-function chargerAnnees() {
+async function chargerAnnees() {
 
-    const select =
-        document.getElementById("annee");
-
+    const select = document.getElementById("annee");
     select.innerHTML = "";
 
-    for (
-        let annee = 2026;
-        annee <= 2040;
-        annee++
-    ) {
+    const response = await fetch(
+        "/api/school-years/index.php",
+        { method: "GET", credentials: "same-origin", headers: { "Accept": "application/json" } }
+    );
+    const payload = await response.json();
 
-        const option =
-            document.createElement("option");
+    if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Impossible de charger les années scolaires.");
+    }
 
-        option.value =
-            `${annee}-${annee + 1}`;
+    anneesServeur = Array.isArray(payload.schoolYears) ? payload.schoolYears : [];
 
-        option.textContent =
-            `${annee}-${annee + 1}`;
-
+    anneesServeur.forEach(function(annee) {
+        const option = document.createElement("option");
+        option.value = annee.label;
+        option.textContent = annee.label;
+        option.dataset.yearId = annee.id;
         select.appendChild(option);
+    });
 
+    const active = anneesServeur.find(function(annee) {
+        return annee.status === "ACTIVE";
+    }) || anneesServeur[0];
+
+    if (active) {
+        select.value = active.label;
+        anneeServeurId = String(active.id);
     }
-
-
-    const anneeActive =
-        localStorage.getItem(CLE_ANNEE);
-
-
-    if (anneeActive) {
-
-        select.value = anneeActive;
-
-    }
-
-
-    if (!select.value) {
-
-        select.value = "2026-2027";
-
-    }
-
 }
 
 
@@ -1296,21 +1312,16 @@ function chargerAnnees() {
 
 document
     .getElementById("annee")
-    .addEventListener("change", function () {
-
-        localStorage.setItem(
-            CLE_ANNEE,
-            this.value
-        );
-
-        afficherEleves();
-
-        if (eleveSelectionne) {
-
-            afficherCarnet(eleveSelectionne);
-
+    .addEventListener("change", async function () {
+        const option = this.options[this.selectedIndex];
+        anneeServeurId = option ? String(option.dataset.yearId || "") : "";
+        try {
+            await chargerDonnees();
+            afficherEleves();
+            if (eleveSelectionne) afficherCarnet(eleveSelectionne);
+        } catch (error) {
+            afficherMessage(error.message, "erreur");
         }
-
     });
 
 
@@ -2829,214 +2840,140 @@ function afficherCarnet(
    ENREGISTRER
 ========================================================= */
 
-function enregistrerResultats() {
+async function enregistrerResultats() {
 
     if (!IMCAuth.requirePermission("resultats.update")) {
-        afficherMessage(
-            "Permission refusée.",
-            "erreur"
-        );
+        afficherMessage("Permission refusée.", "erreur");
         return;
     }
 
     if (!eleveSelectionne) {
-
-        afficherMessage(
-            "Veuillez sélectionner un élève.",
-            "erreur"
-        );
-
+        afficherMessage("Veuillez sélectionner un élève.", "erreur");
         return;
-
     }
 
+    const yearLabel = document.getElementById("annee").value;
+    const enrollmentId = String(eleveSelectionne.enrollmentId || "");
 
-    const annee =
-        document.getElementById(
-            "annee"
-        ).value;
-
-
-    const id =
-        String(
-            eleveSelectionne.id
-        );
-
-
-    if (!resultats[id]) {
-
-        resultats[id] = {};
-
+    if (!enrollmentId || !anneeServeurId) {
+        afficherMessage("Inscription ou année scolaire introuvable.", "erreur");
+        return;
     }
 
+    try {
+        for (let controle = 1; controle <= 3; controle++) {
+            const notes = recupererNotesControle(controle);
 
-    if (!resultats[id][annee]) {
+            for (const subjectId of Object.keys(notes)) {
+                const matiere = matieres.find(function(m) {
+                    return String(m.id) === String(subjectId);
+                });
+                if (!matiere) continue;
 
-        resultats[id][annee] = {};
+                const note = Number(notes[subjectId]);
+                const max = Number(matiere.pointsMax || 100);
+                if (!Number.isFinite(note) || note < 0 || note > max) {
+                    throw new Error("La note de " + matiere.nom + " doit être comprise entre 0 et " + max + ".");
+                }
 
-    }
+                const key = String(eleveSelectionne.id) + "|" + anneeServeurId + "|" +
+                    controle + "|" + String(subjectId);
+                const meta = gradeMeta[key];
+                const body = {
+                    enrollment_id: enrollmentId,
+                    subject_id: String(subjectId),
+                    assessment_number: controle,
+                    grade: note,
+                    grade_date: new Date().toISOString().slice(0, 10)
+                };
 
+                let response;
+                if (meta) {
+                    response = await fetch(
+                        "/api/grades/index.php?id=" + encodeURIComponent(meta.id),
+                        {
+                            method: "PUT",
+                            credentials: "same-origin",
+                            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                            body: JSON.stringify(body)
+                        }
+                    );
+                } else {
+                    response = await fetch(
+                        "/api/grades/index.php",
+                        {
+                            method: "POST",
+                            credentials: "same-origin",
+                            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                            body: JSON.stringify(body)
+                        }
+                    );
+                }
 
-    for (
-        let controle = 1;
-        controle <= 3;
-        controle++
-    ) {
+                const payload = await response.json();
+                if (!response.ok || !payload.success) throw new Error(payload.error || "Échec d'enregistrement d'une note.");
 
-        const notes =
-            recupererNotesControle(
-                controle
-            );
-
-
-        /*
-         * Vérification finale du barème.
-         */
-
-        for (
-            const subjectId in notes
-        ) {
-
-            const matiere =
-                matieres.find(
-                    function (m) {
-
-                        return String(m.id) ===
-                            String(subjectId);
-
-                    }
-                );
-
-
-            if (!matiere) {
-
-                continue;
-
+                const saved = payload.grade;
+                gradeMeta[key] = { id: String(saved.id), enrollmentId: enrollmentId };
             }
 
+            const existing = Object.keys(gradeMeta).filter(function(key) {
+                return key.indexOf(String(eleveSelectionne.id) + "|" + anneeServeurId + "|" + controle + "|") === 0;
+            });
 
-            const note =
-                Number(
-                    notes[subjectId]
-                );
-
-
-            const max =
-                Number(
-                    matiere.pointsMax || 0
-                );
-
-
-            if (
-                note < 0 ||
-                note > max
-            ) {
-
-                afficherMessage(
-                    `La note de ${matiere.nom} doit être comprise entre 0 et ${max}.`,
-                    "erreur"
-                );
-
-                return;
-
+            for (const key of existing) {
+                const subjectId = key.split("|")[3];
+                if (!Object.prototype.hasOwnProperty.call(notes, subjectId)) {
+                    const meta = gradeMeta[key];
+                    const response = await fetch(
+                        "/api/grades/index.php?id=" + encodeURIComponent(meta.id),
+                        { method: "DELETE", credentials: "same-origin", headers: { "Accept": "application/json" } }
+                    );
+                    const payload = await response.json();
+                    if (!response.ok || !payload.success) throw new Error(payload.error || "Échec de suppression d'une note.");
+                    delete gradeMeta[key];
+                }
             }
-
         }
 
-
-        resultats[id][annee][
-            `controle${controle}`
-        ] = notes;
-
-    }
-
-
-    /*
-     * Données de la deuxième partie.
-     */
-
-    resultats[id][annee].carnet =
-        {
-
-            proprete:
-                document.getElementById(
-                    "proprete"
-                ).value,
-
-            conduite:
-                document.getElementById(
-                    "conduite"
-                ).value,
-
-            tenueMateriels:
-                document.getElementById(
-                    "tenueMateriels"
-                ).value,
-
-            retard:
-                document.getElementById(
-                    "retard"
-                ).value,
-
-            absence:
-                document.getElementById(
-                    "absence"
-                ).value,
-
-            classePromotion:
-                document.getElementById(
-                    "classePromotion"
-                ).textContent,
-
-            classeRefait:
-                document.getElementById(
-                    "classeRefait"
-                ).textContent,
-
-            eleveRemis:
-                document.getElementById(
-                    "eleveRemis"
-                ).textContent,
-
-            observation1:
-                document.getElementById(
-                    "observation1"
-                ).value,
-
-            observation2:
-                document.getElementById(
-                    "observation2"
-                ).value,
-
-            observation3:
-                document.getElementById(
-                    "observation3"
-                ).value
-
+        const carnetBody = {
+            enrollment_id: enrollmentId,
+            proprete: document.getElementById("proprete").value,
+            conduite: document.getElementById("conduite").value,
+            tenue_materiels: document.getElementById("tenueMateriels").value,
+            retard: document.getElementById("retard").value,
+            absence: document.getElementById("absence").value,
+            classe_promotion: document.getElementById("classePromotion").textContent,
+            classe_refait: document.getElementById("classeRefait").textContent,
+            eleve_remis: document.getElementById("eleveRemis").textContent,
+            observation1: document.getElementById("observation1").value,
+            observation2: document.getElementById("observation2").value,
+            observation3: document.getElementById("observation3").value
         };
 
+        const carnetResponse = await fetch(
+            "/api/results/index.php",
+            {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                body: JSON.stringify(carnetBody)
+            }
+        );
+        const carnetPayload = await carnetResponse.json();
+        if (!carnetResponse.ok || !carnetPayload.success) {
+            throw new Error(carnetPayload.error || "Échec d'enregistrement du carnet.");
+        }
 
-    localStorage.setItem(
-        CLE_RESULTATS,
-        JSON.stringify(resultats)
-    );
+        carnetMeta = carnetPayload.carnet || null;
+        await chargerDonnees();
+        await chargerDeuxiemePartie();
+        afficherCarnet(eleveSelectionne);
 
-
-    afficherMessage(
-        "Les résultats ont été enregistrés avec succès.",
-        "succes"
-    );
-
-
-    /*
-     * Recharger le carnet pour que
-     * le classement soit immédiatement correct.
-     */
-
-    afficherCarnet(
-        eleveSelectionne
-    );
-
+        afficherMessage("Les résultats ont été enregistrés avec succès.", "succes");
+    } catch (error) {
+        afficherMessage(error.message || "Erreur d'enregistrement.", "erreur");
+    }
 }
 
 
@@ -3044,85 +2981,35 @@ function enregistrerResultats() {
    CHARGER LES INFORMATIONS DE LA DEUXIÈME PARTIE
 ========================================================= */
 
-function chargerDeuxiemePartie() {
+async function chargerDeuxiemePartie() {
 
-    if (!eleveSelectionne) {
+    if (!eleveSelectionne || !eleveSelectionne.enrollmentId) return;
 
-        return;
+    const response = await fetch(
+        "/api/results/index.php?enrollment_id=" +
+        encodeURIComponent(eleveSelectionne.enrollmentId),
+        { method: "GET", credentials: "same-origin", headers: { "Accept": "application/json" } }
+    );
+    const payload = await response.json();
 
+    if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Impossible de charger le carnet.");
     }
 
+    const carnet = payload.carnet || {};
 
-    const annee =
-        document.getElementById(
-            "annee"
-        ).value;
-
-
-    const id =
-        String(
-            eleveSelectionne.id
-        );
-
-
-    const sauvegarde =
-        resultats[id] &&
-        resultats[id][annee]
-            ? resultats[id][annee]
-            : {};
-
-
-    const carnet =
-        sauvegarde.carnet || {};
-
-
-    document.getElementById(
-        "proprete"
-    ).value =
-        carnet.proprete || "";
-
-
-    document.getElementById(
-        "conduite"
-    ).value =
-        carnet.conduite || "";
-
-
-    document.getElementById(
-        "tenueMateriels"
-    ).value =
-        carnet.tenueMateriels || "";
-
-
-    document.getElementById(
-        "retard"
-    ).value =
-        carnet.retard || "";
-
-
-    document.getElementById(
-        "absence"
-    ).value =
-        carnet.absence || "";
-
-
-    document.getElementById(
-        "observation1"
-    ).value =
-        carnet.observation1 || "";
-
-
-    document.getElementById(
-        "observation2"
-    ).value =
-        carnet.observation2 || "";
-
-
-    document.getElementById(
-        "observation3"
-    ).value =
-        carnet.observation3 || "";
-
+    document.getElementById("proprete").value = carnet.proprete || "";
+    document.getElementById("conduite").value = carnet.conduite || "";
+    document.getElementById("tenueMateriels").value = carnet.tenue_materiels || "";
+    document.getElementById("retard").value = carnet.retard || "";
+    document.getElementById("absence").value = carnet.absence || "";
+    document.getElementById("classePromotion").textContent = carnet.classe_promotion || "";
+    document.getElementById("classeRefait").textContent = carnet.classe_refait || "";
+    document.getElementById("eleveRemis").textContent = carnet.eleve_remis || "";
+    document.getElementById("observation1").value = carnet.observation1 || "";
+    document.getElementById("observation2").value = carnet.observation2 || "";
+    document.getElementById("observation3").value = carnet.observation3 || "";
+    carnetMeta = carnet || null;
 }
 
 
@@ -3203,41 +3090,34 @@ function ouvrirPage(
    INITIALISATION
 ========================================================= */
 
-IMCSecureStorage.ready.then(function(ok){
+document.addEventListener("DOMContentLoaded", async function () {
+    try {
+        const authenticated = await IMCAuth.verifySession();
+        if (!authenticated) {
+            window.location.href = "index.html";
+            return;
+        }
+        if (!IMCAuth.requirePermission("resultats.read")) {
+            afficherMessage("Permission refusée.", "erreur");
+            return;
+        }
 
-    if(!ok) return;
+        await chargerAnnees();
+        await chargerDonnees();
+        afficherEleves();
 
-    chargerDonnees();
-
-    chargerAnnees();
-
-    afficherEleves();
-
-
-/*
- * Quand le carnet est affiché,
- * charger les données de la deuxième partie.
- */
-
-const ancienneAfficherCarnet =
-    afficherCarnet;
-
-
-/*
- * Petit remplacement pour charger
- * les données du deuxième tableau
- * après ouverture du carnet.
- */
-
-window.afficherCarnet =
-    function (eleve) {
-
-        ancienneAfficherCarnet(eleve);
-
-        chargerDeuxiemePartie();
-
-    };
-
+        const ancienneAfficherCarnet = afficherCarnet;
+        window.afficherCarnet = async function (eleve) {
+            ancienneAfficherCarnet(eleve);
+            try {
+                await chargerDeuxiemePartie();
+            } catch (error) {
+                afficherMessage(error.message, "erreur");
+            }
+        };
+    } catch (error) {
+        afficherMessage(error.message || "Impossible de charger les résultats.", "erreur");
+    }
 });
 
 
