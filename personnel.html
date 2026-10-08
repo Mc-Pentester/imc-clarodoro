@@ -1021,8 +1021,7 @@ function deconnecterPersonnel() {
   if(!nom||!fonction||!identifiant||!motDePasse){afficherMessage("messagePersonnel","Veuillez remplir les champs obligatoires.","erreur");return;}
   const parts=nom.split(/\\s+/); const firstName=parts.shift()||nom; const lastName=parts.join(" ")||firstName;
   try{
-    const csrf=await IMCAuth.getCsrfToken();
-    const response=await fetch("/api/personnel/index.php",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify({first_name:firstName,last_name:lastName,function_name:fonction,class_name:classe,username:identifiant,password:motDePasse,role_name:fonction})});
+    const response=await fetch("/api/personnel/index.php",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({first_name:firstName,last_name:lastName,function_name:fonction,class_name:classe,username:identifiant,password:motDePasse,role_name:fonction})});
     const payload=await response.json(); if(!response.ok||!payload.success) throw new Error(payload.error||"Impossible d'ajouter le personnel.");
     await chargerPersonnelDepuisAPI(); viderFormulairePersonnel(); afficherMessage("messagePersonnel","Personnel ajouté avec succès.","ok");
   }catch(error){afficherMessage("messagePersonnel",error.message||"Impossible d'ajouter le personnel.","erreur");}
@@ -1111,7 +1110,7 @@ function modifierPersonnel(id){
   const parts=nom.split(/\\s+/); const firstName=parts.shift()||nom; const lastName=parts.join(" ")||firstName;
   const body={id:personnelEnModification.id,first_name:firstName,last_name:lastName,function_name:fonction,class_name:classe};
   if(estPDG()){body.username=document.getElementById("modIdentifiant").value.trim(); const password=document.getElementById("modMotDePasse").value; if(password)body.password=password;}
-  try{const csrf=await IMCAuth.getCsrfToken();const response=await fetch("/api/personnel/index.php",{method:"PUT",credentials:"include",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify(body)});const payload=await response.json();if(!response.ok||!payload.success)throw new Error(payload.error||"Impossible de modifier le personnel.");await chargerPersonnelDepuisAPI();afficherMessage("messagePersonnel","Modification enregistrée.","ok");annulerModificationPersonnel();}catch(error){afficherMessage("messagePersonnel",error.message||"Impossible de modifier le personnel.","erreur");}
+  try{const csrf=await IMCAuth.getCsrfToken();const response=await fetch("/api/personnel/index.php",{method:"PUT",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});const payload=await response.json();if(!response.ok||!payload.success)throw new Error(payload.error||"Impossible de modifier le personnel.");await chargerPersonnelDepuisAPI();afficherMessage("messagePersonnel","Modification enregistrée.","ok");annulerModificationPersonnel();}catch(error){afficherMessage("messagePersonnel",error.message||"Impossible de modifier le personnel.","erreur");}
 }
 
 
@@ -1128,7 +1127,7 @@ function annulerModificationPersonnel(){
 async function supprimerPersonnel(id){
   if(!IMCAuth.requirePermission("personnel.delete")){afficherMessage("messagePersonnel","Permission refusée.","erreur");return;}
   if(!confirm("Voulez-vous archiver ce personnel ?"))return;
-  try{const csrf=await IMCAuth.getCsrfToken();const response=await fetch("/api/personnel/index.php",{method:"DELETE",credentials:"include",headers:{"Content-Type":"application/json","X-CSRF-Token":csrf},body:JSON.stringify({id:id})});const payload=await response.json();if(!response.ok||!payload.success)throw new Error(payload.error||"Impossible d’archiver le personnel.");await chargerPersonnelDepuisAPI();afficherMessage("messagePersonnel","Personnel archivé.","ok");}catch(error){afficherMessage("messagePersonnel",error.message||"Impossible d’archiver le personnel.","erreur");}
+  try{const csrf=await IMCAuth.getCsrfToken();const response=await fetch("/api/personnel/index.php",{method:"DELETE",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id})});const payload=await response.json();if(!response.ok||!payload.success)throw new Error(payload.error||"Impossible d’archiver le personnel.");await chargerPersonnelDepuisAPI();afficherMessage("messagePersonnel","Personnel archivé.","ok");}catch(error){afficherMessage("messagePersonnel",error.message||"Impossible d’archiver le personnel.","erreur");}
 }
 
 
