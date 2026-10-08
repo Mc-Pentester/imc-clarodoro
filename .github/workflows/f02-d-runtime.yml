@@ -1,4 +1,5 @@
 name: F-02-D results runtime proof
+# Trigger runtime proof after idempotent migration fix
 
 on:
   push:
