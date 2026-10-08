@@ -82,20 +82,90 @@ if ($method === 'GET') {
          ORDER BY a.attendance_date DESC, a.id DESC'
     );
     $stmt->execute($params);
+    $attendance = $stmt->fetchAll();
+
+    $enrollmentStmt = $pdo->prepare(
+        'SELECT
+            e.id AS enrollment_id,
+            e.student_id,
+            e.class_id,
+            e.school_year_id,
+            s.last_name,
+            s.first_name,
+            s.sex,
+            c.code AS class_code,
+            c.name AS class_name,
+            sy.label AS school_year_label
+         FROM enrollments e
+         INNER JOIN students s ON s.id = e.student_id
+         INNER JOIN classes c ON c.id = e.class_id
+         INNER JOIN school_years sy ON sy.id = e.school_year_id
+         ' . $scopeSql . '
+         WHERE e.status = 'ACTIVE'
+           AND s.status = 'ACTIVE'
+           AND c.status = 'ACTIVE'
+         ORDER BY sy.start_date DESC, c.name ASC, s.last_name ASC, s.first_name ASC'
+    );
+    $enrollmentStmt->execute($scopeParams);
+    $enrollments = $enrollmentStmt->fetchAll();
 
     echo json_encode([
         'success' => true,
-        'attendance' => $stmt->fetchAll(),
+        'attendance' => $attendance,
+        'enrollments' => $enrollments,
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-if (!in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
-    header('Allow: GET, POST, PUT, PATCH');
+if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
+    header('Allow: GET, POST, PUT, PATCH, DELETE');
     apiError(405, 'Méthode HTTP non autorisée');
 }
 
 $user = requirePermission($pdo, $method === 'POST' ? 'presences.create' : 'presences.update');
+
+if ($method === 'DELETE') {
+    requireCsrfToken();
+
+    $id = f02cAttendanceUuid('id');
+    $enrollmentId = f02cAttendanceUuid('enrollment_id');
+
+    [$scopeSql, $scopeParams] = f02cAttendanceScope($user);
+    $check = $pdo->prepare(
+        'SELECT a.id
+         FROM attendance a
+         INNER JOIN enrollments e ON e.id = a.enrollment_id
+         ' . $scopeSql . '
+         WHERE a.id = :id
+           AND a.enrollment_id = :enrollment_id
+           AND e.status = 'ACTIVE'
+         LIMIT 1'
+    );
+    $check->execute([
+        ':id' => $id,
+        ':enrollment_id' => $enrollmentId,
+    ] + $scopeParams);
+
+    if (!$check->fetch()) {
+        apiError(404, 'Présence introuvable ou hors périmètre');
+    }
+
+    $stmt = $pdo->prepare(
+        'DELETE FROM attendance
+         WHERE id = :id
+           AND enrollment_id = :enrollment_id'
+    );
+    $stmt->execute([
+        ':id' => $id,
+        ':enrollment_id' => $enrollmentId,
+    ]);
+
+    echo json_encode([
+        'success' => true,
+        'deleted' => true,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
 requireCsrfToken();
 $data = readJsonBody();
 
