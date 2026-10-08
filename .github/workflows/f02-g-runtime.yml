@@ -165,6 +165,27 @@ jobs:
           ARCHIVED_DB="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT s.status || '|' || u.status FROM staff s JOIN users u ON u.id=s.user_id WHERE s.id='$STAFF_ID';")"
           test "$ARCHIVED_DB" = 'ARCHIVED|INACTIVE'
 
+          # F-02-CSRF: prove session restoration and CSRF enforcement end-to-end.
+          ME="$(curl -fsS -b "$PDG_COOKIE" "$BASE/api/auth/me.php")"
+          ME_CSRF="$(printf '%s' "$ME" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$ME_CSRF"
+          test "$ME_CSRF" = "$PDG_CSRF"
+
+          MISSING_CSRF="$(curl -sS -o /tmp/f02g-csrf-missing.json -w '%{http_code}' -X POST -b "$PDG_COOKIE" -H 'Content-Type: application/json' -d '{}' "$BASE/api/auth/logout.php")"
+          test "$MISSING_CSRF" = '403'
+
+          INVALID_CSRF="$(curl -sS -o /tmp/f02g-csrf-invalid.json -w '%{http_code}' -X POST -b "$PDG_COOKIE" -H 'X-CSRF-Token: invalid-token' -H 'Content-Type: application/json' -d '{}' "$BASE/api/auth/logout.php")"
+          test "$INVALID_CSRF" = '403'
+
+          # Rejected logout attempts must not destroy the authenticated session.
+          curl -fsS -b "$PDG_COOKIE" "$BASE/api/auth/me.php" | grep -q '"success":true'
+
+          LOGOUT="$(curl -fsS -X POST -b "$PDG_COOKIE" -H "X-CSRF-Token: $ME_CSRF" -H 'Content-Type: application/json' -d '{}' "$BASE/api/auth/logout.php")"
+          printf '%s' "$LOGOUT" | grep -q '"success":true'
+          LOGGED_OUT="$(curl -sS -o /tmp/f02g-csrf-logged-out.json -w '%{http_code}' -b "$PDG_COOKIE" "$BASE/api/auth/me.php")"
+          test "$LOGGED_OUT" = '401'
+          echo 'F-02-CSRF SESSION TOKEN + MISSING/INVALID TOKEN REJECTION: PASS'
+          echo 'F-02-CSRF RUNTIME PROOF: PASS'
           echo 'F-02-G SERVER + RBAC + POSTGRESQL AUTHORITY PROOF: PASS'
 
       - name: Frontend authority guard
