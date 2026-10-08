@@ -247,7 +247,6 @@ tr:nth-child(even) td{
     padding:14px;
     color:white
 }
-
 .summary-box h3{
     margin:0 0 6px
 }
@@ -497,8 +496,7 @@ Institution Mixte Clarodaro — Clarodaro, la clarté du savoir!
 <nav class="menu-principal no-print">
 
 <button type="button" onclick="ouvrirPage('index.html')">
-Élèves
-</button>
+Élèves</button>
 
 <button type="button" onclick="ouvrirPage('matieres.html')">
 Matières
@@ -747,8 +745,7 @@ readonly>
 
 <label>Reste à payer</label>
 
-<input
-id="reste"
+<inputid="reste"
 type="number"
 readonly>
 
@@ -997,7 +994,6 @@ Situation de tous les élèves
 
 
 <thead>
-
 <tr>
 
 <th>#</th>
@@ -1248,7 +1244,6 @@ Observation
 <button
 class="action btn-save"
 onclick="enregistrerVersement()">
-
 Enregistrer
 
 </button>
@@ -1268,2608 +1263,386 @@ Annuler
 </div>
 
 
-<script src="secure-storage.js"></script>
 <script src="auth.js"></script>
 <script>
+"use strict";
 
-// Guard d'authentification
-document.addEventListener("DOMContentLoaded", function() {
-  IMCAuth.requireAuth("personnel.html");
-});
+const FINANCE_API = "/api/finance/index.php";
+const YEARS_API = "/api/school-years/index.php";
 
-/* =====================================================
-   DONNEES
-   ===================================================== */
+let anneesServeur = [];
+let anneeServeurId = "";
+let etudiants = [];
+let factures = [];
+let tarifs = [];
+let eleveSelectionne = null;
+let classeSelectionnee = "";
 
-const CLE_ETUDIANTS="imc_students";
+function ouvrirPage(page){ window.location.assign(page); }
 
-const CLE_FINANCES="imc_finances";
-
-const CLE_TARIFS="imc_tarifs";
-
-const CLE_ANNEE_ACTIVE="imc_active_year";
-
-
-const classes=[
-
-"1ère Kind",
-"2ème Kind",
-"3ème Kind",
-"1ère A.F.",
-"2ème A.F.",
-"3ème A.F.",
-"4ème A.F.",
-"5ème A.F.",
-"6ème A.F.",
-"7ème A.F.",
-"8ème A.F.",
-"9ème A.F."
-
-];
-
-
-let etudiants=[];
-
-
-let finances={};
-
-
-let tarifs={};
-
-
-let eleveSelectionne=null;
-
-
-/* =====================================================
-   OUTILS
-   ===================================================== */
-
-function ouvrirPage(page){
-
-    window.location.assign(page)
-
+function afficherMessage(message, type="success"){
+  const box=document.getElementById("message");
+  box.textContent=message;
+  box.className="message "+type;
+  box.style.display="block";
+  clearTimeout(window.__financeMessageTimer);
+  window.__financeMessageTimer=setTimeout(()=>box.style.display="none",3500);
 }
 
-
-function afficherMessage(t,type="success"){
-
-    let b=document.getElementById("message");
-
-    b.textContent=t;
-
-    b.className="message "+type;
-
-    b.style.display="block";
-
-    setTimeout(()=>{
-
-        b.style.display="none"
-
-    },3500)
-
+function formatMontant(value){
+  return Number(value||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" $ HT";
 }
 
-
-function anneeActuelle(){
-
-    return document.getElementById("annee").value
-
+function escapeHtml(value){
+  return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
 }
 
-
-function cleTarif(a,c){
-
-    return a+"|"+c
-
+async function apiJson(url, options={}){
+  const response=await fetch(url,{credentials:"same-origin",cache:"no-store",...options});
+  let payload=null;
+  try{ payload=await response.json(); }catch(_){}
+  if(!response.ok || !payload || payload.success!==true){
+    throw new Error((payload&&payload.message)||("Erreur HTTP "+response.status));
+  }
+  return payload;
 }
 
+function anneeActuelle(){ return anneeServeurId; }
 
-function cleEleve(a,e){
-
-    return a+"|"+String(e.id)
-
+function factureEleve(studentId){
+  return factures
+    .filter(f=>f.student_id===studentId)
+    .sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||"")))[0] || null;
 }
 
-
-function formatMontant(n){
-
-    return Number(n||0).toLocaleString(
-        "fr-FR",
-        {
-            minimumFractionDigits:2,
-            maximumFractionDigits:2
-        }
-    )+" $ HT"
-
+function tarifEleve(e){
+  return tarifs.find(t=>t.class_id===e.class_id) || null;
 }
 
-
-function escapeHtml(t){
-
-    return String(t??"")
-        .replace(/&/g,"&amp;")
-        .replace(/</g,"&lt;")
-        .replace(/>/g,"&gt;")
-        .replace(/"/g,"&quot;")
-        .replace(/'/g,"&#039;")
-
+function montantAPayer(f){
+  return Math.max(0,Number(f?.amount||0)-Number(f?.reduction||0));
 }
 
-
-function escapeAttr(t){
-
-    return String(t??"")
-        .replace(/\\/g,"\\\\")
-        .replace(/'/g,"\\'")
-
+function totalVerse(f){
+  return (f?.paid_amount!=null ? Number(f.paid_amount) : (f?.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0));
 }
-
-
-/* =====================================================
-   ANNEES
-   ===================================================== */
-
-function genererAnnees(){
-
-    const s=document.getElementById("annee");
-
-    s.innerHTML="";
-
-    for(let y=2026;y<=2040;y++){
-
-        let v=y+"-"+(y+1);
-
-        let o=document.createElement("option");
-
-        o.value=v;
-
-        o.textContent=v;
-
-        s.appendChild(o)
-
-    }
-
-    let a=
-    localStorage.getItem(
-        CLE_ANNEE_ACTIVE
-    );
-
-    s.value=
-    [...s.options].some(
-        o=>o.value===a
-    )
-    ?a
-    :"2026-2027";
-
-    document.getElementById(
-        "anneeAffichee"
-    ).textContent=
-    "Année académique : "+s.value
-
-}
-
-
-/* =====================================================
-   TARIFS
-   ===================================================== */
-
-function obtenirTarif(a,c){
-
-    const k=cleTarif(a,c);
-
-    const def={
-
-        "1ère Kind":{
-            total:3200,
-            m1:1800,
-            m2:900,
-            m3:500
-        },
-
-        "2ème Kind":{
-            total:3300,
-            m1:1800,
-            m2:1000,
-            m3:500
-        },
-
-        "3ème Kind":{
-            total:3500,
-            m1:2000,
-            m2:1000,
-            m3:500
-        },
-
-        "1ère A.F.":{
-            total:3200,
-            m1:1800,
-            m2:900,
-            m3:500
-        },
-
-        "2ème A.F.":{
-            total:3300,
-            m1:1800,
-            m2:1000,
-            m3:500
-        },
-
-        "3ème A.F.":{
-            total:3500,
-            m1:2000,
-            m2:1000,
-            m3:500
-        }
-
-    };
-
-
-    if(!tarifs[k]){
-
-        const d=
-        def[c]||
-        {
-            total:0,
-            m1:0,
-            m2:0,
-            m3:0
-        };
-
-
-        tarifs[k]={
-
-            classe:c,
-
-            date1:"Du 31 au 12 Octobre",
-
-            montant1:d.m1,
-
-            date2:"Du 07 Déc. au 1er Février",
-
-            montant2:d.m2,
-
-            date3:"Du 15 Mars au 30 Avril",
-
-            montant3:d.m3,
-
-            montantTotal:d.total
-
-        }
-
-    }
-
-
-    const t=tarifs[k];
-
-
-    if(t.montantTotal===undefined){
-
-        t.montantTotal=
-        Number(t.montant1||0)+
-        Number(t.montant2||0)+
-        Number(t.montant3||0)
-
-    }
-
-
-    return t
-
-}
-
-
-function totalTarif(tarif){
-
-    return Number(
-        tarif.montantTotal||0
-    )
-
-}
-
-
-function afficherTarifs(){
-
-    let tb=
-    document.getElementById(
-        "tableTarifs"
-    );
-
-    tb.innerHTML="";
-
-    let a=anneeActuelle();
-
-
-    classes.forEach(c=>{
-
-        let t=obtenirTarif(a,c);
-
-        let tr=document.createElement("tr");
-
-
-        tr.innerHTML=`
-
-        <td>
-            <strong>
-                ${escapeHtml(c)}
-            </strong>
-        </td>
-
-        <td>
-            ${formatMontant(t.montant1)}
-            <br>
-            <span class="small">
-                ${escapeHtml(t.date1)}
-            </span>
-        </td>
-
-        <td>
-            ${formatMontant(t.montant2)}
-            <br>
-            <span class="small">
-                ${escapeHtml(t.date2)}
-            </span>
-        </td>
-
-        <td>
-            ${formatMontant(t.montant3)}
-            <br>
-            <span class="small">
-                ${escapeHtml(t.date3)}
-            </span>
-        </td>
-
-        <td class="money">
-            ${formatMontant(totalTarif(t))}
-        </td>
-
-        <td>
-
-            <button
-                class="action btn-edit"
-                onclick="modifierTarif('${escapeAttr(c)}')">
-
-                Modifier
-
-            </button>
-
-        </td>
-
-        `;
-
-
-        tb.appendChild(tr)
-
-    });
-
-
-    localStorage.setItem(
-        CLE_TARIFS,
-        JSON.stringify(tarifs)
-    )
-
-}
-
-
-function modifierTarif(c){
-
-    let t=
-    obtenirTarif(
-        anneeActuelle(),
-        c
-    );
-
-
-    document.getElementById(
-        "tarifClasseOriginal"
-    ).value=c;
-
-
-    document.getElementById(
-        "tarifClasseNom"
-    ).value=c;
-
-
-    document.getElementById(
-        "date1"
-    ).value=t.date1;
-
-
-    document.getElementById(
-        "montantTotal"
-    ).value=t.montantTotal||0;
-
-
-    document.getElementById(
-        "montant1"
-    ).value=t.montant1;
-
-
-    document.getElementById(
-        "date2"
-    ).value=t.date2;
-
-
-    document.getElementById(
-        "montant2"
-    ).value=t.montant2;
-
-
-    document.getElementById(
-        "date3"
-    ).value=t.date3;
-
-
-    document.getElementById(
-        "montant3"
-    ).value=t.montant3;
-
-
-    document.getElementById(
-        "modalTarif"
-    ).style.display="flex"
-
-}
-
-
-function enregistrerTarif(){
-
-    if (!IMCAuth.requirePermission("finances.update")) {
-        afficherMessage("Permission refusée.", "erreur");
-        return;
-    }
-
-    let c=
-    document.getElementById(
-        "tarifClasseOriginal"
-    ).value;
-
-
-    let a=anneeActuelle();
-
-
-    let total=
-    Number(
-        document.getElementById(
-            "montantTotal"
-        ).value||0
-    );
-
-
-    let m1=
-    Number(
-        document.getElementById(
-            "montant1"
-        ).value||0
-    );
-
-
-    let m2=
-    Number(
-        document.getElementById(
-            "montant2"
-        ).value||0
-    );
-
-
-    let m3=
-    Number(
-        document.getElementById(
-            "montant3"
-        ).value||0
-    );
-
-
-    if(
-        total<0||
-        m1<0||
-        m2<0||
-        m3<0
-    ){
-
-        return afficherMessage(
-            "Les montants ne peuvent pas être négatifs.",
-            "error"
-        )
-
-    }
-
-
-    tarifs[cleTarif(a,c)]={
-
-        classe:c,
-
-        date1:
-        document.getElementById(
-            "date1"
-        ).value.trim(),
-
-        montant1:m1,
-
-        date2:
-        document.getElementById(
-            "date2"
-        ).value.trim(),
-
-        montant2:m2,
-
-        date3:
-        document.getElementById(
-            "date3"
-        ).value.trim(),
-
-        montant3:m3,
-
-        montantTotal:total
-
-    };
-
-
-    etudiants
-    .filter(e=>e.classe===c)
-    .forEach(e=>{
-
-        obtenirFinanceEleve(e)
-        .tarifNormal=total
-
-    });
-
-
-    localStorage.setItem(
-        CLE_TARIFS,
-        JSON.stringify(tarifs)
-    );
-
-
-    localStorage.setItem(
-        CLE_FINANCES,
-        JSON.stringify(finances)
-    );
-
-
-    fermerModals();
-
-    afficherTarifs();
-
-    afficherEleves();
-
-    afficherSituations();
-
-    afficherResume();
-
-
-    if(
-        eleveSelectionne &&
-        eleveSelectionne.classe===c
-    ){
-
-        chargerFicheEleve()
-
-    }
-
-
-    afficherMessage(
-        "Tarif enregistré pour tous les élèves de "+c+"."
-    )
-
-}
-
-
-/* =====================================================
-   FINANCE ELEVE
-   ===================================================== */
-
-function obtenirFinanceEleve(e){
-
-    let k=
-    cleEleve(
-        anneeActuelle(),
-        e
-    );
-
-
-    if(!finances[k]){
-
-        let t=
-        obtenirTarif(
-            anneeActuelle(),
-            e.classe
-        );
-
-
-        finances[k]={
-
-            studentId:e.id,
-
-            annee:anneeActuelle(),
-
-            tarifNormal:
-            totalTarif(t),
-
-            reduction:0,
-
-            motifReduction:"",
-
-            versements:[]
-
-        }
-
-    }
-
-
-    if(!Array.isArray(finances[k].versements)){
-
-        finances[k].versements=[]
-
-    }
-
-
-    return finances[k]
-
-}
-
-
-/* =====================================================
-   SITUATION
-   ===================================================== */
-
-function enregistrerSituation(){
-
-    if (!IMCAuth.requirePermission("finances.update")) {
-        afficherMessage("Permission refusée.", "erreur");
-        return;
-    }
-
-    if(!eleveSelectionne)return;
-
-
-    let f=
-    obtenirFinanceEleve(
-        eleveSelectionne
-    );
-
-
-    f.tarifNormal=
-    +document.getElementById(
-        "tarifNormal"
-    ).value||0;
-
-
-    f.reduction=
-    Math.min(
-        +document.getElementById(
-            "reduction"
-        ).value||0,
-        f.tarifNormal
-    );
-
-
-    f.motifReduction=
-    document.getElementById(
-        "motifReduction"
-    ).value.trim();
-
-
-    localStorage.setItem(
-        CLE_FINANCES,
-        JSON.stringify(finances)
-    );
-
-
-    chargerFicheEleve();
-
-    afficherSituations();
-
-    afficherResume();
-
-
-    afficherMessage(
-        "Situation financière enregistrée."
-    )
-
-}
-
-
-function ouvrirReduction(){
-
-    if(eleveSelectionne){
-
-        document.getElementById(
-            "reduction"
-        ).focus();
-
-
-        afficherMessage(
-            "Saisissez la réduction et son motif, puis enregistrez la situation."
-        )
-
-    }
-
-}
-
-
-/* =====================================================
-   AJOUT VERSEMENT PAR MODAL
-   ===================================================== */
-
-function ouvrirVersement(){
-
-    if(!eleveSelectionne){
-
-        return afficherMessage(
-            "Sélectionnez d'abord un élève.",
-            "error"
-        )
-
-    }
-
-
-    let f=
-    obtenirFinanceEleve(
-        eleveSelectionne
-    );
-
-
-    document.getElementById(
-        "versementNumero"
-    ).value=
-    f.versements.length+1;
-
-
-    document.getElementById(
-        "versementDate"
-    ).value=
-    new Date()
-    .toISOString()
-    .slice(0,10);
-
-
-    document.getElementById(
-        "versementMontant"
-    ).value="";
-
-
-    document.getElementById(
-        "versementMode"
-    ).value="Espèces";
-
-
-    document.getElementById(
-        "versementObservation"
-    ).value="";
-
-
-    document.getElementById(
-        "modalVersement"
-    ).style.display="flex"
-
-}
-
-
-function enregistrerVersement(){
-
-    if (!IMCAuth.requirePermission("finances.create")) {
-        return afficherMessage(
-            "messageFinance",
-            "Permission refusée.",
-            "erreur"
-        );
-    }
-
-    if(!eleveSelectionne)return;
-
-
-    let f=
-    obtenirFinanceEleve(
-        eleveSelectionne
-    );
-
-
-    let m=
-    +document.getElementById(
-        "versementMontant"
-    ).value||0;
-
-
-    if(m<=0){
-
-        return afficherMessage(
-            "Veuillez saisir un montant supérieur à 0.",
-            "error"
-        )
-
-    }
-
-
-    let ap=
-    Math.max(
-        0,
-        (+f.tarifNormal||0)-
-        (+f.reduction||0)
-    );
-
-
-    let deja=
-    f.versements.reduce(
-        (s,v)=>s+(+v.montant||0),
-        0
-    );
-
-
-    if(
-        ap>0 &&
-        deja+m>ap
-    ){
-
-        return afficherMessage(
-            "Le versement dépasse le montant restant à payer.",
-            "error"
-        )
-
-    }
-
-
-    let maintenant=
-    new Date();
-
-
-    f.versements.push({
-
-        id:Date.now(),
-
-        numero:
-        f.versements.length+1,
-
-        date:
-        document.getElementById(
-            "versementDate"
-        ).value,
-
-        heure:
-        maintenant.toLocaleTimeString(
-            "fr-FR",
-            {
-                hour:"2-digit",
-                minute:"2-digit"
-            }
-        ),
-
-        montant:m,
-
-        mode:
-        document.getElementById(
-            "versementMode"
-        ).value,
-
-        observation:
-        document.getElementById(
-            "versementObservation"
-        ).value.trim()
-
-    });
-
-
-    localStorage.setItem(
-        CLE_FINANCES,
-        JSON.stringify(finances)
-    );
-
-
-    fermerModals();
-
-    chargerFicheEleve();
-
-    afficherSituations();
-
-    afficherResume();
-
-
-    afficherMessage(
-        "Versement enregistré avec succès."
-    )
-
-}
-
-
-/* =====================================================
-   SUPPRIMER VERSEMENT
-   ===================================================== */
-
-function supprimerVersement(id){
-
-    if (!IMCAuth.requirePermission("finances.delete")) {
-        afficherMessage("Permission refusée.", "erreur");
-        return;
-    }
-
-    if(
-        !confirm(
-            "Voulez-vous supprimer ce versement ?"
-        )
-    )return;
-
-
-    let f=
-    obtenirFinanceEleve(
-        eleveSelectionne
-    );
-
-
-    f.versements=
-    f.versements.filter(
-        v=>String(v.id)!==String(id)
-    );
-
-
-    f.versements.forEach(
-        (v,i)=>v.numero=i+1
-    );
-
-
-    localStorage.setItem(
-        CLE_FINANCES,
-        JSON.stringify(finances)
-    );
-
-
-    chargerFicheEleve();
-
-    afficherSituations();
-
-    afficherResume();
-
-
-    afficherMessage(
-        "Versement supprimé."
-    )
-
-}
-
-
-/* =====================================================
-   CLASSES
-   ===================================================== */
-
-function afficherClasses(){
-
-    const box=
-    document.getElementById(
-        "listeClasses"
-    );
-
-
-    box.innerHTML="";
-
-
-    const c=
-    document.getElementById(
-        "classe"
-    ).value;
-
-
-    classes.forEach(cl=>{
-
-        const b=
-        document.createElement(
-            "button"
-        );
-
-
-        b.type="button";
-
-
-        b.className=
-        "class-button"+
-        (c===cl?" selected":"");
-
-
-        b.textContent=cl;
-
-
-        b.onclick=()=>
-        selectionnerClasse(cl);
-
-
-        box.appendChild(b)
-
-    });
-
-
-    document.getElementById(
-        "btnToutesClasses"
-    ).classList.toggle(
-        "selected",
-        !c
-    )
-
-}
-
-
-function afficherToutesLesClasses(){
-
-    const box=
-    document.getElementById(
-        "listeClasses"
-    );
-
-
-    document.getElementById(
-        "classe"
-    ).value="";
-
-
-    eleveSelectionne=null;
-
-
-    document.getElementById(
-        "ficheEleve"
-    ).classList.add(
-        "hidden"
-    );
-
-
-    box.classList.remove(
-        "hidden"
-    );
-
-
-    afficherClasses();
-
-    afficherEleves();
-
-    afficherSituations();
-
-    afficherResume();
-
-
-    box.scrollIntoView({
-        behavior:"smooth",
-        block:"nearest"
-    })
-
-}
-
-
-function selectionnerClasse(c){
-
-    document.getElementById(
-        "classe"
-    ).value=c;
-
-
-    eleveSelectionne=null;
-
-
-    document.getElementById(
-        "ficheEleve"
-    ).classList.add(
-        "hidden"
-    );
-
-
-    document.getElementById(
-        "listeClasses"
-    ).classList.remove(
-        "hidden"
-    );
-
-
-    afficherClasses();
-
-    afficherEleves();
-
-    afficherSituations();
-
-    afficherResume();
-
-
-    document.getElementById(
-        "listeEleves"
-    ).scrollIntoView({
-        behavior:"smooth",
-        block:"start"
-    })
-
-}
-
-
-/* =====================================================
-   LISTE ELEVES
-   ===================================================== */
-
-function afficherEleves(){
-
-    let l=
-    document.getElementById(
-        "listeEleves"
-    );
-
-
-    let q=
-    document.getElementById(
-        "recherche"
-    ).value
-    .trim()
-    .toLowerCase();
-
-
-    let c=
-    document.getElementById(
-        "classe"
-    ).value;
-
-
-    l.innerHTML="";
-
-
-    let r=
-    etudiants.filter(e=>{
-
-        let n=
-        String(e.nom||"")
-        .toLowerCase();
-
-
-        let p=
-        String(e.prenom||"")
-        .toLowerCase();
-
-
-        return(
-            (!q||n.includes(q)||p.includes(q))&&
-            (!c||e.classe===c)
-        )
-
-    });
-
-
-    r.sort((a,b)=>
-
-        `${a.nom||""} ${a.prenom||""}`
-        .localeCompare(
-            `${b.nom||""} ${b.prenom||""}`
-        )
-
-    );
-
-
-    if(!r.length){
-
-        return l.innerHTML=
-        "<p>Aucun élève trouvé.</p>"
-
-    }
-
-
-    r.forEach(e=>{
-
-        let b=
-        document.createElement(
-            "button"
-        );
-
-
-        if(
-            eleveSelectionne &&
-            String(
-                eleveSelectionne.id
-            )===String(e.id)
-        ){
-
-            b.classList.add(
-                "selected"
-            )
-
-        }
-
-
-        b.textContent=
-        `${e.nom||""} ${e.prenom||""} — ${e.classe||""}`;
-
-
-        b.onclick=()=>
-        selectionnerEleve(e);
-
-
-        l.appendChild(b)
-
-    })
-
-}
-
-
-/* =====================================================
-   SELECTION ELEVE
-   ===================================================== */
-
-function selectionnerEleve(e){
-
-    eleveSelectionne=e;
-
-    afficherEleves();
-
-    chargerFicheEleve();
-
-
-    document.getElementById(
-        "ficheEleve"
-    ).classList.remove(
-        "hidden"
-    );
-
-
-    document.getElementById(
-        "ficheEleve"
-    ).scrollIntoView({
-        behavior:"smooth"
-    })
-
-}
-
-
-/* =====================================================
-   HEURE ACTUELLE
-   ===================================================== */
-
-function heureActuelle(){
-
-    return new Date().toLocaleTimeString(
-        "fr-FR",
-        {
-            hour:"2-digit",
-            minute:"2-digit"
-        }
-    )
-
-}
-
-
-/* =====================================================
-   FORMAT DATE
-   ===================================================== */
-
-function formatDateAffichage(date){
-
-    if(!date)return"—";
-
-
-    let morceaux=
-    String(date).split("-");
-
-
-    if(morceaux.length===3){
-
-        return(
-            morceaux[2]+"/"+
-            morceaux[1]+"/"+
-            morceaux[0]
-        )
-
-    }
-
-
-    return date
-
-}
-
-
-/* =====================================================
-   TROUVER VERSEMENT PAR NUMERO
-   ===================================================== */
-
-function trouverVersement(f,numero){
-
-    return f.versements.find(
-        v=>Number(v.numero)===Number(numero)
-    )
-
-}
-
-
-/* =====================================================
-   SAUVEGARDE D'UN VERSEMENT DIRECTEMENT
-   DANS LE NOUVEAU TABLEAU
-   ===================================================== */
-
-function enregistrerVersementDirect(numero,valeur){
-
-    if(!eleveSelectionne)return;
-
-    let f=
-    obtenirFinanceEleve(
-        eleveSelectionne
-    );
-
-    const versementExistant = trouverVersement(f, numero);
-    const suppression = String(valeur).trim() === "" && !!versementExistant;
-
-    if (suppression) {
-        if (!IMCAuth.requirePermission("finances.delete")) {
-            afficherMessage("Permission refusée.", "erreur");
-            return;
-        }
-    } else if (versementExistant) {
-        if (!IMCAuth.requirePermission("finances.update")) {
-            afficherMessage("Permission refusée.", "erreur");
-            return;
-        }
-    } else if (!IMCAuth.requirePermission("finances.create")) {
-        afficherMessage("Permission refusée.", "erreur");
-        return;
-    }
-
-
-    let montant=
-    Number(valeur);
-
-
-    if(
-        !Number.isFinite(montant)||
-        montant<0
-    ){
-
-        montant=0
-
-    }
-
-
-    /*
-       Montant réellement à payer
-    */
-
-    let montantAPayer=
-    Math.max(
-        0,
-        Number(f.tarifNormal||0)-
-        Number(f.reduction||0)
-    );
-
-
-    /*
-       Total des autres versements
-    */
-
-    let autres=
-    f.versements
-    .filter(
-        v=>Number(v.numero)!==Number(numero)
-    )
-    .reduce(
-        (s,v)=>s+Number(v.montant||0),
-        0
-    );
-
-
-    /*
-       Empêcher de dépasser la balance
-    */
-
-    if(
-        montantAPayer>0 &&
-        autres+montant>montantAPayer
-    ){
-
-        montant=
-        Math.max(
-            0,
-            montantAPayer-autres
-        );
-
-
-        afficherMessage(
-            "Le montant a été limité au solde restant.",
-            "error"
-        )
-
-    }
-
-
-    let v=
-    trouverVersement(
-        f,
-        numero
-    );
-
-
-    /*
-       Si la case est vide,
-       supprimer le versement correspondant.
-    */
-
-    if(montant===0 && String(valeur).trim()===""){
-
-        if(v){
-
-            f.versements=
-            f.versements.filter(
-                x=>Number(x.numero)!==Number(numero)
-            );
-
-            f.versements.forEach(
-                (x,i)=>x.numero=i+1
-            )
-
-        }
-
-    }
-
-    else{
-
-        let maintenant=
-        new Date();
-
-
-        if(v){
-
-            v.montant=montant;
-
-
-            /*
-               On garde la date et l'heure
-               déjà enregistrées.
-            */
-
-            if(!v.date){
-
-                v.date=
-                maintenant
-                .toISOString()
-                .slice(0,10)
-
-            }
-
-
-            if(!v.heure){
-
-                v.heure=
-                heureActuelle()
-
-            }
-
-        }
-
-        else{
-
-            f.versements.push({
-
-                id:Date.now(),
-
-                numero:Number(numero),
-
-                date:
-                maintenant
-                .toISOString()
-                .slice(0,10),
-
-                heure:
-                heureActuelle(),
-
-                montant:montant,
-
-                mode:"Espèces",
-
-                observation:""
-
-            })
-
-        }
-
-    }
-
-
-    localStorage.setItem(
-        CLE_FINANCES,
-        JSON.stringify(finances)
-    );
-
-
-    /*
-       Recharger immédiatement
-       tous les calculs.
-    */
-
-    chargerFicheEleve();
-
-    afficherSituations();
-
-    afficherResume()
-
-}
-
-
-/* =====================================================
-   TABLEAU FINANCIER PRINCIPAL DE L'ELEVE
-   ===================================================== */
-
-function afficherTableauResumeEleve(e,f){
-
-    const tbody=
-    document.getElementById(
-        "tableResumeEleve"
-    );
-
-
-    tbody.innerHTML="";
-
-
-    if(!e||!f)return;
-
-
-    /*
-       Montant à payer
-    */
-
-    const montantAPayer=
-    Math.max(
-        0,
-        Number(f.tarifNormal||0)-
-        Number(f.reduction||0)
-    );
-
-
-    /*
-       Versements
-    */
-
-    const v1=
-    trouverVersement(f,1);
-
-
-    const v2=
-    trouverVersement(f,2);
-
-
-    const v3=
-    trouverVersement(f,3);
-
-
-    /*
-       Total de tous les versements
-    */
-
-    const total=
-    f.versements.reduce(
-        (s,v)=>
-        s+Number(v.montant||0),
-        0
-    );
-
-
-    /*
-       Balance
-    */
-
-    const balance=
-    Math.max(
-        0,
-        montantAPayer-total
-    );
-
-
-    /*
-       Dernière date et dernière heure
-    */
-
-    let dernier=null;
-
-
-    if(f.versements.length){
-
-        dernier=
-        [...f.versements]
-        .sort(
-            (a,b)=>
-            Number(b.id||0)-
-            Number(a.id||0)
-        )[0]
-
-    }
-
-
-    const tr=
-    document.createElement("tr");
-
-
-    tr.innerHTML=`
-
-        <td>1</td>
-
-
-        <td>
-
-            ${escapeHtml(
-                `${e.nom||""} ${e.prenom||""}`
-            )}
-
-        </td>
-
-
-        <td>
-
-            ${escapeHtml(
-                e.classe||""
-            )}
-
-        </td>
-
-
-        <td class="money">
-
-            ${formatMontant(
-                montantAPayer
-            )}
-
-        </td>
-
-
-        <!-- 1ER VERSEMENT -->
-
-        <td>
-
-            <input
-
-                class="versement-input"
-
-                type="number"
-
-                min="0"
-
-                step="0.01"
-
-                value="${
-                    v1
-                    ? Number(v1.montant)
-                    : ""
-                }"
-
-                placeholder="0"
-
-                onchange="
-                    enregistrerVersementDirect(
-                        1,
-                        this.value
-                    )
-                "
-
-                oninput="
-                    calculerApercuTableau()
-                "
-
-            >
-
-        </td>
-
-
-        <!-- 2EME VERSEMENT -->
-
-        <td>
-
-            <input
-
-                class="versement-input"
-
-                type="number"
-
-                min="0"
-
-                step="0.01"
-
-                value="${
-                    v2
-                    ? Number(v2.montant)
-                    : ""
-                }"
-
-                placeholder="0"
-
-                onchange="
-                    enregistrerVersementDirect(
-                        2,
-                        this.value
-                    )
-                "
-
-                oninput="
-                    calculerApercuTableau()
-                "
-
-            >
-
-        </td>
-
-
-        <!-- 3EME VERSEMENT -->
-
-        <td>
-
-            <input
-
-                class="versement-input"
-
-                type="number"
-
-                min="0"
-
-                step="0.01"
-
-                value="${
-                    v3
-                    ? Number(v3.montant)
-                    : ""
-                }"
-
-                placeholder="0"
-
-                onchange="
-                    enregistrerVersementDirect(
-                        3,
-                        this.value
-                    )
-                "
-
-                oninput="
-                    calculerApercuTableau()
-                "
-
-            >
-
-        </td>
-
-
-        <!-- TOTAL AUTOMATIQUE -->
-
-        <td
-            id="totalAutoEleve"
-            class="money total-auto"
-        >
-
-            ${formatMontant(total)}
-
-        </td>
-
-
-        <!-- BALANCE AUTOMATIQUE -->
-
-        <td
-            id="balanceAutoEleve"
-            class="money balance-auto"
-        >
-
-            ${formatMontant(balance)}
-
-        </td>
-
-
-        <!-- DATE -->
-
-        <td>
-
-            <div class="date-heure">
-
-                <div class="date-ligne">
-
-                    📅 ${
-                        dernier
-                        ? formatDateAffichage(
-                            dernier.date
-                          )
-                        : "—"
-                    }
-
-                </div>
-
-            </div>
-
-        </td>
-
-
-        <!-- HEURE -->
-
-        <td>
-
-            <div class="date-heure">
-
-                <div class="heure-ligne">
-
-                    🕐 ${
-                        dernier
-                        ? escapeHtml(
-                            dernier.heure||"—"
-                          )
-                        : "—"
-                    }
-
-                </div>
-
-            </div>
-
-        </td>
-
-    `;
-
-
-    tbody.appendChild(tr)
-
-}
-
-
-/* =====================================================
-   CALCUL EN DIRECT AVANT ENREGISTREMENT
-   ===================================================== */
-
-function calculerApercuTableau(){
-
-    if(!eleveSelectionne)return;
-
-
-    let f=
-    obtenirFinanceEleve(
-        eleveSelectionne
-    );
-
-
-    let ap=
-    Math.max(
-        0,
-        Number(f.tarifNormal||0)-
-        Number(f.reduction||0)
-    );
-
-
-    let inputs=
-    document.querySelectorAll(
-        ".versement-input"
-    );
-
-
-    let total=0;
-
-
-    inputs.forEach(input=>{
-
-        total+=
-        Number(input.value||0)
-
-    });
-
-
-    let balance=
-    Math.max(
-        0,
-        ap-total
-    );
-
-
-    let totalBox=
-    document.getElementById(
-        "totalAutoEleve"
-    );
-
-
-    let balanceBox=
-    document.getElementById(
-        "balanceAutoEleve"
-    );
-
-
-    if(totalBox){
-
-        totalBox.textContent=
-        formatMontant(total)
-
-    }
-
-
-    if(balanceBox){
-
-        balanceBox.textContent=
-        formatMontant(balance)
-
-    }
-
-}
-
-
-/* =====================================================
-   CHARGER FICHE ELEVE
-   ===================================================== */
-
-function chargerFicheEleve(){
-
-    if(!eleveSelectionne)return;
-
-
-    let f=
-    obtenirFinanceEleve(
-        eleveSelectionne
-    );
-
-
-    let t=
-    obtenirTarif(
-        anneeActuelle(),
-        eleveSelectionne.classe
-    );
-
-
-    if(
-        (+f.tarifNormal||0)===0 &&
-        totalTarif(t)>0
-    ){
-
-        f.tarifNormal=
-        totalTarif(t);
-
-
-        localStorage.setItem(
-            CLE_FINANCES,
-            JSON.stringify(finances)
-        )
-
-    }
-
-
-    let ap=
-    Math.max(
-        0,
-        (+f.tarifNormal||0)-
-        (+f.reduction||0)
-    );
-
-
-    let tv=
-    f.versements.reduce(
-        (s,v)=>
-        s+(+v.montant||0),
-        0
-    );
-
-
-    let r=
-    Math.max(
-        0,
-        ap-tv
-    );
-
-
-    document.getElementById(
-        "identiteEleve"
-    ).innerHTML=`
-
-        <p>
-
-            <strong>
-                Nom et prénom :
-            </strong>
-
-            ${escapeHtml(
-                `${eleveSelectionne.nom||""} ${eleveSelectionne.prenom||""}`
-            )}
-
-        </p>
-
-
-        <p>
-
-            <strong>
-                Classe :
-            </strong>
-
-            ${escapeHtml(
-                eleveSelectionne.classe||""
-            )}
-
-        </p>
-
-
-        <p>
-
-            <strong>
-                Année académique :
-            </strong>
-
-            ${escapeHtml(
-                anneeActuelle()
-            )}
-
-        </p>
-
-    `;
-
-
-    document.getElementById(
-        "tarifNormal"
-    ).value=
-    f.tarifNormal||0;
-
-
-    document.getElementById(
-        "reduction"
-    ).value=
-    f.reduction||0;
-
-
-    document.getElementById(
-        "montantAPayer"
-    ).value=
-    ap.toFixed(2);
-
-
-    document.getElementById(
-        "totalVerse"
-    ).value=
-    tv.toFixed(2);
-
-
-    document.getElementById(
-        "reste"
-    ).value=
-    r.toFixed(2);
-
-
-    document.getElementById(
-        "motifReduction"
-    ).value=
-    f.motifReduction||"";
-
-
-    /*
-       NOUVEAU TABLEAU
-    */
-
-    afficherTableauResumeEleve(
-        eleveSelectionne,
-        f
-    );
-
-
-    /*
-       TABLEAU DES VERSEMENTS DETAILLES
-    */
-
-    let tb=
-    document.getElementById(
-        "tableVersements"
-    );
-
-
-    tb.innerHTML="";
-
-
-    if(!f.versements.length){
-
-        tb.innerHTML=
-        `
-        <tr>
-
-            <td colspan="7">
-                Aucun versement enregistré.
-            </td>
-
-        </tr>
-        `
-
-    }
-
-    else{
-
-        f.versements
-        .forEach((v,i)=>{
-
-            let tr=
-            document.createElement(
-                "tr"
-            );
-
-
-            tr.innerHTML=`
-
-                <td>
-                    ${i+1}
-                </td>
-
-
-                <td>
-
-                    📅 ${
-                        escapeHtml(
-                            formatDateAffichage(
-                                v.date||""
-                            )
-                        )
-                    }
-
-                    <br>
-
-                    <span class="small">
-
-                        🕐 ${
-                            escapeHtml(
-                                v.heure||"—"
-                            )
-                        }
-
-                    </span>
-
-                </td>
-
-
-                <td>
-
-                    ${v.numero||i+1}e
-
-                </td>
-
-
-                <td class="money">
-
-                    ${formatMontant(
-                        v.montant
-                    )}
-
-                </td>
-
-
-                <td>
-
-                    ${escapeHtml(
-                        v.mode||""
-                    )}
-
-                </td>
-
-
-                <td>
-
-                    ${escapeHtml(
-                        v.observation||""
-                    )}
-
-                </td>
-
-
-                <td class="no-print">
-
-                    <button
-
-                        class="action btn-delete"
-
-                        onclick="
-                            supprimerVersement(
-                                '${escapeAttr(v.id)}'
-                            )
-                        ">
-
-                        Supprimer
-
-                    </button>
-
-                </td>
-
-            `;
-
-
-            tb.appendChild(tr)
-
-        })
-
-    }
-
-}
-
-
-/* =====================================================
-   LIGNE FINANCIERE
-   ===================================================== */
 
 function obtenirLigneFinance(e){
-
-    let f=
-    obtenirFinanceEleve(e);
-
-
-    let ap=
-    Math.max(
-        0,
-        (+f.tarifNormal||0)-
-        (+f.reduction||0)
-    );
-
-
-    let tv=
-    f.versements.reduce(
-        (s,v)=>
-        s+(+v.montant||0),
-        0
-    );
-
-
-    return{
-
-        ap,
-
-        tv,
-
-        r:
-        Math.max(
-            0,
-            ap-tv
-        )
-
-    }
-
+  const f=factureEleve(e.id);
+  const t=tarifEleve(e);
+  const ap=f ? montantAPayer(f) : Number(t?.amount||0);
+  const tv=f ? totalVerse(f) : 0;
+  return {f,ap,tv,r:Math.max(0,ap-tv)};
 }
 
+async function chargerAnnees(){
+  const data=await apiJson(YEARS_API);
+  anneesServeur=data.schoolYears||[];
+  const select=document.getElementById("annee");
+  select.innerHTML="";
+  anneesServeur.forEach(y=>{
+    const option=document.createElement("option");
+    option.value=y.id;
+    option.textContent=y.label;
+    select.appendChild(option);
+  });
+  if(!anneesServeur.length) throw new Error("Aucune année scolaire disponible.");
+  const active=anneesServeur.find(y=>y.status==="ACTIVE")||anneesServeur[0];
+  anneeServeurId=active.id;
+  select.value=anneeServeurId;
+  document.getElementById("anneeAffichee").textContent="Année académique : "+active.label;
+}
 
-/* =====================================================
-   SITUATIONS
-   ===================================================== */
+async function chargerFinance(){
+  if(!anneeServeurId) return;
+  const data=await apiJson(FINANCE_API+"?school_year_id="+encodeURIComponent(anneeServeurId));
+  etudiants=data.students||[];
+  factures=data.invoices||[];
+  tarifs=data.tariffs||[];
+  renderAll();
+}
+
+function renderAll(){
+  afficherClasses();
+  afficherEleves();
+  afficherSituations();
+  afficherResume();
+  afficherTarifs();
+  if(eleveSelectionne){
+    const found=etudiants.find(e=>e.id===eleveSelectionne.id);
+    if(found) { eleveSelectionne=found; chargerFicheEleve(); }
+    else { eleveSelectionne=null; document.getElementById("ficheEleve").classList.add("hidden"); }
+  }
+}
+
+function afficherClasses(){
+  const box=document.getElementById("listeClasses");
+  box.innerHTML="";
+  const classes=[...new Map(etudiants.filter(e=>e.class_name).map(e=>[e.class_id,e.class_name])).entries()]
+    .sort((a,b)=>a[1].localeCompare(b[1],"fr"));
+  classes.forEach(([id,name])=>{
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="class-button"+(classeSelectionnee===id?" selected":"");
+    b.textContent=name;
+    b.onclick=()=>selectionnerClasse(id);
+    box.appendChild(b);
+  });
+  document.getElementById("btnToutesClasses").classList.toggle("selected",!classeSelectionnee);
+}
+
+function afficherToutesLesClasses(){
+  classeSelectionnee="";
+  eleveSelectionne=null;
+  document.getElementById("ficheEleve").classList.add("hidden");
+  document.getElementById("listeClasses").classList.remove("hidden");
+  afficherClasses(); afficherEleves(); afficherSituations();
+}
+
+function selectionnerClasse(id){
+  classeSelectionnee=id;
+  eleveSelectionne=null;
+  document.getElementById("ficheEleve").classList.add("hidden");
+  document.getElementById("listeClasses").classList.remove("hidden");
+  afficherClasses(); afficherEleves(); afficherSituations();
+}
+
+function afficherEleves(){
+  const list=document.getElementById("listeEleves");
+  const q=document.getElementById("recherche").value.trim().toLowerCase();
+  const rows=etudiants.filter(e=>{
+    const name=(e.last_name+" "+e.first_name).toLowerCase();
+    return (!q||name.includes(q))&&(!classeSelectionnee||e.class_id===classeSelectionnee);
+  }).sort((a,b)=>(a.last_name+" "+a.first_name).localeCompare(b.last_name+" "+b.first_name,"fr"));
+  list.innerHTML="";
+  if(!rows.length){ list.innerHTML="<p>Aucun élève trouvé.</p>"; return; }
+  rows.forEach(e=>{
+    const b=document.createElement("button");
+    b.type="button";
+    b.className=""+(eleveSelectionne?.id===e.id?"selected":"");
+    b.textContent=(e.last_name+" "+e.first_name)+(e.class_name?" — "+e.class_name:"");
+    b.onclick=()=>selectionnerEleve(e.id);
+    list.appendChild(b);
+  });
+}
+
+function selectionnerEleve(id){
+  eleveSelectionne=etudiants.find(e=>e.id===id)||null;
+  if(!eleveSelectionne) return;
+  document.getElementById("ficheEleve").classList.remove("hidden");
+  chargerFicheEleve();
+  afficherEleves();
+  document.getElementById("ficheEleve").scrollIntoView({behavior:"smooth",block:"start"});
+}
 
 function afficherSituations(){
-
-    let tb=
-    document.getElementById(
-        "tableSituations"
-    );
-
-
-    tb.innerHTML="";
-
-
-    let c=
-    document.getElementById(
-        "classe"
-    ).value;
-
-
-    let q=
-    document.getElementById(
-        "recherche"
-    ).value
-    .trim()
-    .toLowerCase();
-
-
-    let r=
-    etudiants.filter(
-        e=>!c||e.classe===c
-    );
-
-
-    r=
-    r.filter(
-        e=>
-        !q||
-        `${e.nom||""} ${e.prenom||""}`
-        .toLowerCase()
-        .includes(q)
-    );
-
-
-    r.sort((a,b)=>
-
-        `${a.nom||""} ${a.prenom||""}`
-        .localeCompare(
-            `${b.nom||""} ${b.prenom||""}`
-        )
-
-    );
-
-
-    r.forEach((e,i)=>{
-
-        let x=
-        obtenirLigneFinance(e);
-
-
-        let s=
-        x.ap>0&&x.r===0
-        ?"Payé"
-        :x.tv>0
-        ?"Partiellement payé"
-        :"Non payé";
-
-
-        let cl=
-        s==="Payé"
-        ?"paid"
-        :s==="Partiellement payé"
-        ?"partial"
-        :"remaining";
-
-
-        let tr=
-        document.createElement(
-            "tr"
-        );
-
-
-        tr.innerHTML=`
-
-            <td>
-                ${i+1}
-            </td>
-
-
-            <td>
-
-                <strong>
-                    ${escapeHtml(
-                        `${e.nom||""} ${e.prenom||""}`
-                    )}
-                </strong>
-
-            </td>
-
-
-            <td>
-                ${escapeHtml(
-                    e.classe||""
-                )}
-            </td>
-
-
-            <td>
-                ${formatMontant(x.ap)}
-            </td>
-
-
-            <td>
-                ${formatMontant(x.tv)}
-            </td>
-
-
-            <td class="${
-                x.r>0
-                ?"remaining"
-                :"paid"
-            }">
-
-                ${formatMontant(x.r)}
-
-            </td>
-
-
-            <td class="${cl}">
-
-                ${s}
-
-            </td>
-
-        `;
-
-
-        tb.appendChild(tr)
-
-    })
-
+  const tb=document.getElementById("tableSituations");
+  tb.innerHTML="";
+  const q=document.getElementById("recherche").value.trim().toLowerCase();
+  const rows=etudiants.filter(e=>{
+    const name=(e.last_name+" "+e.first_name).toLowerCase();
+    return (!q||name.includes(q))&&(!classeSelectionnee||e.class_id===classeSelectionnee);
+  });
+  rows.forEach((e,i)=>{
+    const x=obtenirLigneFinance(e);
+    const status=x.ap>0&&x.r===0?"Payé":x.tv>0?"Partiellement payé":"Non payé";
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${i+1}</td><td><strong>${escapeHtml(e.last_name+" "+e.first_name)}</strong></td><td>${escapeHtml(e.class_name||"")}</td><td>${formatMontant(x.ap)}</td><td>${formatMontant(x.tv)}</td><td class="${x.r>0?"remaining":"paid"}">${formatMontant(x.r)}</td><td class="${status==="Payé"?"paid":status==="Partiellement payé"?"partial":"remaining"}">${status}</td>`;
+    tb.appendChild(tr);
+  });
 }
-
-
-/* =====================================================
-   RESUME ANNEE
-   ===================================================== */
 
 function afficherResume(){
-
-    let p=0;
-
-    let recu=0;
-
-    let rest=0;
-
-    let np=0;
-
-    let part=0;
-
-
-    etudiants.forEach(e=>{
-
-        let x=
-        obtenirLigneFinance(e);
-
-
-        p+=x.ap;
-
-        recu+=x.tv;
-
-        rest+=x.r;
-
-
-        if(
-            x.ap>0&&
-            x.tv===0
-        ){
-
-            np++
-
-        }
-
-        else if(
-            x.tv>0&&
-            x.r>0
-        ){
-
-            part++
-
-        }
-
-    });
-
-
-    document.getElementById(
-        "resumePrevu"
-    ).textContent=
-    formatMontant(p);
-
-
-    document.getElementById(
-        "resumeRecu"
-    ).textContent=
-    formatMontant(recu);
-
-
-    document.getElementById(
-        "resumeReste"
-    ).textContent=
-    formatMontant(rest);
-
-
-    document.getElementById(
-        "resumeNonPayes"
-    ).textContent=np;
-
-
-    document.getElementById(
-        "resumePartiels"
-    ).textContent=part;
-
-
-    localStorage.setItem(
-        CLE_FINANCES,
-        JSON.stringify(finances)
-    )
-
+  let prevu=0,recu=0,reste=0,non=0,part=0;
+  etudiants.forEach(e=>{
+    const x=obtenirLigneFinance(e);
+    prevu+=x.ap; recu+=x.tv; reste+=x.r;
+    if(x.ap>0&&x.tv===0) non++;
+    else if(x.tv>0&&x.r>0) part++;
+  });
+  document.getElementById("resumePrevu").textContent=formatMontant(prevu);
+  document.getElementById("resumeRecu").textContent=formatMontant(recu);
+  document.getElementById("resumeReste").textContent=formatMontant(reste);
+  document.getElementById("resumeNonPayes").textContent=non;
+  document.getElementById("resumePartiels").textContent=part;
 }
 
+function afficherTarifs(){
+  const tb=document.getElementById("tableTarifs");
+  tb.innerHTML="";
+  tarifs.forEach(t=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${escapeHtml(t.class_name||"")}</td><td>${formatMontant(t.installment1_amount)}<br><span class="small">${escapeHtml(t.installment1_label||"")}</span></td><td>${formatMontant(t.installment2_amount)}<br><span class="small">${escapeHtml(t.installment2_label||"")}</span></td><td>${formatMontant(t.installment3_amount)}<br><span class="small">${escapeHtml(t.installment3_label||"")}</span></td><td>${formatMontant(t.amount)}</td><td><button class="action btn-edit" onclick="modifierTarif('${t.class_id}')">Modifier</button></td>`;
+    tb.appendChild(tr);
+  });
+}
 
-/* =====================================================
-   IMPRESSION
-   ===================================================== */
+function afficherTableauResumeEleve(e,f){
+  const tb=document.getElementById("tableResumeEleve");
+  tb.innerHTML="";
+  const x=obtenirLigneFinance(e);
+  const payments=(f?.payments||[]).sort((a,b)=>String(a.payment_date||"").localeCompare(String(b.payment_date||"")));
+  const byNumber=[1,2,3].map(n=>payments[n-1]||null);
+  const cells=byNumber.map((p,n)=>`<td><input class="versement-input" type="number" min="0" step="0.01" value="${p?Number(p.amount):""}" placeholder="0" onchange="enregistrerVersementDirect(${n+1},this.value)"></td>`).join("");
+  const last=payments[payments.length-1];
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>1</td><td>${escapeHtml(e.last_name+" "+e.first_name)}</td><td>${escapeHtml(e.class_name||"")}</td><td class="money">${formatMontant(x.ap)}</td>${cells}<td id="totalAutoEleve" class="money total-auto">${formatMontant(x.tv)}</td><td id="balanceAutoEleve" class="money balance-auto">${formatMontant(x.r)}</td><td>${last?escapeHtml(last.payment_date||"—"):"—"}</td><td>${last?escapeHtml(last.method||"—"):"—"}</td>`;
+  tb.appendChild(tr);
+}
 
-function imprimerFiche(){
+function chargerFicheEleve(){
+  if(!eleveSelectionne) return;
+  const f=factureEleve(eleveSelectionne.id);
+  const t=tarifEleve(eleveSelectionne);
+  const x=obtenirLigneFinance(eleveSelectionne);
+  document.getElementById("identiteEleve").innerHTML=`<p><strong>Nom et prénom :</strong> ${escapeHtml(eleveSelectionne.last_name+" "+eleveSelectionne.first_name)}</p><p><strong>Classe :</strong> ${escapeHtml(eleveSelectionne.class_name||"")}</p><p><strong>Année académique :</strong> ${escapeHtml(anneesServeur.find(y=>y.id===anneeServeurId)?.label||"")}</p>`;
+  document.getElementById("tarifNormal").value=f?Number(f.amount):Number(t?.amount||0);
+  document.getElementById("reduction").value=f?Number(f.reduction||0):0;
+  document.getElementById("montantAPayer").value=x.ap.toFixed(2);
+  document.getElementById("totalVerse").value=x.tv.toFixed(2);
+  document.getElementById("reste").value=x.r.toFixed(2);
+  document.getElementById("motifReduction").value=f?.reduction_reason||"";
+  afficherTableauResumeEleve(eleveSelectionne,f);
+  const tb=document.getElementById("tableVersements");
+  tb.innerHTML="";
+  const payments=f?.payments||[];
+  if(!payments.length){ tb.innerHTML="<tr><td colspan='7'>Aucun versement enregistré.</td></tr>"; return; }
+  payments.forEach((p,i)=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${i+1}</td><td>📅 ${escapeHtml(p.payment_date||"—")}</td><td>${i+1}e</td><td class="money">${formatMontant(p.amount)}</td><td>${escapeHtml(p.method||"")}</td><td>${escapeHtml(p.reference||"")}</td><td class="no-print"><button class="action btn-delete" onclick="supprimerVersement('${escapeHtml(p.id)}')">Supprimer</button></td>`;
+    tb.appendChild(tr);
+  });
+}
 
-    if(!eleveSelectionne){
-
-        return afficherMessage(
-            "Sélectionnez un élève avant d'imprimer.",
-            "error"
-        )
-
+async function enregistrerSituation(){
+  if(!eleveSelectionne) return;
+  if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
+  const reduction=Number(document.getElementById("reduction").value||0);
+  const reason=document.getElementById("motifReduction").value.trim();
+  let f=factureEleve(eleveSelectionne.id);
+  try{
+    if(!f){
+      const t=tarifEleve(eleveSelectionne);
+      if(!t||Number(t.amount)<=0) throw new Error("Aucun tarif serveur pour cette classe.");
+      await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"invoice",student_id:eleveSelectionne.id,school_year_id:anneeServeurId,amount:Number(t.amount),reduction,reduction_reason:reason})});
+    }else{
+      await apiJson(FINANCE_API+"?invoice_id="+encodeURIComponent(f.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({reduction,reduction_reason:reason})});
     }
-
-
-    print()
-
+    await chargerFinance();
+    afficherMessage("Situation enregistrée.");
+  }catch(e){ afficherMessage(e.message,"error"); }
 }
 
+function ouvrirReduction(){
+  if(!eleveSelectionne) return;
+  document.getElementById("reduction").focus();
+}
 
-/* =====================================================
-   FERMER MODALS
-   ===================================================== */
+function modifierTarif(classId){
+  const t=tarifs.find(x=>x.class_id===classId);
+  if(!t) return afficherMessage("Tarif serveur introuvable.","error");
+  document.getElementById("tarifClasseOriginal").value=classId;
+  document.getElementById("tarifClasseNom").value=t.class_name||"";
+  document.getElementById("montantTotal").value=t.amount||0;
+  document.getElementById("date1").value=t.installment1_label||"";
+  document.getElementById("montant1").value=t.installment1_amount||0;
+  document.getElementById("date2").value=t.installment2_label||"";
+  document.getElementById("montant2").value=t.installment2_amount||0;
+  document.getElementById("date3").value=t.installment3_label||"";
+  document.getElementById("montant3").value=t.installment3_amount||0;
+  document.getElementById("modalTarif").style.display="flex";
+}
+
+async function enregistrerTarif(){
+  if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
+  const classId=document.getElementById("tarifClasseOriginal").value;
+  const body={
+    resource:"tariff",school_year_id:anneeServeurId,class_id:classId,
+    amount:Number(document.getElementById("montantTotal").value||0),
+    installment1_amount:Number(document.getElementById("montant1").value||0),
+    installment1_label:document.getElementById("date1").value.trim(),
+    installment2_amount:Number(document.getElementById("montant2").value||0),
+    installment2_label:document.getElementById("date2").value.trim(),
+    installment3_amount:Number(document.getElementById("montant3").value||0),
+    installment3_label:document.getElementById("date3").value.trim()
+  };
+  if(body.amount<0||body.installment1_amount<0||body.installment2_amount<0||body.installment3_amount<0) return afficherMessage("Les montants ne peuvent pas être négatifs.","error");
+  try{ await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); fermerModals(); await chargerFinance(); afficherMessage("Tarif enregistré."); }
+  catch(e){ afficherMessage(e.message,"error"); }
+}
+
+function ouvrirVersement(){
+  if(!eleveSelectionne) return afficherMessage("Sélectionnez un élève.","error");
+  const f=factureEleve(eleveSelectionne.id);
+  if(!f) return afficherMessage("Enregistrez d'abord la situation financière.","error");
+  document.getElementById("versementDate").value=new Date().toISOString().slice(0,10);
+  document.getElementById("versementNumero").value=(f.payments||[]).length+1;
+  document.getElementById("versementMontant").value="";
+  document.getElementById("versementObservation").value="";
+  document.getElementById("modalVersement").style.display="flex";
+}
+
+async function enregistrerVersement(){
+  if(!IMCAuth.requirePermission("finances.create")) return afficherMessage("Permission refusée.","error");
+  if(!eleveSelectionne) return;
+  const f=factureEleve(eleveSelectionne.id);
+  const amount=Number(document.getElementById("versementMontant").value||0);
+  if(!f||amount<=0) return afficherMessage("Versement invalide.","error");
+  try{
+    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,amount,payment_date:document.getElementById("versementDate").value,method:document.getElementById("versementMode").value,reference:document.getElementById("versementObservation").value.trim()})});
+    fermerModals(); await chargerFinance(); afficherMessage("Versement enregistré.");
+  }catch(e){ afficherMessage(e.message,"error"); }
+}
+
+async function enregistrerVersementDirect(numero,valeur){
+  if(!IMCAuth.requirePermission("finances.create")) return;
+  const f=factureEleve(eleveSelectionne?.id);
+  const amount=Number(valeur||0);
+  if(!f) return afficherMessage("Enregistrez d'abord la situation financière.","error");
+  if(amount<=0) return afficherMessage("Le montant doit être supérieur à 0.","error");
+  try{
+    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,amount,payment_date:new Date().toISOString().slice(0,10),method:"Espèces",reference:"Versement "+numero})});
+    await chargerFinance(); afficherMessage("Versement enregistré.");
+  }catch(e){ afficherMessage(e.message,"error"); }
+}
+
+async function supprimerVersement(id){
+  if(!IMCAuth.requirePermission("finances.delete")) return afficherMessage("Permission refusée.","error");
+  if(!confirm("Voulez-vous supprimer ce versement ?")) return;
+  try{
+    await apiJson(FINANCE_API+"?payment_id="+encodeURIComponent(id),{method:"DELETE"});
+    await chargerFinance(); afficherMessage("Versement supprimé.");
+  }catch(e){ afficherMessage(e.message,"error"); }
+}
 
 function fermerModals(){
-
-    document.getElementById(
-        "modalTarif"
-    ).style.display="none";
-
-
-    document.getElementById(
-        "modalVersement"
-    ).style.display="none"
-
+  document.getElementById("modalTarif").style.display="none";
+  document.getElementById("modalVersement").style.display="none";
 }
 
-
-/* =====================================================
-   ACTUALISATION
-   ===================================================== */
-
-function actualiser(){
-
-    localStorage.setItem(
-        CLE_ANNEE_ACTIVE,
-        document.getElementById(
-            "annee"
-        ).value
-    );
-
-
-    document.getElementById(
-        "anneeAffichee"
-    ).textContent=
-    "Année académique : "+
-    document.getElementById(
-        "annee"
-    ).value;
-
-
-    eleveSelectionne=null;
-
-
-    document.getElementById(
-        "ficheEleve"
-    ).classList.add(
-        "hidden"
-    );
-
-
-    afficherClasses();
-
-    afficherTarifs();
-
-    afficherEleves();
-
-    afficherSituations();
-
-    afficherResume()
-
+function imprimerFiche(){
+  if(!eleveSelectionne) return afficherMessage("Sélectionnez un élève avant d'imprimer.","error");
+  window.print();
 }
 
-
-/* =====================================================
-   EVENEMENTS
-   ===================================================== */
-
-document.getElementById(
-    "annee"
-).addEventListener(
-    "change",
-    actualiser
-);
-
-
-document.getElementById(
-    "btnToutesClasses"
-).addEventListener(
-    "click",
-    afficherToutesLesClasses
-);
-
-
-document.getElementById(
-    "recherche"
-).addEventListener(
-    "input",
-    ()=>{
-
-        afficherEleves();
-
-        afficherSituations()
-
-    }
-);
-
-
-/* =====================================================
-   DEMARRAGE
-   ===================================================== */
-
-IMCSecureStorage.ready.then(function(ok){
-
-    if(!ok) return;
-
-    etudiants=JSON.parse(localStorage.getItem(CLE_ETUDIANTS)||"[]");
-    finances=JSON.parse(localStorage.getItem(CLE_FINANCES)||"{}");
-    tarifs=JSON.parse(localStorage.getItem(CLE_TARIFS)||"{}");
-
-    genererAnnees();
-    actualiser();
-
+document.addEventListener("DOMContentLoaded",async()=>{
+  if(!IMCAuth.requireAuth("index.html")) return;
+  document.getElementById("annee").addEventListener("change",async()=>{
+    anneeServeurId=document.getElementById("annee").value;
+    const y=anneesServeur.find(x=>x.id===anneeServeurId);
+    document.getElementById("anneeAffichee").textContent="Année académique : "+(y?.label||"");
+    eleveSelectionne=null; classeSelectionnee="";
+    document.getElementById("ficheEleve").classList.add("hidden");
+    try{ await chargerFinance(); }catch(e){ afficherMessage(e.message,"error"); }
+  });
+  document.getElementById("btnToutesClasses").addEventListener("click",afficherToutesLesClasses);
+  document.getElementById("recherche").addEventListener("input",()=>{afficherEleves();afficherSituations();});
+  try{
+    await chargerAnnees();
+    await chargerFinance();
+  }catch(e){ afficherMessage(e.message,"error"); }
 });
-
-
 </script>
-
 </body>
 
 </html>
