@@ -60,7 +60,7 @@ if ($method === 'GET') {
          INNER JOIN enrollments e ON e.id = rc.enrollment_id
          ' . $scopeSql . '
          WHERE rc.enrollment_id = :enrollment_id
-           AND e.status = ''ACTIVE''
+           AND e.status = \'ACTIVE\'
          LIMIT 1'
     );
     $stmt->execute([':enrollment_id' => $enrollmentId] + $scopeParams);
