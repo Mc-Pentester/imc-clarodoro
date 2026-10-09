@@ -691,50 +691,82 @@ let eleveSelectionne = null;
 
 
 /* =========================
-   CHARGER LES ÉLÈVES
+   CHARGER LES ÉLÈVES DEPUIS L'API
 ========================= */
 
-function chargerEleves(){
+async function chargerEleves(){
 
-    try{
+    const boutonsClasses = document.getElementById("boutonsClasses");
+    const boutonsEleves = document.getElementById("boutonsEleves");
 
-        eleves = JSON.parse(
-            localStorage.getItem("imc_students") || "[]"
-        );
+    try {
+        const response = await fetch("api/students/index.php", {
+            method: "GET",
+            credentials: "same-origin",
+            headers: { "Accept": "application/json" }
+        });
 
-        if(!Array.isArray(eleves)){
-
-            eleves = [];
-
+        let payload;
+        try {
+            payload = await response.json();
+        } catch (_) {
+            throw new Error("Réponse serveur invalide.");
         }
 
-    }catch(e){
+        if (response.status === 401 || response.status === 403) {
+            IMCAuth.requireAuth("personnel.html");
+            throw new Error("Accès refusé. Veuillez vous reconnecter ou vérifier vos permissions.");
+        }
 
-        console.error(
-            "Erreur lors du chargement des élèves :",
-            e
-        );
+        if (!response.ok || !payload.success || !Array.isArray(payload.students)) {
+            throw new Error(payload.message || "Impossible de charger les élèves depuis le serveur.");
+        }
 
+        eleves = payload.students.map(function(student) {
+            const profile = student && student.profile_data && typeof student.profile_data === "object"
+                ? student.profile_data
+                : {};
+
+            return {
+                ...student,
+                id: student.id,
+                nom: student.last_name || "",
+                prenom: student.first_name || "",
+                adresse: student.address || profile.adresse || profile.address || profile.commune || "",
+                telephone: student.phone || profile.telephone || profile.tel || profile.contact || "",
+                classe: profile.classe || student.class_name || "",
+                photo: profile.photo || profile.image || profile.photoData || "",
+                annee_scolaire: profile.annee_scolaire || profile.annee || ""
+            };
+        });
+
+        return eleves;
+    } catch (error) {
+        console.error("Erreur de chargement des élèves depuis l’API :", error);
         eleves = [];
-
+        if (boutonsClasses) {
+            boutonsClasses.replaceChildren();
+            const message = document.createElement("p");
+            message.textContent = error.message || "Impossible de charger les élèves depuis le serveur.";
+            boutonsClasses.appendChild(message);
+        }
+        if (boutonsEleves) {
+            boutonsEleves.replaceChildren();
+        }
+        throw error;
     }
-
 }
 
 
 /* =========================
-   ANNÉE ACADÉMIQUE
+   ANNÉE SCOLAIRE
 ========================= */
 
-function chargerAnnee(){
+function chargerAnnee(eleve){
 
-    const annee =
-        localStorage.getItem("imc_active_year")
-        || "2026-2027";
+    const annee = obtenirValeur(eleve, ["annee_scolaire", "annee", "school_year"]);
 
-    document.getElementById("annee").textContent =
-        annee;
-
+    document.getElementById("annee").textContent = annee;
 }
 
 
@@ -917,9 +949,14 @@ const classesParDefaut = [
    AFFICHER LES CLASSES
 ========================= */
 
-function afficherClasses(){
+async function afficherClasses(){
 
-    chargerEleves();
+    try {
+        await chargerEleves();
+    } catch (_) {
+        document.getElementById("listeClasses").style.display = "block";
+        return;
+    }
 
     const zone =
         document.getElementById(
@@ -1032,9 +1069,14 @@ function afficherClasses(){
    AFFICHER LES ÉLÈVES
 ========================= */
 
-function afficherElevesClasse(classe){
+async function afficherElevesClasse(classe){
 
-    chargerEleves();
+    try {
+        await chargerEleves();
+    } catch (_) {
+        document.getElementById("zoneEleves").style.display = "block";
+        return;
+    }
 
     const zone =
         document.getElementById(
@@ -1244,6 +1286,8 @@ function selectionnerEleve(index){
     ).textContent =
         obtenirTelephone(eleve)
         || "………………";
+
+    chargerAnnee(eleve);
 
 
     /* PHOTO */
@@ -1534,22 +1578,16 @@ ${badgeClone.outerHTML}
    INITIALISATION
 ========================= */
 
-document.addEventListener(
-    "DOMContentLoaded",
-    function(){
+document.addEventListener("DOMContentLoaded", async function() {
+    IMCAuth.requireAuth("personnel.html");
 
-        IMCSecureStorage.ready.then(function(ok){
-
-        if(!ok) return;
-
-        chargerEleves();
-
-        chargerAnnee();
-
-        });
-
+    try {
+        await chargerEleves();
+        chargerAnnee(null);
+    } catch (_) {
+        // L'erreur est affichée dans la zone de sélection; aucun repli local.
     }
-);
+});
 
 </script>
 
