@@ -201,8 +201,8 @@ jobs:
 
           GRADE_UPDATE_STATUS="$(curl -sS -o /tmp/f10ops-grade-update.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X PUT             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"subject_id\":\"$SUBJECT\",\"grade\":16.5,\"grade_date\":\"2026-10-09\",\"assessment_number\":1}"             "$BASE/api/grades/index.php?id=$GRADE_ID")"
           test "$GRADE_UPDATE_STATUS" = '200'
-          GRADE_DB="$(psql "$DB_URL" -Atqc "SELECT grade::numeric::text FROM grades WHERE id = '$GRADE_ID'")"
-          test "$GRADE_DB" = '16.5'
+          GRADE_DB_MATCH="$(psql "$DB_URL" -Atqc "SELECT (grade = 16.5)::text FROM grades WHERE id = '$GRADE_ID'")"
+          test "$GRADE_DB_MATCH" = 'true'
           echo 'resultats.update (grade): HTTP 200 and PostgreSQL persistence PASS'
 
           # Authorized attendance create, read and update.
