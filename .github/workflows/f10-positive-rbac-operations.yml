@@ -57,7 +57,9 @@ jobs:
           set -euo pipefail
           psql 'postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro' -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (id, name)
-          VALUES ('00000000-0000-0000-0000-000000004001', 'PDG')
+          VALUES
+            ('00000000-0000-0000-0000-000000004001', 'PDG'),
+            ('00000000-0000-0000-0000-000000004009', 'Enseignant')
           ON CONFLICT (name) DO NOTHING;
 
           INSERT INTO permissions (name)
@@ -73,6 +75,16 @@ jobs:
           WHERE r.name = 'PDG'
             AND p.name IN (
               'eleves.read', 'eleves.create', 'eleves.update',
+              'resultats.read', 'resultats.create', 'resultats.update',
+              'presences.read', 'presences.create', 'presences.update'
+            )
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id
+          FROM roles r CROSS JOIN permissions p
+          WHERE r.name = 'Enseignant'
+            AND p.name IN (
               'resultats.read', 'resultats.create', 'resultats.update',
               'presences.read', 'presences.create', 'presences.update'
             )
@@ -96,6 +108,14 @@ jobs:
           VALUES (
             '00000000-0000-0000-0000-000000004004',
             'F10OPS-CLASS', 'F10 Operations Class',
+            '00000000-0000-0000-0000-000000004003', 'ACTIVE'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO classes (id, code, name, level_id, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000004010',
+            'F10OPS-CLASS-B', 'F10 Operations Class B',
             '00000000-0000-0000-0000-000000004003', 'ACTIVE'
           )
           ON CONFLICT (id) DO NOTHING;
@@ -129,6 +149,57 @@ jobs:
             '00000000-0000-0000-0000-000000004005',
             'ACTIVE', '2026-09-01'
           )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO students (id, matricule, last_name, first_name, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000004011',
+            'F10OPS-STUDENT-B', 'Scope', 'Other Class', 'ACTIVE'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO enrollments (id, student_id, class_id, school_year_id, status, enrollment_date)
+          VALUES (
+            '00000000-0000-0000-0000-000000004012',
+            '00000000-0000-0000-0000-000000004011',
+            '00000000-0000-0000-0000-000000004010',
+            '00000000-0000-0000-0000-000000004005',
+            'ACTIVE', '2026-09-01'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO teachers (id, first_name, last_name, status)
+          VALUES
+            ('00000000-0000-0000-0000-000000004013', 'Teacher', 'A', 'ACTIVE'),
+            ('00000000-0000-0000-0000-000000004014', 'Teacher', 'B', 'ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO users (id, username, password_hash, role_id, status)
+          VALUES
+            ('00000000-0000-0000-0000-000000004015', 'f10_teacher_a',
+             crypt('F10-Teacher-A-2026!', gen_salt('bf')),
+             (SELECT id FROM roles WHERE name = 'Enseignant'), 'ACTIVE'),
+            ('00000000-0000-0000-0000-000000004016', 'f10_teacher_b',
+             crypt('F10-Teacher-B-2026!', gen_salt('bf')),
+             (SELECT id FROM roles WHERE name = 'Enseignant'), 'ACTIVE')
+          ON CONFLICT (username) DO NOTHING;
+
+          INSERT INTO user_teachers (user_id, teacher_id)
+          VALUES
+            ('00000000-0000-0000-0000-000000004015', '00000000-0000-0000-0000-000000004013'),
+            ('00000000-0000-0000-0000-000000004016', '00000000-0000-0000-0000-000000004014')
+          ON CONFLICT (user_id) DO NOTHING;
+
+          INSERT INTO teacher_class_subjects (id, teacher_id, class_id, subject_id, status)
+          VALUES
+            ('00000000-0000-0000-0000-000000004017',
+             '00000000-0000-0000-0000-000000004013',
+             '00000000-0000-0000-0000-000000004004',
+             '00000000-0000-0000-0000-000000004006', 'ACTIVE'),
+            ('00000000-0000-0000-0000-000000004018',
+             '00000000-0000-0000-0000-000000004014',
+             '00000000-0000-0000-0000-000000004010',
+             '00000000-0000-0000-0000-000000004006', 'ACTIVE')
           ON CONFLICT (id) DO NOTHING;
           SQL
 
