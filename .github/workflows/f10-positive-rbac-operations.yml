@@ -316,6 +316,41 @@ jobs:
           test "$CARNET_DB" = 'F10-PASS'
           echo 'resultats.update (carnet): HTTP 200, read-back and PostgreSQL persistence PASS'
 
+          # Teacher A may mutate assigned Class A, but not Teacher B's Class B.
+          TEACHER_COOKIE='/tmp/f10ops-teacher-a.cookies'
+          TEACHER_LOGIN="$(curl -fsS -c "$TEACHER_COOKIE" -b "$TEACHER_COOKIE"             -H 'Content-Type: application/json'             -d '{"username":"f10_teacher_a","password":"F10-Teacher-A-2026!"}'             "$BASE/api/auth/login.php")"
+          test "$(printf '%s' "$TEACHER_LOGIN" | jq -r '.success')" = 'true'
+          TEACHER_CSRF="$(printf '%s' "$TEACHER_LOGIN" | jq -r '.csrfToken')"
+          test -n "$TEACHER_CSRF"
+          echo 'Teacher A login and CSRF: PASS'
+
+          TEACHER_OWN_GRADE_STATUS="$(curl -sS -o /tmp/f10ops-teacher-own-grade.json -w '%{http_code}'             -c "$TEACHER_COOKIE" -b "$TEACHER_COOKIE" -X POST             -H "X-CSRF-Token: $TEACHER_CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"subject_id\":\"$SUBJECT\",\"grade\":12,\"grade_date\":\"2026-10-10\",\"assessment_number\":2}"             "$BASE/api/grades/index.php")"
+          test "$TEACHER_OWN_GRADE_STATUS" = '201'
+          echo 'Teacher assigned grade create: HTTP 201 PASS'
+
+          TEACHER_CROSS_GRADE_STATUS="$(curl -sS -o /tmp/f10ops-teacher-cross-grade.json -w '%{http_code}'             -c "$TEACHER_COOKIE" -b "$TEACHER_COOKIE" -X POST             -H "X-CSRF-Token: $TEACHER_CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"00000000-0000-0000-0000-000000004012\",\"subject_id\":\"$SUBJECT\",\"grade\":12,\"grade_date\":\"2026-10-10\",\"assessment_number\":2}"             "$BASE/api/grades/index.php")"
+          test "$TEACHER_CROSS_GRADE_STATUS" = '404'
+          test "$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM grades WHERE enrollment_id = '00000000-0000-0000-0000-000000004012'")" = '0'
+          echo 'Teacher A grade mutation outside assigned class: HTTP 404, no row: PASS'
+
+          TEACHER_OWN_ATT_STATUS="$(curl -sS -o /tmp/f10ops-teacher-own-attendance.json -w '%{http_code}'             -c "$TEACHER_COOKIE" -b "$TEACHER_COOKIE" -X POST             -H "X-CSRF-Token: $TEACHER_CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"attendance_date\":\"2026-10-10\",\"status\":\"PRESENT\",\"comment\":\"Teacher A own scope\"}"             "$BASE/api/attendance/index.php")"
+          test "$TEACHER_OWN_ATT_STATUS" = '201'
+          echo 'Teacher assigned attendance create: HTTP 201 PASS'
+
+          TEACHER_CROSS_ATT_STATUS="$(curl -sS -o /tmp/f10ops-teacher-cross-attendance.json -w '%{http_code}'             -c "$TEACHER_COOKIE" -b "$TEACHER_COOKIE" -X POST             -H "X-CSRF-Token: $TEACHER_CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"00000000-0000-0000-0000-000000004012\",\"attendance_date\":\"2026-10-10\",\"status\":\"PRESENT\",\"comment\":\"must be rejected\"}"             "$BASE/api/attendance/index.php")"
+          test "$TEACHER_CROSS_ATT_STATUS" = '404'
+          test "$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM attendance WHERE enrollment_id = '00000000-0000-0000-0000-000000004012'")" = '0'
+          echo 'Teacher A attendance mutation outside assigned class: HTTP 404, no row: PASS'
+
+          TEACHER_OWN_CARNET_STATUS="$(curl -sS -o /tmp/f10ops-teacher-own-carnet.json -w '%{http_code}'             -c "$TEACHER_COOKIE" -b "$TEACHER_COOKIE" -X PUT             -H "X-CSRF-Token: $TEACHER_CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"proprete\":\"Teacher A scope\"}"             "$BASE/api/results/index.php")"
+          test "$TEACHER_OWN_CARNET_STATUS" = '200'
+          echo 'Teacher assigned report carnet update: HTTP 200 PASS'
+
+          TEACHER_CROSS_CARNET_STATUS="$(curl -sS -o /tmp/f10ops-teacher-cross-carnet.json -w '%{http_code}'             -c "$TEACHER_COOKIE" -b "$TEACHER_COOKIE" -X PUT             -H "X-CSRF-Token: $TEACHER_CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"00000000-0000-0000-0000-000000004012\",\"proprete\":\"must be rejected\"}"             "$BASE/api/results/index.php")"
+          test "$TEACHER_CROSS_CARNET_STATUS" = '404'
+          test "$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM result_carnets WHERE enrollment_id = '00000000-0000-0000-0000-000000004012'")" = '0'
+          echo 'Teacher A report mutation outside assigned class: HTTP 404, no row: PASS'
+
           # Exact row counts prevent false positives from API-only responses.
           STUDENT_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM students WHERE matricule = 'F10OPS-CREATED-001'")"
           GRADE_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM grades WHERE id = '$GRADE_ID' AND grade = 16.5")"
