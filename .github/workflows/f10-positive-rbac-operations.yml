@@ -355,7 +355,7 @@ jobs:
           STUDENT_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM students WHERE matricule = 'F10OPS-CREATED-001'")"
           GRADE_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM grades WHERE id = '$GRADE_ID' AND grade = 16.5")"
           ATT_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM attendance WHERE id = '$ATT_ID' AND status = 'LATE'")"
-          CARNET_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM result_carnets WHERE enrollment_id = '$ENROLLMENT' AND proprete = 'F10-PASS'")"
+          CARNET_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM result_carnets WHERE enrollment_id = '$ENROLLMENT' AND proprete = 'Teacher A scope'")"
           test "$STUDENT_COUNT" = '1'
           test "$GRADE_COUNT" = '1'
           test "$ATT_COUNT" = '1'
