@@ -206,8 +206,8 @@ if (!isset($data['grade']) || !is_numeric($data['grade'])) {
 }
 
 $grade = (float) $data['grade'];
-if (!is_finite($grade) || $grade < 0 || $grade > 100) {
-    apiError(422, 'grade doit être compris entre 0 et 100');
+if (!is_finite($grade) || $grade < 0) {
+    apiError(422, 'grade doit être un nombre fini positif ou nul');
 }
 
 $assessmentNumber = $data['assessment_number'] ?? 1;
@@ -227,7 +227,7 @@ if (!is_string($gradeDate) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $gradeDate)) 
 [$scopeSql, $scopeParams] = f02cScope($user, 'e', 's');
 
 $check = $pdo->prepare(
-    'SELECT e.id
+    'SELECT e.id, s.max_points
      FROM enrollments e
      INNER JOIN subjects s
         ON s.id = :subject_id
@@ -245,8 +245,14 @@ $check->execute(
     ] + $scopeParams
 );
 
-if (!$check->fetch()) {
+$enrollmentSubject = $check->fetch();
+if (!$enrollmentSubject) {
     apiError(404, 'Inscription ou matière hors périmètre');
+}
+
+$maxPoints = (float) $enrollmentSubject['max_points'];
+if ($grade > $maxPoints) {
+    apiError(422, 'grade ne peut pas dépasser le barème de la matière (' . rtrim(rtrim(number_format($maxPoints, 2, '.', ''), '0'), '.') . ')');
 }
 
 try {
