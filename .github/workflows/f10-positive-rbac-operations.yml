@@ -1,0 +1,249 @@
+name: F-10 positive RBAC operations runtime proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'config/auth.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - '.github/workflows/f10-positive-rbac-operations.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authorized-operations:
+    name: Authorized student, grade, attendance and report mutations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client jq curl
+
+      - name: Apply schema and migrations to isolated CI database
+        run: |
+          set -euo pipefail
+          DB_URL='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
+
+      - name: Seed authorized account and isolated school fixtures
+        run: |
+          set -euo pipefail
+          psql 'postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro' -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000004001', 'Directeur')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO permissions (name)
+          VALUES
+            ('eleves.read'), ('eleves.create'), ('eleves.update'),
+            ('resultats.read'), ('resultats.create'), ('resultats.update'),
+            ('presences.read'), ('presences.create'), ('presences.update')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id
+          FROM roles r CROSS JOIN permissions p
+          WHERE r.name = 'Directeur'
+            AND p.name IN (
+              'eleves.read', 'eleves.create', 'eleves.update',
+              'resultats.read', 'resultats.create', 'resultats.update',
+              'presences.read', 'presences.create', 'presences.update'
+            )
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO users (id, username, password_hash, role_id, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000004002',
+            'f10_operations_user',
+            crypt('F10-Operations-Test-2026!', gen_salt('bf')),
+            (SELECT id FROM roles WHERE name = 'Directeur'),
+            'ACTIVE'
+          )
+          ON CONFLICT (username) DO NOTHING;
+
+          INSERT INTO levels (id, code, name)
+          VALUES ('00000000-0000-0000-0000-000000004003', 'F10OPS', 'F10 Operations Level')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO classes (id, code, name, level_id, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000004004',
+            'F10OPS-CLASS', 'F10 Operations Class',
+            '00000000-0000-0000-0000-000000004003', 'ACTIVE'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO school_years (id, label, start_date, end_date, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000004005',
+            'F10OPS-2026-2027', '2026-09-01', '2027-07-15', 'ACTIVE'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO subjects (id, code, name, coefficient, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000004006',
+            'F10OPS-MATH', 'F10 Operations Math', 1, 'ACTIVE'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO students (id, matricule, last_name, first_name, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000004007',
+            'F10OPS-STUDENT-001', 'Operations', 'Fixture', 'ACTIVE'
+          )
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO enrollments (id, student_id, class_id, school_year_id, status, enrollment_date)
+          VALUES (
+            '00000000-0000-0000-0000-000000004008',
+            '00000000-0000-0000-0000-000000004007',
+            '00000000-0000-0000-0000-000000004004',
+            '00000000-0000-0000-0000-000000004005',
+            'ACTIVE', '2026-09-01'
+          )
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+
+      - name: Validate API PHP syntax
+        run: |
+          set -euo pipefail
+          php -l api/students/index.php
+          php -l api/grades/index.php
+          php -l api/attendance/index.php
+          php -l api/results/index.php
+          php -l config/auth.php
+
+      - name: Start local PHP API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8080 -t . >/tmp/f10-operations-php.log 2>&1 &
+          echo $! >/tmp/f10-operations-php.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/api/health.php >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/api/health.php >/dev/null
+
+      - name: Prove authorized reads, updates and persisted mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'rc=$?; echo "::error::F-10 operations proof failed rc=$rc command=[$BASH_COMMAND]"; echo "::error::API log:"; cat /tmp/f10-operations-php.log 2>/dev/null || true; exit $rc' ERR
+          BASE='http://127.0.0.1:8080'
+          DB_URL='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          COOKIE='/tmp/f10-operations.cookies'
+          ENROLLMENT='00000000-0000-0000-0000-000000004008'
+          SUBJECT='00000000-0000-0000-0000-000000004006'
+
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H 'Content-Type: application/json'             -d '{"username":"f10_operations_user","password":"F10-Operations-Test-2026!"}'             "$BASE/api/auth/login.php")"
+          test "$(printf '%s' "$LOGIN" | jq -r '.success')" = 'true'
+          CSRF="$(printf '%s' "$LOGIN" | jq -r '.csrfToken')"
+          test -n "$CSRF"
+          echo 'Authorized login and CSRF token: PASS'
+
+          # Authorized student create, read, then update and verify persisted state.
+          STUDENT_STATUS="$(curl -sS -o /tmp/f10ops-student-create.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X POST             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d '{"matricule":"F10OPS-CREATED-001","last_name":"Authorized","first_name":"Before"}'             "$BASE/api/students/index.php")"
+          test "$STUDENT_STATUS" = '201'
+          STUDENT_ID="$(jq -r '.student.id' /tmp/f10ops-student-create.json)"
+          test -n "$STUDENT_ID" && test "$STUDENT_ID" != 'null'
+          echo 'eleves.create: HTTP 201 PASS'
+
+          STUDENT_LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/students/index.php")"
+          printf '%s' "$STUDENT_LIST" | grep -q 'F10OPS-CREATED-001'
+          echo 'eleves.read: authorized GET PASS'
+
+          UPDATE_STATUS="$(curl -sS -o /tmp/f10ops-student-update.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X PATCH             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d '{"first_name":"After"}'             "$BASE/api/students/index.php?id=$STUDENT_ID")"
+          test "$UPDATE_STATUS" = '200'
+          test "$(jq -r '.student.first_name' /tmp/f10ops-student-update.json)" = 'After'
+          STUDENT_DB="$(psql "$DB_URL" -Atqc "SELECT first_name FROM students WHERE id = '$STUDENT_ID'")"
+          test "$STUDENT_DB" = 'After'
+          echo 'eleves.update: HTTP 200 and PostgreSQL persistence PASS'
+
+          # Authorized grade create, read and update.
+          GRADE_STATUS="$(curl -sS -o /tmp/f10ops-grade-create.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X POST             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"subject_id\":\"$SUBJECT\",\"grade\":14.5,\"grade_date\":\"2026-10-09\",\"assessment_number\":1}"             "$BASE/api/grades/index.php")"
+          test "$GRADE_STATUS" = '201'
+          GRADE_ID="$(jq -r '.grade.id' /tmp/f10ops-grade-create.json)"
+          test -n "$GRADE_ID" && test "$GRADE_ID" != 'null'
+          echo 'resultats.create (grade): HTTP 201 PASS'
+
+          GRADES="$(curl -fsS -b "$COOKIE" "$BASE/api/grades/index.php?school_year_id=00000000-0000-0000-0000-000000004005")"
+          printf '%s' "$GRADES" | grep -q 'F10OPS-MATH'
+          printf '%s' "$GRADES" | grep -q "$GRADE_ID"
+          echo 'resultats.read (grades): authorized GET PASS'
+
+          GRADE_UPDATE_STATUS="$(curl -sS -o /tmp/f10ops-grade-update.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X PUT             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"subject_id\":\"$SUBJECT\",\"grade\":16.5,\"grade_date\":\"2026-10-09\",\"assessment_number\":1}"             "$BASE/api/grades/index.php?id=$GRADE_ID")"
+          test "$GRADE_UPDATE_STATUS" = '200'
+          GRADE_DB="$(psql "$DB_URL" -Atqc "SELECT grade::numeric::text FROM grades WHERE id = '$GRADE_ID'")"
+          test "$GRADE_DB" = '16.5'
+          echo 'resultats.update (grade): HTTP 200 and PostgreSQL persistence PASS'
+
+          # Authorized attendance create, read and update.
+          ATT_STATUS="$(curl -sS -o /tmp/f10ops-attendance-create.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X POST             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"attendance_date\":\"2026-10-09\",\"status\":\"PRESENT\",\"comment\":\"F10 authorized create\"}"             "$BASE/api/attendance/index.php")"
+          test "$ATT_STATUS" = '201'
+          ATT_ID="$(jq -r '.attendance.id' /tmp/f10ops-attendance-create.json)"
+          test -n "$ATT_ID" && test "$ATT_ID" != 'null'
+          echo 'presences.create: HTTP 201 PASS'
+
+          ATT_LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/attendance/index.php?attendance_date=2026-10-09")"
+          printf '%s' "$ATT_LIST" | grep -q "$ATT_ID"
+          echo 'presences.read: authorized GET PASS'
+
+          ATT_UPDATE_STATUS="$(curl -sS -o /tmp/f10ops-attendance-update.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X PATCH             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"status\":\"LATE\",\"comment\":\"F10 authorized update\"}"             "$BASE/api/attendance/index.php?id=$ATT_ID")"
+          test "$ATT_UPDATE_STATUS" = '200'
+          ATT_DB="$(psql "$DB_URL" -Atqc "SELECT status FROM attendance WHERE id = '$ATT_ID'")"
+          test "$ATT_DB" = 'LATE'
+          echo 'presences.update: HTTP 200 and PostgreSQL persistence PASS'
+
+          # Authorized report/carnet update and read-back.
+          CARNET_STATUS="$(curl -sS -o /tmp/f10ops-carnet-update.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X PUT             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"proprete\":\"F10-PASS\",\"conduite\":\"BON\",\"observation1\":\"authorized persisted\"}"             "$BASE/api/results/index.php")"
+          test "$CARNET_STATUS" = '200'
+          CARNET="$(curl -fsS -b "$COOKIE" "$BASE/api/results/index.php?enrollment_id=$ENROLLMENT")"
+          printf '%s' "$CARNET" | grep -q 'F10-PASS'
+          CARNET_DB="$(psql "$DB_URL" -Atqc "SELECT proprete FROM result_carnets WHERE enrollment_id = '$ENROLLMENT'")"
+          test "$CARNET_DB" = 'F10-PASS'
+          echo 'resultats.update (carnet): HTTP 200, read-back and PostgreSQL persistence PASS'
+
+          # Exact row counts prevent false positives from API-only responses.
+          STUDENT_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM students WHERE matricule = 'F10OPS-CREATED-001'")"
+          GRADE_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM grades WHERE id = '$GRADE_ID' AND grade = 16.5")"
+          ATT_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM attendance WHERE id = '$ATT_ID' AND status = 'LATE'")"
+          CARNET_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM result_carnets WHERE enrollment_id = '$ENROLLMENT' AND proprete = 'F10-PASS'")"
+          test "$STUDENT_COUNT" = '1'
+          test "$GRADE_COUNT" = '1'
+          test "$ATT_COUNT" = '1'
+          test "$CARNET_COUNT" = '1'
+          echo 'PostgreSQL final-state verification for all tested resources: PASS'
+          echo 'F-10 POSITIVE RBAC AUTHORIZED OPERATIONS PROOF: PASS'
+
+      - name: Stop PHP runtime
+        if: always()
+        run: |
+          if [ -f /tmp/f10-operations-php.pid ]; then kill "$(cat /tmp/f10-operations-php.pid)" || true; fi
