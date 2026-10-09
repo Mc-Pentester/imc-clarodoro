@@ -1,0 +1,186 @@
+name: F-02-H badge runtime
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  f02-h-badge-runtime:
+    name: F-02-H badge API and authorization
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client curl
+
+      - name: Create isolated schema and apply migrations
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+
+      - name: Seed isolated F-02-H runtime fixture
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000008001', 'PDG')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO permissions (name)
+          VALUES ('eleves.read')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id
+          FROM roles r
+          CROSS JOIN permissions p
+          WHERE r.name = 'PDG'
+            AND p.name = 'eleves.read'
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO users (id, username, password_hash, role_id, status)
+          SELECT
+            '00000000-0000-0000-0000-000000008002',
+            'f02h-badge-runtime',
+            crypt('F02H-Badge-2026!', gen_salt('bf')),
+            r.id,
+            'ACTIVE'
+          FROM roles r
+          WHERE r.name = 'PDG'
+          ON CONFLICT (username) DO NOTHING;
+
+          INSERT INTO students (
+            id, matricule, last_name, first_name, address, phone, profile_data, status
+          )
+          VALUES (
+            '00000000-0000-0000-0000-000000008003',
+            'F02H-RUNTIME-001',
+            'BadgeRuntime',
+            'EleveTest',
+            'Adresse F02H',
+            '50937000000',
+            '{"classe":"F02H-Classe-Test","annee_scolaire":"2026-2027","photo":"data:image/png;base64,RjAySA=="}'::jsonb,
+            'ACTIVE'
+          )
+          ON CONFLICT (matricule) DO NOTHING;
+          SQL
+
+      - name: Start local PHP API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/f02h-api.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove badge API authentication and PostgreSQL data
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          trap 'rc=$?; echo "::error::F-02-H runtime failed: rc=$rc command=[$BASH_COMMAND]"; cat /tmp/f02h-api.log 2>/dev/null || true; exit $rc' ERR
+
+          BASE='http://127.0.0.1:8090'
+          COOKIE='/tmp/f02h-cookies.txt'
+
+          UNAUTH_STATUS="$(curl -sS -o /tmp/f02h-unauth.json -w '%{http_code}' "$BASE/api/students/index.php")"
+          echo "F-02-H unauthenticated GET status: $UNAUTH_STATUS"
+          test "$UNAUTH_STATUS" = '401'
+          php -r '$d=json_decode(file_get_contents("/tmp/f02h-unauth.json"),true); if (($d["success"]??true)!==false) exit(1);'
+
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H 'Content-Type: application/json'             --data '{"username":"f02h-badge-runtime","password":"F02H-Badge-2026!"}'             "$BASE/api/auth/login.php")"
+          printf '%s' "$LOGIN" | grep -q '"success":true'
+
+          STUDENTS="$(curl -fsS -c "$COOKIE" -b "$COOKIE"             -H 'Accept: application/json'             "$BASE/api/students/index.php")"
+          printf '%s' "$STUDENTS" > /tmp/f02h-students.json
+
+          php -r '
+          $payload = json_decode(file_get_contents("/tmp/f02h-students.json"), true);
+          if (!is_array($payload) || ($payload["success"] ?? false) !== true || !is_array($payload["students"] ?? null)) {
+              fwrite(STDERR, "FAIL: students API response contract invalid\n"); exit(1);
+          }
+          $matches = array_values(array_filter($payload["students"], static fn($s) => ($s["matricule"] ?? "") === "F02H-RUNTIME-001"));
+          if (count($matches) !== 1) {
+              fwrite(STDERR, "FAIL: runtime fixture absent or duplicated in API response\n"); exit(1);
+          }
+          $s = $matches[0];
+          $p = is_array($s["profile_data"] ?? null) ? $s["profile_data"] : [];
+          $checks = [
+              "last_name" => $s["last_name"] ?? null,
+              "first_name" => $s["first_name"] ?? null,
+              "address" => $s["address"] ?? null,
+              "phone" => $s["phone"] ?? null,
+              "class" => $p["classe"] ?? null,
+              "school_year" => $p["annee_scolaire"] ?? null,
+              "photo" => $p["photo"] ?? null,
+          ];
+          $expected = [
+              "last_name" => "BadgeRuntime",
+              "first_name" => "EleveTest",
+              "address" => "Adresse F02H",
+              "phone" => "50937000000",
+              "class" => "F02H-Classe-Test",
+              "school_year" => "2026-2027",
+              "photo" => "data:image/png;base64,RjAySA==",
+          ];
+          foreach ($expected as $key => $value) {
+              if (($checks[$key] ?? null) !== $value) {
+                  fwrite(STDERR, "FAIL: field {$key} mismatch; got " . var_export($checks[$key] ?? null, true) . "\n");
+                  exit(1);
+              }
+          }
+          echo "F-02-H PostgreSQL fixture and badge fields: PASS\n";
+          '
+
+          echo 'F-02-H API authentication + authorized student GET: PASS'
+
+      - name: Verify badge consumes server API without local data fallback
+        run: |
+          set -euo pipefail
+          grep -Fq 'fetch("api/students/index.php"' badge.html
+          grep -Fq 'student.last_name' badge.html
+          grep -Fq 'student.first_name' badge.html
+          grep -Fq 'profile.classe || student.class_name' badge.html
+          grep -Fq 'profile.annee_scolaire || profile.annee' badge.html
+          grep -Fq 'IMCAuth.requireAuth("personnel.html")' badge.html
+          if grep -nE 'imc_students|imc_active_year|IMCSecureStorage.*imc_students|localStorage.*imc_students' badge.html; then
+            echo 'FAIL: badge still reads student source-of-truth from browser storage'
+            exit 1
+          fi
+          echo 'F-02-H badge server-authority contract: PASS'
+          echo 'F-02-H RUNTIME PROOF: PASS'
