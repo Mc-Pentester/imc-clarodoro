@@ -57,7 +57,7 @@ jobs:
           set -euo pipefail
           psql 'postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro' -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (id, name)
-          VALUES ('00000000-0000-0000-0000-000000004001', 'Directeur')
+          VALUES ('00000000-0000-0000-0000-000000004001', 'PDG')
           ON CONFLICT (name) DO NOTHING;
 
           INSERT INTO permissions (name)
