@@ -1,0 +1,141 @@
+name: F-10 positive RBAC authorized mutation proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'config/auth.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - '.github/workflows/f10-positive-rbac-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authorized-student-create:
+    name: Authorized student creation and persistence proof
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP PostgreSQL runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client jq curl
+      - name: Apply schema and migrations to isolated CI database
+        run: |
+          set -euo pipefail
+          DB_URL="postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
+      - name: Seed one explicitly authorized user
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000921', 'Directeur')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO permissions (name)
+          VALUES ('eleves.create')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id
+          FROM roles r CROSS JOIN permissions p
+          WHERE r.name = 'Directeur' AND p.name = 'eleves.create'
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO users (id, username, password_hash, role_id, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000000922',
+            'f10_positive_user',
+            crypt('F10-Positive-Test-2026!', gen_salt('bf')),
+            (SELECT id FROM roles WHERE name = 'Directeur'),
+            'ACTIVE'
+          )
+          ON CONFLICT (username) DO NOTHING;
+
+          SELECT 1 / CASE WHEN EXISTS (
+            SELECT 1
+            FROM users u
+            JOIN roles r ON r.id = u.role_id
+            JOIN role_permissions rp ON rp.role_id = r.id
+            JOIN permissions p ON p.id = rp.permission_id
+            WHERE u.username = 'f10_positive_user'
+              AND r.name = 'Directeur'
+              AND p.name = 'eleves.create'
+          ) THEN 1 ELSE 0 END;
+          SQL
+      - name: Start PHP API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8080 -t . >/tmp/f10-positive-php.log 2>&1 &
+          echo $! >/tmp/f10-positive-php.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/api/health.php >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/api/health.php >/dev/null
+      - name: Prove authorized mutation and persisted result
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='http://127.0.0.1:8080'
+          DB_URL='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          COOKIE='/tmp/f10-positive.cookies'
+
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE" \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"f10_positive_user","password":"F10-Positive-Test-2026!"}' \
+            "$BASE/api/auth/login.php")"
+          test "$(printf '%s' "$LOGIN" | jq -r '.success')" = 'true'
+          CSRF="$(printf '%s' "$LOGIN" | jq -r '.csrfToken')"
+          test -n "$CSRF"
+          echo 'Authorized test login and CSRF token: PASS'
+
+          STATUS="$(curl -sS -o /tmp/f10-positive-response.json -w '%{http_code}' \
+            -b "$COOKIE" -X POST \
+            -H 'Content-Type: application/json' \
+            -H "X-CSRF-Token: $CSRF" \
+            -d '{"matricule":"F10-RBAC-POSITIVE-001","last_name":"RBAC","first_name":"Authorized"}' \
+            "$BASE/api/students/index.php")"
+          if [ "$STATUS" != '201' ]; then
+            echo "FAIL: expected HTTP 201, got $STATUS"
+            cat /tmp/f10-positive-response.json
+            cat /tmp/f10-positive-php.log
+            exit 1
+          fi
+          echo 'Permission eleves.create allows POST -> HTTP 201: PASS'
+
+          test "$(jq -r '.success' /tmp/f10-positive-response.json)" = 'true'
+          test "$(jq -r '.student.matricule' /tmp/f10-positive-response.json)" = 'F10-RBAC-POSITIVE-001'
+          COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM students WHERE matricule = 'F10-RBAC-POSITIVE-001' AND last_name = 'RBAC' AND first_name = 'Authorized'")"
+          test "$COUNT" = '1'
+          echo 'Created student is persisted in PostgreSQL exactly once: PASS'
+          echo 'F-10 POSITIVE RBAC AUTHORIZED MUTATION PROOF: PASS'
+      - name: Stop PHP runtime
+        if: always()
+        run: |
+          if [ -f /tmp/f10-positive-php.pid ]; then kill "$(cat /tmp/f10-positive-php.pid)" || true; fi
