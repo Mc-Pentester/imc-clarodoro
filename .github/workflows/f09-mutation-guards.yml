@@ -1,0 +1,184 @@
+name: F-09 cross-route mutation guard runtime proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'config/auth.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - '.github/workflows/f09-mutation-guards.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation-guards:
+    name: F-09 auth and CSRF across mutation routes
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP PostgreSQL runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client jq
+      - name: Apply schema and migrations
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
+      - name: Seed isolated test identity and mutation permissions
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000901', 'PDG')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO permissions (name) VALUES
+            ('eleves.create'), ('eleves.update'),
+            ('annees.create'), ('annees.update'),
+            ('matieres.create'), ('matieres.update'),
+            ('vacances.create'), ('vacances.update'),
+            ('resultats.create'), ('resultats.update'),
+            ('presences.create'), ('presences.update'),
+            ('finances.create'), ('finances.update'), ('finances.delete'),
+            ('personnel.create'), ('personnel.update'), ('personnel.delete')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT '00000000-0000-0000-0000-000000000901', id
+          FROM permissions
+          WHERE name IN (
+            'eleves.create','eleves.update',
+            'annees.create','annees.update',
+            'matieres.create','matieres.update',
+            'vacances.create','vacances.update',
+            'resultats.create','resultats.update',
+            'presences.create','presences.update',
+            'finances.create','finances.update','finances.delete',
+            'personnel.create','personnel.update','personnel.delete'
+          )
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO users (id, username, password_hash, role_id)
+          VALUES (
+            '00000000-0000-0000-0000-000000000902',
+            'f09_guard_user',
+            crypt('F09-Guard-Test-2026!', gen_salt('bf')),
+            '00000000-0000-0000-0000-000000000901'
+          )
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+      - name: PHP syntax
+        run: |
+          set -euo pipefail
+          php -l config/auth.php
+          for f in api/students/index.php api/school-years/index.php api/subjects/index.php api/vacations/index.php api/grades/index.php api/attendance/index.php api/results/index.php api/finance/index.php api/personnel/index.php; do php -l "$f"; done
+      - name: Start local PHP API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8080 -t . >/tmp/f09-php.log 2>&1 &
+          echo $! >/tmp/f09-php.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/api/health.php >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/api/health.php >/dev/null
+      - name: Prove unauthenticated mutations are rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_unauth() {
+            local label="$1" method="$2" url="$3" body="$4"
+            local status
+            status="$(curl -sS -o /tmp/f09-response.json -w '%{http_code}' -X "$method" \
+              -H 'Content-Type: application/json' -d "$body" "$url")"
+            if [ "$status" != "401" ]; then
+              echo "FAIL unauthenticated $label: expected 401, got $status"
+              cat /tmp/f09-response.json
+              cat /tmp/f09-php.log
+              exit 1
+            fi
+            echo "Unauthenticated $label -> 401: PASS"
+          }
+          BASE=http://127.0.0.1:8080
+          BODY='{"resource":"invoice","student_id":"00000000-0000-0000-0000-000000000999","amount":100}'
+          check_unauth "students POST" POST "$BASE/api/students/index.php" '{"matricule":"F09-X","last_name":"Test","first_name":"Guard"}'
+          check_unauth "school-years POST" POST "$BASE/api/school-years/index.php" '{"label":"F09 test","start_date":"2026-09-01","end_date":"2027-06-30"}'
+          check_unauth "subjects POST" POST "$BASE/api/subjects/index.php" '{"code":"F09-X","name":"F09 test","coefficient":1}'
+          check_unauth "vacations POST" POST "$BASE/api/vacations/index.php" '{"name":"F09 test","start_date":"2026-12-20","end_date":"2027-01-05"}'
+          check_unauth "grades POST" POST "$BASE/api/grades/index.php" '{"enrollment_id":"00000000-0000-0000-0000-000000000999","subject_id":"00000000-0000-0000-0000-000000000998","grade":10}'
+          check_unauth "attendance POST" POST "$BASE/api/attendance/index.php" '{"enrollment_id":"00000000-0000-0000-0000-000000000999","attendance_date":"2026-10-09","status":"PRESENT"}'
+          check_unauth "results PUT" PUT "$BASE/api/results/index.php" '{"enrollment_id":"00000000-0000-0000-0000-000000000999"}'
+          check_unauth "finance POST" POST "$BASE/api/finance/index.php" "$BODY"
+          check_unauth "personnel POST" POST "$BASE/api/personnel/index.php" '{"first_name":"F09","last_name":"Guard","username":"f09-new","password":"F09-Password-2026!"}'
+      - name: Prove authenticated mutations require session-bound CSRF
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=http://127.0.0.1:8080
+          LOGIN="$(curl -fsS -c /tmp/f09.cookies -b /tmp/f09.cookies -H 'Content-Type: application/json' \
+            -d '{"username":"f09_guard_user","password":"F09-Guard-Test-2026!"}' "$BASE/api/auth/login.php")"
+          test "$(printf '%s' "$LOGIN" | jq -r '.success')" = "true"
+          test -n "$(printf '%s' "$LOGIN" | jq -r '.csrfToken')"
+
+          check_csrf() {
+            local label="$1" method="$2" url="$3" body="$4"
+            local status
+            status="$(curl -sS -o /tmp/f09-response.json -w '%{http_code}' -b /tmp/f09.cookies \
+              -X "$method" -H 'Content-Type: application/json' -d "$body" "$url")"
+            if [ "$status" != "403" ]; then
+              echo "FAIL missing-CSRF $label: expected 403, got $status"
+              cat /tmp/f09-response.json
+              cat /tmp/f09-php.log
+              exit 1
+            fi
+            echo "Authenticated $label without CSRF -> 403: PASS"
+          }
+
+          check_csrf "students POST" POST "$BASE/api/students/index.php" '{"matricule":"F09-X","last_name":"Test","first_name":"Guard"}'
+          check_csrf "school-years POST" POST "$BASE/api/school-years/index.php" '{"label":"F09 test","start_date":"2026-09-01","end_date":"2027-06-30"}'
+          check_csrf "school-years PUT" PUT "$BASE/api/school-years/index.php?id=00000000-0000-0000-0000-000000000999" '{"label":"F09 test updated"}'
+          check_csrf "subjects POST" POST "$BASE/api/subjects/index.php" '{"code":"F09-X","name":"F09 test","coefficient":1}'
+          check_csrf "subjects PUT" PUT "$BASE/api/subjects/index.php?id=00000000-0000-0000-0000-000000000999" '{"name":"F09 test updated"}'
+          check_csrf "vacations POST" POST "$BASE/api/vacations/index.php" '{"name":"F09 test","start_date":"2026-12-20","end_date":"2027-01-05"}'
+          check_csrf "vacations PUT" PUT "$BASE/api/vacations/index.php?id=00000000-0000-0000-0000-000000000999" '{"name":"F09 test updated"}'
+          check_csrf "grades POST" POST "$BASE/api/grades/index.php" '{"enrollment_id":"00000000-0000-0000-0000-000000000999","subject_id":"00000000-0000-0000-0000-000000000998","grade":10}'
+          check_csrf "grades DELETE" DELETE "$BASE/api/grades/index.php?id=00000000-0000-0000-0000-000000000999" '{}'
+          check_csrf "attendance POST" POST "$BASE/api/attendance/index.php" '{"enrollment_id":"00000000-0000-0000-0000-000000000999","attendance_date":"2026-10-09","status":"PRESENT"}'
+          check_csrf "attendance DELETE" DELETE "$BASE/api/attendance/index.php?id=00000000-0000-0000-0000-000000000999&enrollment_id=00000000-0000-0000-0000-000000000998" '{}'
+          check_csrf "results PUT" PUT "$BASE/api/results/index.php" '{"enrollment_id":"00000000-0000-0000-0000-000000000999"}'
+          check_csrf "finance POST invoice" POST "$BASE/api/finance/index.php" '{"resource":"invoice","student_id":"00000000-0000-0000-0000-000000000999","amount":100}'
+          check_csrf "finance PUT" PUT "$BASE/api/finance/index.php?invoice_id=00000000-0000-0000-0000-000000000999" '{"description":"F09 test"}'
+          check_csrf "finance DELETE payment" DELETE "$BASE/api/finance/index.php?payment_id=00000000-0000-0000-0000-000000000999" '{}'
+          check_csrf "personnel POST" POST "$BASE/api/personnel/index.php" '{"first_name":"F09","last_name":"Guard","username":"f09-new","password":"F09-Password-2026!"}'
+          check_csrf "personnel PUT" PUT "$BASE/api/personnel/index.php" '{"id":"00000000-0000-0000-0000-000000000999","first_name":"F09","last_name":"Guard"}'
+          check_csrf "personnel DELETE" DELETE "$BASE/api/personnel/index.php" '{"id":"00000000-0000-0000-0000-000000000999"}'
+
+          echo "F-09 MUTATION GUARDS RUNTIME PROOF: PASS"
+      - name: Stop PHP runtime
+        if: always()
+        run: |
+          if [ -f /tmp/f09-php.pid ]; then kill "$(cat /tmp/f09-php.pid)" || true; fi
