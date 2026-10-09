@@ -52,19 +52,26 @@ jobs:
         run: |
           set -euo pipefail
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          -- Use a canonical role name accepted by the F-07 RBAC constraint.
           INSERT INTO roles (id, name)
-          VALUES ('00000000-0000-0000-0000-000000000910', 'F10_NO_PERMISSIONS')
-          ON CONFLICT (id) DO NOTHING;
+          VALUES ('00000000-0000-0000-0000-000000000910', 'Autre')
+          ON CONFLICT (name) DO NOTHING;
 
           INSERT INTO users (id, username, password_hash, role_id, status)
           VALUES (
             '00000000-0000-0000-0000-000000000911',
             'f10_limited_user',
             crypt('F10-Limited-Test-2026!', gen_salt('bf')),
-            '00000000-0000-0000-0000-000000000910',
+            (SELECT id FROM roles WHERE name = 'Autre'),
             'ACTIVE'
           )
           ON CONFLICT (id) DO NOTHING;
+
+          -- Prove that this test role has no permissions in the fresh CI database.
+          SELECT 1 / CASE WHEN NOT EXISTS (
+            SELECT 1 FROM role_permissions
+            WHERE role_id = (SELECT id FROM roles WHERE name = 'Autre')
+          ) THEN 1 ELSE 0 END;
           SQL
       - name: PHP syntax
         run: |
