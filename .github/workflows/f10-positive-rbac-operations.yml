@@ -107,10 +107,10 @@ jobs:
           )
           ON CONFLICT (id) DO NOTHING;
 
-          INSERT INTO subjects (id, code, name, coefficient, status)
+          INSERT INTO subjects (id, code, name, coefficient, max_points, status)
           VALUES (
             '00000000-0000-0000-0000-000000004006',
-            'F10OPS-MATH', 'F10 Operations Math', 1, 'ACTIVE'
+            'F10OPS-MATH', 'F10 Operations Math', 1, 20, 'ACTIVE'
           )
           ON CONFLICT (id) DO NOTHING;
 
@@ -187,6 +187,13 @@ jobs:
           test "$STUDENT_DB" = 'After'
           echo 'eleves.update: HTTP 200 and PostgreSQL persistence PASS'
 
+          # The subject is graded out of 20: reject 20.5 and prove no row was inserted.
+          INVALID_GRADE_STATUS="$(curl -sS -o /tmp/f10ops-grade-invalid-create.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X POST             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"subject_id\":\"$SUBJECT\",\"grade\":20.5,\"grade_date\":\"2026-10-09\",\"assessment_number\":1}"             "$BASE/api/grades/index.php")"
+          test "$INVALID_GRADE_STATUS" = '422'
+          INVALID_GRADE_COUNT="$(psql "$DB_URL" -Atqc "SELECT COUNT(*) FROM grades WHERE enrollment_id = '$ENROLLMENT' AND subject_id = '$SUBJECT'")"
+          test "$INVALID_GRADE_COUNT" = '0'
+          echo 'Business rule: grade above subject max_points rejected with HTTP 422 and no insert: PASS'
+
           # Authorized grade create, read and update.
           GRADE_STATUS="$(curl -sS -o /tmp/f10ops-grade-create.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X POST             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"subject_id\":\"$SUBJECT\",\"grade\":14.5,\"grade_date\":\"2026-10-09\",\"assessment_number\":1}"             "$BASE/api/grades/index.php")"
           test "$GRADE_STATUS" = '201'
@@ -204,6 +211,13 @@ jobs:
           GRADE_DB_MATCH="$(psql "$DB_URL" -Atqc "SELECT (grade = 16.5)::text FROM grades WHERE id = '$GRADE_ID'")"
           test "$GRADE_DB_MATCH" = 'true'
           echo 'resultats.update (grade): HTTP 200 and PostgreSQL persistence PASS'
+
+          # An out-of-range update must fail and leave the existing grade unchanged.
+          INVALID_GRADE_UPDATE_STATUS="$(curl -sS -o /tmp/f10ops-grade-invalid-update.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X PUT             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"subject_id\":\"$SUBJECT\",\"grade\":20.5,\"grade_date\":\"2026-10-09\",\"assessment_number\":1}"             "$BASE/api/grades/index.php?id=$GRADE_ID")"
+          test "$INVALID_GRADE_UPDATE_STATUS" = '422'
+          GRADE_DB_AFTER_REJECT="$(psql "$DB_URL" -Atqc "SELECT (grade = 16.5)::text FROM grades WHERE id = '$GRADE_ID'")"
+          test "$GRADE_DB_AFTER_REJECT" = 'true'
+          echo 'Business rule: out-of-range grade update rejected with HTTP 422; prior value preserved: PASS'
 
           # Authorized attendance create, read and update.
           ATT_STATUS="$(curl -sS -o /tmp/f10ops-attendance-create.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X POST             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d "{\"enrollment_id\":\"$ENROLLMENT\",\"attendance_date\":\"2026-10-09\",\"status\":\"PRESENT\",\"comment\":\"F10 authorized create\"}"             "$BASE/api/attendance/index.php")"
