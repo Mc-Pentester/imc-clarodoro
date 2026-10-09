@@ -1,0 +1,138 @@
+name: F-10 least-privilege RBAC runtime proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - 'config/auth.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - '.github/workflows/f10-rbac-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rbac:
+    name: Least-privilege authorization and no-write proof
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP PostgreSQL runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client jq
+      - name: Apply schema and migrations
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          php database/migrate.php --status
+      - name: Seed a user with no permissions
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000910', 'F10_NO_PERMISSIONS')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO users (id, username, password_hash, role_id, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000000911',
+            'f10_limited_user',
+            crypt('F10-Limited-Test-2026!', gen_salt('bf')),
+            '00000000-0000-0000-0000-000000000910',
+            'ACTIVE'
+          )
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+      - name: PHP syntax
+        run: |
+          set -euo pipefail
+          php -l config/auth.php
+          php -l api/auth/login.php
+          php -l api/grades/index.php
+          php -l api/students/index.php
+      - name: Start local PHP API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8080 -t . >/tmp/f10-php.log 2>&1 &
+          echo $! >/tmp/f10-php.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8080/api/health.php >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/api/health.php >/dev/null
+      - name: Prove RBAC denies reads and writes before mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=http://127.0.0.1:8080
+          DB_URL="postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro"
+
+          LOGIN="$(curl -fsS -c /tmp/f10.cookies -b /tmp/f10.cookies \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"f10_limited_user","password":"F10-Limited-Test-2026!"}' \
+            "$BASE/api/auth/login.php")"
+          test "$(printf '%s' "$LOGIN" | jq -r '.success')" = "true"
+          CSRF="$(printf '%s' "$LOGIN" | jq -r '.csrfToken')"
+          test -n "$CSRF"
+
+          READ_STATUS="$(curl -sS -o /tmp/f10-read.json -w '%{http_code}' \
+            -b /tmp/f10.cookies "$BASE/api/grades/index.php")"
+          if [ "$READ_STATUS" != "403" ]; then
+            echo "FAIL: user without resultats.read expected 403, got $READ_STATUS"
+            cat /tmp/f10-read.json
+            cat /tmp/f10-php.log
+            exit 1
+          fi
+          echo "Least-privilege GET grades -> 403: PASS"
+
+          BEFORE="$(psql "$DB_URL" -Atqc 'SELECT COUNT(*) FROM students')"
+          WRITE_STATUS="$(curl -sS -o /tmp/f10-write.json -w '%{http_code}' \
+            -b /tmp/f10.cookies -X POST \
+            -H 'Content-Type: application/json' \
+            -H "X-CSRF-Token: $CSRF" \
+            -d '{"matricule":"F10-RBAC-NOWRITE","last_name":"RBAC","first_name":"Denied"}' \
+            "$BASE/api/students/index.php")"
+          AFTER="$(psql "$DB_URL" -Atqc 'SELECT COUNT(*) FROM students')"
+
+          if [ "$WRITE_STATUS" != "403" ]; then
+            echo "FAIL: user without eleves.create expected 403, got $WRITE_STATUS"
+            cat /tmp/f10-write.json
+            cat /tmp/f10-php.log
+            exit 1
+          fi
+          echo "Least-privilege POST students with valid CSRF -> 403: PASS"
+
+          if [ "$BEFORE" != "$AFTER" ]; then
+            echo "FAIL: student count changed from $BEFORE to $AFTER despite RBAC denial"
+            psql "$DB_URL" -c "SELECT id, matricule FROM students WHERE matricule = 'F10-RBAC-NOWRITE'"
+            exit 1
+          fi
+          echo "Denied write leaves student count unchanged ($BEFORE): PASS"
+          echo "F-10 LEAST-PRIVILEGE RBAC RUNTIME PROOF: PASS"
+      - name: Stop PHP runtime
+        if: always()
+        run: |
+          if [ -f /tmp/f10-php.pid ]; then kill "$(cat /tmp/f10-php.pid)" || true; fi
