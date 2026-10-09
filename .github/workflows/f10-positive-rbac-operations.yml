@@ -70,7 +70,7 @@ jobs:
           INSERT INTO role_permissions (role_id, permission_id)
           SELECT r.id, p.id
           FROM roles r CROSS JOIN permissions p
-          WHERE r.name = 'Directeur'
+          WHERE r.name = 'PDG'
             AND p.name IN (
               'eleves.read', 'eleves.create', 'eleves.update',
               'resultats.read', 'resultats.create', 'resultats.update',
@@ -83,7 +83,7 @@ jobs:
             '00000000-0000-0000-0000-000000004002',
             'f10_operations_user',
             crypt('F10-Operations-Test-2026!', gen_salt('bf')),
-            (SELECT id FROM roles WHERE name = 'Directeur'),
+            (SELECT id FROM roles WHERE name = 'PDG'),
             'ACTIVE'
           )
           ON CONFLICT (username) DO NOTHING;
