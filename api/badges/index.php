@@ -44,8 +44,8 @@ if (!is_array($badgeData) || array_is_list($badgeData)) {
     apiError(422, 'Données du badge invalides');
 }
 $encoded = json_encode($badgeData, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-if (strlen($encoded) > 16384) {
-    apiError(413, 'Les données du badge dépassent la taille autorisée');
+if (strlen($encoded) > 1048576) {
+    apiError(413, 'Les données du badge dépassent la limite de 1 Mo');
 }
 
 $studentCheck = $pdo->prepare('SELECT id FROM students WHERE id = :id LIMIT 1');
