@@ -70,7 +70,7 @@ if ($method === 'POST') {
         ? trim($data['school_year_label'])
         : '';
 
-    if ($description === '' || mb_strlen($description) > 500) {
+    if ($description === '' || strlen($description) > 2000) {
         apiError(422, 'Description invalide');
     }
     if (!is_numeric($amount) || !is_finite((float)$amount) || (float)$amount <= 0) {
