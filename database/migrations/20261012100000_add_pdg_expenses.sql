@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     school_year_id UUID NOT NULL,
     description VARCHAR(500) NOT NULL,
+    legacy_id VARCHAR(100),
     amount NUMERIC(12,2) NOT NULL,
     expense_date DATE NOT NULL,
     created_by UUID NOT NULL,
@@ -16,6 +17,11 @@ CREATE TABLE IF NOT EXISTS expenses (
     CONSTRAINT expenses_created_by_fk
         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
 );
+
+ALTER TABLE expenses ADD COLUMN IF NOT EXISTS legacy_id VARCHAR(100);
+
+CREATE UNIQUE INDEX IF NOT EXISTS expenses_school_year_legacy_id_uidx
+    ON expenses (school_year_id, legacy_id) WHERE legacy_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS expenses_school_year_date_idx
     ON expenses (school_year_id, expense_date DESC, created_at DESC);
