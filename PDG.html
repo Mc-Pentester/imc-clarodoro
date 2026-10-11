@@ -738,6 +738,7 @@
     <section class="carte">
 
         <h2>Paie du personnel</h2>
+        <p id="messagePaie" role="status" aria-live="polite"></p>
 
         <p class="petit-texte">
             Les membres du personnel affichés ici sont récupérés
@@ -1231,6 +1232,10 @@ const CLE_ANNEE_ACTIVE =
 */
 const CLE_PAIES_PERSONNEL =
     "imc_paies_personnel";
+
+let paiesServeurCache = {};
+let paiesAnneesChargees = {};
+let chargementPaiesPromise = null;
 
 
 const classesDisponibles = [
@@ -2049,29 +2054,121 @@ function obtenirPersonnel() {
 ============================================================ */
 
 function obtenirPaies() {
-
-    const paies =
-        lireJSON(
-            CLE_PAIES_PERSONNEL,
-            {}
-        );
-
-
-    if (
-        !paies ||
-        typeof paies !== "object" ||
-        Array.isArray(paies)
-    ) {
-
-        return {};
-
-    }
-
-
-    return paies;
-
+    return paiesServeurCache;
 }
 
+function statutPaieDepuisServeur(status) {
+    return ({ UNPAID: "Non payé", PARTIAL: "Partiel", PAID: "Payé" })[status] || "Non payé";
+}
+
+function clePaieServeur(entry) {
+    return clePaie(
+        String(entry.school_year_label).replace(/\s/g, ""),
+        entry.staff_id,
+        String(entry.payroll_month).padStart(2, "0")
+    );
+}
+
+async function chargerPaiesServeur(force = false) {
+    if (!anneeConnectee) return paiesServeurCache;
+    const anneeNormalisee = String(anneeConnectee).replace(/\s/g, "");
+    if (!force && paiesAnneesChargees[anneeNormalisee]) return paiesServeurCache;
+    if (chargementPaiesPromise) return chargementPaiesPromise;
+
+    chargementPaiesPromise = (async () => {
+        const url = "/api/payroll/index.php?school_year_label=" + encodeURIComponent(anneeNormalisee);
+        const charger = async () => {
+            const response = await fetch(url, {
+                credentials: "include",
+                headers: { Accept: "application/json" },
+                cache: "no-store"
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || "Impossible de charger les paies depuis PostgreSQL.");
+            }
+            return Array.isArray(payload.payroll) ? payload.payroll : [];
+        };
+
+        let entries = await charger();
+        const parCle = new Map(entries.map(entry => [clePaieServeur(entry), entry]));
+        const personnelIds = new Set(personnelServeur.map(p => String(p.id)));
+        const anciennesPaies = lireJSON(CLE_PAIES_PERSONNEL, {});
+        const avertissements = [];
+
+        if (anciennesPaies && typeof anciennesPaies === "object" && !Array.isArray(anciennesPaies)
+            && IMCAuth.hasPermission("paies.create")) {
+            for (const [legacyKey, paie] of Object.entries(anciennesPaies)) {
+                if (!paie || typeof paie !== "object") continue;
+                const morceaux = String(legacyKey).split("|");
+                if (morceaux.length !== 3) continue;
+                const legacyYear = morceaux[0].replace(/\s/g, "");
+                const staffId = String(paie.personnelId ?? morceaux[1]);
+                const monthText = String(paie.mois ?? morceaux[2]).padStart(2, "0");
+                if (legacyYear !== anneeNormalisee || !/^(0[1-9]|1[0-2])$/.test(monthText)) continue;
+                if (!personnelIds.has(staffId)) continue;
+                const key = clePaie(anneeNormalisee, staffId, monthText);
+                if (parCle.has(key)) continue;
+
+                try {
+                    const response = await fetch("/api/payroll/index.php", {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            staff_id: staffId,
+                            school_year_label: anneeNormalisee,
+                            month: Number(monthText),
+                            base: paie.base ?? 0,
+                            bonuses: paie.primes ?? 0,
+                            deductions: paie.deductions ?? 0,
+                            status: paie.statut || "Non payé"
+                        })
+                    });
+                    const payload = await response.json();
+                    if (!response.ok || !payload.success) {
+                        throw new Error(payload.error || "Import de la paie historique refusé.");
+                    }
+                    parCle.set(key, payload.payroll);
+                } catch (error) {
+                    avertissements.push(String(error.message || error));
+                }
+            }
+        }
+
+        entries = await charger();
+        for (const entry of entries) {
+            const key = clePaieServeur(entry);
+            paiesServeurCache[key] = {
+                personnelId: entry.staff_id,
+                annee: String(entry.school_year_label).replace(/\s/g, ""),
+                mois: String(entry.payroll_month).padStart(2, "0"),
+                base: Number(entry.base_amount),
+                primes: Number(entry.bonus_amount),
+                deductions: Number(entry.deduction_amount),
+                net: Number(entry.net_amount),
+                statut: statutPaieDepuisServeur(entry.status),
+                dateEnregistrement: entry.recorded_at,
+                id: entry.id
+            };
+        }
+        paiesAnneesChargees[anneeNormalisee] = true;
+
+        const message = document.getElementById("messagePaie");
+        if (message) {
+            message.textContent = avertissements.length
+                ? "Certaines paies historiques restent locales et n’ont pas été importées : " + avertissements.join(" ")
+                : "";
+        }
+        return paiesServeurCache;
+    })();
+
+    try {
+        return await chargementPaiesPromise;
+    } finally {
+        chargementPaiesPromise = null;
+    }
+}
 
 /* ============================================================
    CLÉ D'UNE PAIE
@@ -2240,7 +2337,14 @@ function calculerSalaireNet(
    AFFICHER PAIE DU PERSONNEL
 ============================================================ */
 
-function afficherPaie() {
+async function afficherPaie() {
+
+    try {
+        await chargerPaiesServeur();
+    } catch (error) {
+        const message = document.getElementById("messagePaie");
+        if (message) message.textContent = "Lecture des paies indisponible : " + (error.message || "");
+    }
 
     afficherNomMoisPaie();
 
@@ -2536,171 +2640,82 @@ function afficherPaie() {
    ENREGISTRER UNE PAIE
 ============================================================ */
 
-function enregistrerPaie(
-    idPersonnel
-) {
-
-    if (!IMCAuth.requirePermission("paies.create")) {
+async function enregistrerPaie(idPersonnel) {
+    if (!IMCAuth.hasPermission("paies.create") && !IMCAuth.hasPermission("paies.update")) {
         alert("Permission refusée.");
         return;
     }
 
-    const mois =
-        obtenirMoisSelectionne();
+    const mois = obtenirMoisSelectionne();
+    const id = String(idPersonnel);
+    const baseElement = document.getElementById("base_" + id);
+    const primeElement = document.getElementById("prime_" + id);
+    const deductionElement = document.getElementById("deduction_" + id);
+    const statutElement = document.getElementById("statut_" + id);
+    if (!baseElement || !primeElement || !deductionElement || !statutElement) return;
 
+    const base = nombreMontant(baseElement.value);
+    const primes = nombreMontant(primeElement.value);
+    const deductions = nombreMontant(deductionElement.value);
+    const statut = statutElement.value;
 
-    const id =
-        String(idPersonnel);
+    try {
+        const response = await fetch("/api/payroll/index.php", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                staff_id: id,
+                school_year_label: anneeConnectee,
+                month: Number(mois),
+                base,
+                bonuses: primes,
+                deductions,
+                status: statut
+            })
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || "La paie n’a pas été enregistrée.");
+        }
 
-
-    const baseElement =
-        document.getElementById(
-            "base_" + id
+        const entry = payload.payroll;
+        const key = clePaie(
+            String(entry.school_year_label).replace(/\s/g, ""),
+            entry.staff_id,
+            String(entry.payroll_month).padStart(2, "0")
         );
+        paiesServeurCache[key] = {
+            personnelId: entry.staff_id,
+            annee: String(entry.school_year_label).replace(/\s/g, ""),
+            mois: String(entry.payroll_month).padStart(2, "0"),
+            base: Number(entry.base_amount),
+            primes: Number(entry.bonus_amount),
+            deductions: Number(entry.deduction_amount),
+            net: Number(entry.net_amount),
+            statut: statutPaieDepuisServeur(entry.status),
+            dateEnregistrement: entry.recorded_at,
+            id: entry.id
+        };
+        paiesAnneesChargees[String(anneeConnectee).replace(/\s/g, "")] = true;
+        const message = document.getElementById("messagePaie");
+        if (message) message.textContent = "Paie enregistrée dans PostgreSQL.";
 
+        await afficherPaie();
+        await chargerTableauDeBord();
 
-    const primeElement =
-        document.getElementById(
-            "prime_" + id
-        );
-
-
-    const deductionElement =
-        document.getElementById(
-            "deduction_" + id
-        );
-
-
-    const statutElement =
-        document.getElementById(
-            "statut_" + id
-        );
-
-
-    if (
-        !baseElement ||
-        !primeElement ||
-        !deductionElement ||
-        !statutElement
-    ) {
-
-        return;
-
+        const bouton = window.event && window.event.currentTarget;
+        if (bouton) {
+            const ancien = bouton.textContent;
+            bouton.textContent = "✓ Enregistré";
+            setTimeout(() => { bouton.textContent = ancien; }, 1500);
+        }
+    } catch (error) {
+        const message = document.getElementById("messagePaie");
+        if (message) message.textContent = "Paie non enregistrée. Les données locales historiques sont conservées. " + (error.message || "");
+        else alert(error.message || "Impossible d’enregistrer la paie sur le serveur.");
     }
-
-
-    const base =
-        nombreMontant(
-            baseElement.value
-        );
-
-
-    const primes =
-        nombreMontant(
-            primeElement.value
-        );
-
-
-    const deductions =
-        nombreMontant(
-            deductionElement.value
-        );
-
-
-    const statut =
-        statutElement.value;
-
-
-    const paies =
-        obtenirPaies();
-
-
-    const cle =
-        clePaie(
-            anneeConnectee,
-            idPersonnel,
-            mois
-        );
-
-
-    paies[cle] = {
-
-        personnelId:
-            idPersonnel,
-
-        annee:
-            anneeConnectee,
-
-        mois:
-            mois,
-
-        base:
-            base,
-
-        primes:
-            primes,
-
-        deductions:
-            deductions,
-
-        net:
-            Math.max(
-                0,
-                base +
-                primes -
-                deductions
-            ),
-
-        statut:
-            statut,
-
-        dateEnregistrement:
-            new Date().toISOString()
-
-    };
-
-
-    localStorage.setItem(
-        CLE_PAIES_PERSONNEL,
-        JSON.stringify(
-            paies
-        )
-    );
-
-
-    afficherPaie();
-
-
-    chargerTableauDeBord();
-
-
-    const bouton =
-        event &&
-        event.currentTarget;
-
-
-    if (bouton) {
-
-        const ancien =
-            bouton.textContent;
-
-        bouton.textContent =
-            "✓ Enregistré";
-
-        setTimeout(
-            function() {
-
-                bouton.textContent =
-                    ancien;
-
-            },
-            1500
-        );
-
-    }
-
 }
-
 
 /* ============================================================
    TOTAL DES SALAIRES POUR L'ANNÉE
@@ -2805,6 +2820,10 @@ async function chargerTableauDeBord() {
     anneeConnectee =
         select.value;
 
+    if (!personnelServeur.length) {
+        try { await chargerPersonnelServeur(); } catch (_) {}
+    }
+    try { await chargerPaiesServeur(); } catch (_) {}
 
     localStorage.setItem(
         CLE_ANNEE_ACTIVE,
@@ -2954,7 +2973,7 @@ async function chargerTableauDeBord() {
             : "solde-negatif";
 
 
-    afficherPaie();
+    await afficherPaie();
 
 
     afficherDepenses(
