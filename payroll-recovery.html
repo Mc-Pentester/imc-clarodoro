@@ -53,8 +53,8 @@ function monthText(v){return String(v||"").padStart(2,"0");}
 function amount(v){
   if(v===null||v===undefined||v==="")return 0;
   if(typeof v==="number")return Number.isFinite(v)&&v>=0?v:NaN;
-  let text=String(v).trim().replace(/\\s/g,"").replace(/\\$/g,"").replace(/HT/gi,"");
-  if(text.includes(".")&&text.includes(","))text=text.replace(/\\./g,"").replace(",",".");
+  let text=String(v).trim().replace(/\s/g,"").replace(/\$/g,"").replace(/HT/gi,"");
+  if(text.includes(".")&&text.includes(","))text=text.replace(/\./g,"").replace(",",".");
   else if(text.includes(","))text=text.replace(",",".");
   const n=Number(text);return Number.isFinite(n)&&n>=0?n:NaN;
 }
