@@ -58,7 +58,7 @@ jobs:
           php database/migrate.php --apply
           php database/migrate.php --status
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
-          INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000002001','PDG'), ('00000000-0000-0000-0000-000000002002','VACATION_ARCHIVER');
+          INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000002001','PDG'), ('00000000-0000-0000-0000-000000002002','Autre');
           INSERT INTO permissions(name) VALUES
             ('annees.read'),('annees.create'),('annees.update'),
             ('matieres.read'),('matieres.create'),('matieres.update'),
