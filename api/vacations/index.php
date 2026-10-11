@@ -23,7 +23,7 @@ function validateVacationName(mixed $value): string
     }
 
     $name = trim($value);
-    if ($name === '' || mb_strlen($name, 'UTF-8') > 150) {
+    if ($name === '' || preg_match_all('/./us', $name) > 150) {
         apiError(422, 'name est requis et limité à 150 caractères');
     }
 
