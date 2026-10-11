@@ -200,7 +200,7 @@ jobs:
           ON CONFLICT (id) DO NOTHING;
 
           INSERT INTO staff(id,first_name,last_name,function_name,status)
-          VALUES ('00000000-0000-0000-0000-000000007031','Runtime','Teacher','Enseignant','ACTIVE')
+          VALUES ('00000000-0000-4000-8000-000000007031','Runtime','Teacher','Enseignant','ACTIVE')
           ON CONFLICT (id) DO NOTHING;
           SQL
 
@@ -228,31 +228,31 @@ jobs:
           CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
           test -n "$CSRF"
 
-          CREATE_STATUS="$(curl -sS -o /tmp/payroll-create.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-0000-0000-000000007031","school_year_label":"2026-2027","month":10,"base":1000,"bonuses":100,"deductions":50,"status":"Partiel"}' "$BASE/api/payroll/index.php")"
+          CREATE_STATUS="$(curl -sS -o /tmp/payroll-create.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-4000-8000-000000007031","school_year_label":"2026-2027","month":10,"base":1000,"bonuses":100,"deductions":50,"status":"Partiel"}' "$BASE/api/payroll/index.php")"
           test "$CREATE_STATUS" = '201'
           PAYROLL_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-create.json"),true); echo $d["payroll"]["id"]??"";')"
           test -n "$PAYROLL_ID"
           test "$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-create.json"),true); echo $d["payroll"]["net_amount"]??"";')" = '1050'
 
-          UPDATE_STATUS="$(curl -sS -o /tmp/payroll-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-0000-0000-000000007031","school_year_label":"2026-2027","month":10,"base":1100,"bonuses":50,"deductions":100,"status":"Payé"}' "$BASE/api/payroll/index.php")"
+          UPDATE_STATUS="$(curl -sS -o /tmp/payroll-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-4000-8000-000000007031","school_year_label":"2026-2027","month":10,"base":1100,"bonuses":50,"deductions":100,"status":"Payé"}' "$BASE/api/payroll/index.php")"
           test "$UPDATE_STATUS" = '200'
           test "$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-update.json"),true); echo $d["payroll"]["id"]??"";')" = "$PAYROLL_ID"
           test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$PAYROLL_ID'")" = '1050.00'
-          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_entries WHERE staff_id='00000000-0000-0000-0000-000000007031' AND payroll_month=10")" = '1'
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_entries WHERE staff_id='00000000-0000-4000-8000-000000007031' AND payroll_month=10")" = '1'
 
           LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/payroll/index.php?school_year_label=2026-2027")"
           printf '%s' "$LIST" | grep -q "$PAYROLL_ID"
           printf '%s' "$LIST" | grep -q '"status":"PAID"'
 
           set +e
-          NO_CSRF="$(curl -sS -o /tmp/payroll-no-csrf.json -w '%{http_code}' -b "$COOKIE" -X POST -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-0000-0000-000000007031","school_year_label":"2026-2027","month":10,"base":1,"bonuses":0,"deductions":0,"status":"Payé"}' "$BASE/api/payroll/index.php")"
+          NO_CSRF="$(curl -sS -o /tmp/payroll-no-csrf.json -w '%{http_code}' -b "$COOKIE" -X POST -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-4000-8000-000000007031","school_year_label":"2026-2027","month":10,"base":1,"bonuses":0,"deductions":0,"status":"Payé"}' "$BASE/api/payroll/index.php")"
           set -e
           test "$NO_CSRF" = '403'
 
           READ_LOGIN="$(curl -fsS -c /tmp/payroll-read.cookies -b /tmp/payroll-read.cookies -H 'Content-Type: application/json' -d '{"username":"payroll-readonly","password":"Payroll-Read-2026!"}' "$BASE/api/auth/login.php")"
           READ_CSRF="$(printf '%s' "$READ_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
           set +e
-          DENIED="$(curl -sS -o /tmp/payroll-denied.json -w '%{http_code}' -c /tmp/payroll-read.cookies -b /tmp/payroll-read.cookies -X POST -H "X-CSRF-Token: $READ_CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-0000-0000-000000007031","school_year_label":"2026-2027","month":10,"base":999,"bonuses":0,"deductions":0,"status":"Payé"}' "$BASE/api/payroll/index.php")"
+          DENIED="$(curl -sS -o /tmp/payroll-denied.json -w '%{http_code}' -c /tmp/payroll-read.cookies -b /tmp/payroll-read.cookies -X POST -H "X-CSRF-Token: $READ_CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-4000-8000-000000007031","school_year_label":"2026-2027","month":10,"base":999,"bonuses":0,"deductions":0,"status":"Payé"}' "$BASE/api/payroll/index.php")"
           set -e
           test "$DENIED" = '403'
           test "$(psql "$DB" -Atqc "SELECT base_amount::text FROM payroll_entries WHERE id='$PAYROLL_ID'")" = '1100.00'
