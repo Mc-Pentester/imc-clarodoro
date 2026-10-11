@@ -10,6 +10,14 @@ on:
       - 'database/migrations/**'
       - 'database/schema.sql'
       - '.github/workflows/f02-b-runtime.yml'
+  pull_request:
+    paths:
+      - 'api/school-years/index.php'
+      - 'api/subjects/index.php'
+      - 'api/vacations/index.php'
+      - 'database/migrations/**'
+      - 'database/schema.sql'
+      - '.github/workflows/f02-b-runtime.yml'
   workflow_dispatch:
 
 permissions:
