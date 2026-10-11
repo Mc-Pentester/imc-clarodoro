@@ -74,7 +74,7 @@ jobs:
           import re
           from pathlib import Path
           html = Path("PDG.html").read_text(encoding="utf-8")
-          scripts = [s for s in re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
+          scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
           if not scripts:
               raise SystemExit("No inline JavaScript found in PDG.html")
           for i, script in enumerate(scripts):
