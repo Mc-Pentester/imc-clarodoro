@@ -1,0 +1,171 @@
+name: Student badges PostgreSQL runtime proof
+
+on:
+  push:
+    branches: [main, test/student-badges-postgres-runtime]
+    paths:
+      - 'api/badges/index.php'
+      - 'api/auth/login.php'
+      - 'config/auth.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - '.github/workflows/student-badges-runtime.yml'
+  pull_request:
+    paths:
+      - 'api/badges/index.php'
+      - 'api/auth/login.php'
+      - 'config/auth.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - '.github/workflows/student-badges-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  badges-runtime:
+    name: Badge save, RBAC, CSRF and PostgreSQL persistence
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL extension and client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client curl
+
+      - name: Apply schema and badge migration twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_URL="postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261006200000_normalize_rbac_role_names.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261007100000_add_student_profile_data.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261011170000_add_student_badges.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261011170000_add_student_badges.sql
+
+      - name: Seed isolated runtime fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name) VALUES
+            ('00000000-0000-0000-0000-000000008001', 'PDG'),
+            ('00000000-0000-0000-0000-000000008002', 'Secrétaire');
+
+          INSERT INTO permissions (id, name) VALUES
+            ('00000000-0000-0000-0000-000000008003', 'badge.create')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO role_permissions (role_id, permission_id)
+          SELECT '00000000-0000-0000-0000-000000008001', id
+          FROM permissions WHERE name = 'badge.create'
+          ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+          INSERT INTO users (id, username, password_hash, role_id)
+          VALUES
+            ('00000000-0000-0000-0000-000000008004', 'badge-pdg', crypt('Badge-PDG-2026!', gen_salt('bf')), '00000000-0000-0000-0000-000000008001'),
+            ('00000000-0000-0000-0000-000000008005', 'badge-secretary', crypt('Badge-Secretary-2026!', gen_salt('bf')), '00000000-0000-0000-0000-000000008002');
+
+          INSERT INTO students (id, matricule, last_name, first_name, sex)
+          VALUES ('00000000-0000-0000-0000-000000008006', 'BADGE-RT-001', 'Test', 'Badge', 'M');
+          SQL
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l api/badges/index.php
+          php -l api/auth/login.php
+          php -l config/auth.php
+
+      - name: Start API
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/badges-php.log 2>&1 &
+          echo $! >/tmp/badges-php.pid
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/badges-php.log
+          exit 1
+
+      - name: Prove authorized save, database persistence, and denied role
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='http://127.0.0.1:8090'
+
+          LOGIN="$(curl -fsS -c /tmp/badge-pdg.cookies -b /tmp/badge-pdg.cookies \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"badge-pdg","password":"Badge-PDG-2026!"}' \
+            "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["csrfToken"] ?? "";')"
+          test -n "$CSRF"
+
+          SAVE="$(curl -fsS -c /tmp/badge-pdg.cookies -b /tmp/badge-pdg.cookies \
+            -H "X-CSRF-Token: $CSRF" \
+            -H 'Content-Type: application/json' \
+            -d '{"student_id":"00000000-0000-0000-0000-000000008006","badge_data":{"matricule":"BADGE-RT-001","nom":"Test","prenom":"Badge","photo":""}}' \
+            "$BASE/api/badges/index.php")"
+          printf '%s' "$SAVE" | grep -q '"success":true'
+          printf '%s' "$SAVE" | grep -q '"student_id":"00000000-0000-0000-0000-000000008006"'
+
+          DB_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM student_badges WHERE student_id = '00000000-0000-0000-0000-000000008006' AND badge_data->>'matricule' = 'BADGE-RT-001';")"
+          test "$DB_COUNT" = "1"
+
+          LOGIN_DENIED="$(curl -fsS -c /tmp/badge-secretary.cookies -b /tmp/badge-secretary.cookies \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"badge-secretary","password":"Badge-Secretary-2026!"}' \
+            "$BASE/api/auth/login.php")"
+          CSRF_DENIED="$(printf '%s' "$LOGIN_DENIED" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["csrfToken"] ?? "";')"
+          test -n "$CSRF_DENIED"
+          STATUS="$(curl -sS -o /tmp/badge-denied.json -w '%{http_code}' \
+            -c /tmp/badge-secretary.cookies -b /tmp/badge-secretary.cookies \
+            -H "X-CSRF-Token: $CSRF_DENIED" \
+            -H 'Content-Type: application/json' \
+            -d '{"student_id":"00000000-0000-0000-0000-000000008006","badge_data":{"matricule":"DENIED"}}' \
+            "$BASE/api/badges/index.php")"
+          test "$STATUS" = "403"
+          grep -q 'Permission insuffisante' /tmp/badge-denied.json
+
+          STATUS="$(curl -sS -o /tmp/badge-csrf.json -w '%{http_code}' \
+            -c /tmp/badge-pdg.cookies -b /tmp/badge-pdg.cookies \
+            -H 'Content-Type: application/json' \
+            -d '{"student_id":"00000000-0000-0000-0000-000000008006","badge_data":{"matricule":"NO-CSRF"}}' \
+            "$BASE/api/badges/index.php")"
+          test "$STATUS" = "403"
+
+          echo 'STUDENT BADGES RUNTIME PROOF: PASS'
