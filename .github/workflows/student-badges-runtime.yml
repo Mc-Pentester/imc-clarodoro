@@ -79,7 +79,7 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (id, name) VALUES
             ('00000000-0000-0000-0000-000000008001', 'PDG'),
-            ('00000000-0000-0000-0000-000000008002', 'Secretaire');
+            ('00000000-0000-0000-0000-000000008002', 'Secrétaire');
 
           INSERT INTO permissions (id, name) VALUES
             ('00000000-0000-0000-0000-000000008003', 'badge.create')
@@ -146,7 +146,6 @@ jobs:
           DB_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM student_badges WHERE student_id = '00000000-0000-0000-0000-000000008006' AND badge_data->>'matricule' = 'BADGE-RT-001';")"
           test "$DB_COUNT" = "1"
 
-          # A valid authenticated user without badge.create must be denied.
           LOGIN_DENIED="$(curl -fsS -c /tmp/badge-secretary.cookies -b /tmp/badge-secretary.cookies \
             -H 'Content-Type: application/json' \
             -d '{"username":"badge-secretary","password":"Badge-Secretary-2026!"}' \
@@ -162,7 +161,6 @@ jobs:
           test "$STATUS" = "403"
           grep -q 'Permission insuffisante' /tmp/badge-denied.json
 
-          # Mutation without CSRF token must be rejected.
           STATUS="$(curl -sS -o /tmp/badge-csrf.json -w '%{http_code}' \
             -c /tmp/badge-pdg.cookies -b /tmp/badge-pdg.cookies \
             -H 'Content-Type: application/json' \
