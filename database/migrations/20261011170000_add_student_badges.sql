@@ -25,6 +25,6 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r
 CROSS JOIN permissions p
-WHERE r.name IN ('PDG', 'Directeur')
+WHERE r.name = 'PDG'
   AND p.name = 'badge.create'
 ON CONFLICT (role_id, permission_id) DO NOTHING;
