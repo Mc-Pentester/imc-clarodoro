@@ -67,6 +67,22 @@ jobs:
           php -l api/expenses/index.php
           php -l config/auth.php
 
+      - name: Check embedded PDG JavaScript syntax
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("PDG.html").read_text(encoding="utf-8")
+          scripts = [s for s in re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
+          if not scripts:
+              raise SystemExit("No inline JavaScript found in PDG.html")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/pdg-inline-{i}.js").write_text(script, encoding="utf-8")
+          print(f"Extracted {len(scripts)} inline script(s)")
+          PY
+          for file in /tmp/pdg-inline-*.js; do node --check "$file"; done
+
       - name: Start API
         run: |
           set -euo pipefail
