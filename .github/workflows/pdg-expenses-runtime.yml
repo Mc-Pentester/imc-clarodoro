@@ -87,10 +87,17 @@ jobs:
           CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
           test -n "$CSRF"
 
-          CREATE="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"school_year_label":"EXP-2026-2027","description":"Runtime test expense","amount":123.45,"expense_date":"2026-10-12"}' "$BASE/api/expenses/index.php")"
+          CREATE="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"school_year_label":"EXP-2026-2027","description":"Runtime test expense","amount":123.45,"expense_date":"2026-10-12","legacy_id":"legacy-runtime-001"}' "$BASE/api/expenses/index.php")"
           printf '%s' "$CREATE" | grep -q '"amount":123.45'
           EXPENSE_ID="$(printf '%s' "$CREATE" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["expense"]["id"]??"";')"
           test -n "$EXPENSE_ID"
+
+          REIMPORT="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"school_year_label":"EXP-2026-2027","description":"Runtime test expense","amount":123.45,"expense_date":"2026-10-12","legacy_id":"legacy-runtime-001"}' "$BASE/api/expenses/index.php")"
+          printf '%s' "$REIMPORT" | grep -q '"created":false'
+          REIMPORT_ID="$(printf '%s' "$REIMPORT" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["expense"]["id"]??"";')"
+          test "$REIMPORT_ID" = "$EXPENSE_ID"
+          LEGACY_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM expenses WHERE school_year_id='00000000-0000-0000-0000-000000006021' AND legacy_id='legacy-runtime-001';")"
+          test "$LEGACY_COUNT" = '1'
 
           LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/expenses/index.php?school_year_label=EXP-2026-2027")"
           printf '%s' "$LIST" | grep -q "$EXPENSE_ID"
