@@ -131,3 +131,129 @@ jobs:
           DB_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM expenses WHERE id='$EXPENSE_ID';")"
           test "$DB_COUNT" = '0'
           echo 'PDG EXPENSES POSTGRESQL RUNTIME PROOF: PASS'
+
+
+  payroll-runtime:
+    name: Payroll API and PostgreSQL persistence
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema and seed isolated payroll fixtures
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles(id,name) VALUES
+            ('00000000-0000-0000-0000-000000007001','PDG'),
+            ('00000000-0000-0000-0000-000000007002','Autre')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO permissions(name,description) VALUES
+            ('paies.read','Read payroll'),
+            ('paies.create','Create payroll'),
+            ('paies.update','Update payroll')
+          ON CONFLICT (name) DO NOTHING;
+
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000007001',id
+          FROM permissions WHERE name IN ('paies.read','paies.create','paies.update')
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000007002',id
+          FROM permissions WHERE name = 'paies.read'
+          ON CONFLICT DO NOTHING;
+
+          INSERT INTO users(id,username,password_hash,role_id,status) VALUES
+            ('00000000-0000-0000-0000-000000007011','payroll-runtime',crypt('Payroll-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007001','ACTIVE'),
+            ('00000000-0000-0000-0000-000000007012','payroll-readonly',crypt('Payroll-Read-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007002','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO school_years(id,label,start_date,end_date,status)
+          VALUES ('00000000-0000-0000-0000-000000007021','2026-2027','2026-09-01','2027-07-15','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO staff(id,first_name,last_name,function_name,status)
+          VALUES ('00000000-0000-4000-8000-000000007031','Runtime','Teacher','Enseignant','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+
+      - name: PHP syntax
+        run: php -l api/payroll/index.php
+
+      - name: Start API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/payroll-api.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove payroll CRUD, generated net, RBAC and CSRF
+        run: |
+          set -Eeuo pipefail
+          trap 'rc=$?; echo "::error::Payroll runtime failed rc=$rc command=[$BASH_COMMAND]"; cat /tmp/payroll-api.log 2>/dev/null || true; exit $rc' ERR
+          BASE='http://127.0.0.1:8090'
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          COOKIE='/tmp/payroll.cookies'
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -d '{"username":"payroll-runtime","password":"Payroll-Test-2026!"}' "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+
+          CREATE_STATUS="$(curl -sS -o /tmp/payroll-create.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-4000-8000-000000007031","school_year_label":"2026-2027","month":10,"base":1000,"bonuses":100,"deductions":50,"status":"Partiel"}' "$BASE/api/payroll/index.php")"
+          test "$CREATE_STATUS" = '201'
+          PAYROLL_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-create.json"),true); echo $d["payroll"]["id"]??"";')"
+          test -n "$PAYROLL_ID"
+          test "$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-create.json"),true); echo $d["payroll"]["net_amount"]??"";')" = '1050'
+
+          UPDATE_STATUS="$(curl -sS -o /tmp/payroll-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-4000-8000-000000007031","school_year_label":"2026-2027","month":10,"base":1100,"bonuses":50,"deductions":100,"status":"Payé"}' "$BASE/api/payroll/index.php")"
+          test "$UPDATE_STATUS" = '200'
+          test "$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-update.json"),true); echo $d["payroll"]["id"]??"";')" = "$PAYROLL_ID"
+          test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$PAYROLL_ID'")" = '1050.00'
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_entries WHERE staff_id='00000000-0000-4000-8000-000000007031' AND payroll_month=10")" = '1'
+
+          LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/payroll/index.php?school_year_label=2026-2027")"
+          printf '%s' "$LIST" | grep -q "$PAYROLL_ID"
+          printf '%s' "$LIST" | grep -q '"status":"PAID"'
+
+          set +e
+          NO_CSRF="$(curl -sS -o /tmp/payroll-no-csrf.json -w '%{http_code}' -b "$COOKIE" -X POST -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-4000-8000-000000007031","school_year_label":"2026-2027","month":10,"base":1,"bonuses":0,"deductions":0,"status":"Payé"}' "$BASE/api/payroll/index.php")"
+          set -e
+          test "$NO_CSRF" = '403'
+
+          READ_LOGIN="$(curl -fsS -c /tmp/payroll-read.cookies -b /tmp/payroll-read.cookies -H 'Content-Type: application/json' -d '{"username":"payroll-readonly","password":"Payroll-Read-2026!"}' "$BASE/api/auth/login.php")"
+          READ_CSRF="$(printf '%s' "$READ_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          set +e
+          DENIED="$(curl -sS -o /tmp/payroll-denied.json -w '%{http_code}' -c /tmp/payroll-read.cookies -b /tmp/payroll-read.cookies -X POST -H "X-CSRF-Token: $READ_CSRF" -H 'Content-Type: application/json' -d '{"staff_id":"00000000-0000-4000-8000-000000007031","school_year_label":"2026-2027","month":10,"base":999,"bonuses":0,"deductions":0,"status":"Payé"}' "$BASE/api/payroll/index.php")"
+          set -e
+          test "$DENIED" = '403'
+          test "$(psql "$DB" -Atqc "SELECT base_amount::text FROM payroll_entries WHERE id='$PAYROLL_ID'")" = '1100.00'
+          echo 'PAYROLL POSTGRESQL RUNTIME PROOF: PASS'
