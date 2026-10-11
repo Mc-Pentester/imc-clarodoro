@@ -1391,7 +1391,7 @@ function imprimerBadge(){
    ENREGISTRER LE BADGE
 ========================= */
 
-function enregistrerBadge(){
+async function enregistrerBadge(){
 
     if (!IMCAuth.requirePermission("badge.create")) {
         return;
@@ -1407,6 +1407,46 @@ function enregistrerBadge(){
 
     }
 
+
+    const studentId = eleveSelectionne && eleveSelectionne.id;
+    if (!studentId) {
+        alert("Impossible d'enregistrer le badge : identifiant élève manquant.");
+        return;
+    }
+
+    const badgePayload = {
+        student_id: String(studentId),
+        badge_data: {
+            matricule: String(eleveSelectionne.matricule || ""),
+            nom: obtenirNom(eleveSelectionne),
+            prenom: obtenirPrenom(eleveSelectionne),
+            adresse: obtenirAdresse(eleveSelectionne),
+            telephone: obtenirTelephone(eleveSelectionne),
+            classe: obtenirClasse(eleveSelectionne),
+            annee_scolaire: obtenirValeur(eleveSelectionne, ["annee_scolaire", "annee", "school_year"]),
+            photo: obtenirPhoto(eleveSelectionne)
+        }
+    };
+
+    let saveResponse;
+    let savePayload;
+    try {
+        saveResponse = await fetch("api/badges/index.php", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify(badgePayload)
+        });
+        savePayload = await saveResponse.json();
+    } catch (error) {
+        alert("Le badge n'a pas pu être enregistré sur le serveur. Vérifiez la connexion et réessayez.");
+        return;
+    }
+
+    if (!saveResponse.ok || !savePayload || !savePayload.success || !savePayload.badge) {
+        alert((savePayload && (savePayload.error || savePayload.message)) || "Échec de l'enregistrement du badge sur le serveur.");
+        return;
+    }
 
     const badge =
         document.getElementById("badge");
@@ -1568,7 +1608,7 @@ ${badgeClone.outerHTML}
 
 
     alert(
-        "Le badge a été enregistré avec succès."
+        "Le badge a été enregistré sur le serveur et le fichier HTML est prêt à être téléchargé."
     );
 
 }
