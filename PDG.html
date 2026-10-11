@@ -2106,7 +2106,11 @@ async function chargerPaiesServeur(force = false) {
                 const staffId = String(paie.personnelId ?? morceaux[1]);
                 const monthText = String(paie.mois ?? morceaux[2]).padStart(2, "0");
                 if (legacyYear !== anneeNormalisee || !/^(0[1-9]|1[0-2])$/.test(monthText)) continue;
-                if (!personnelIds.has(staffId)) continue;
+                if (!personnelIds.has(staffId)) {
+                    const warning = "Des paies historiques ne correspondent à aucun membre du personnel disponible sur le serveur; elles restent locales et n’ont pas été effacées.";
+                    if (!avertissements.includes(warning)) avertissements.push(warning);
+                    continue;
+                }
                 const key = clePaie(anneeNormalisee, staffId, monthText);
                 if (parCle.has(key)) continue;
 
