@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reprise des paies historiques — IMC-Clarodoro</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#172033;background:#f1f5f9}
+*{box-sizing:border-box}body{margin:0}header{background:#12355b;color:#fff;padding:1.25rem clamp(1rem,4vw,3rem)}
+main{max-width:1100px;margin:1.5rem auto;padding:0 1rem 3rem}.card{background:#fff;border-radius:12px;padding:1.25rem;margin:1rem 0;box-shadow:0 3px 12px #0f172a12}
+h1{margin:.1rem 0;font-size:1.5rem}h2{margin-top:0;color:#12355b;font-size:1.15rem}
+.notice{padding:.85rem 1rem;border-left:4px solid #2563eb;background:#eff6ff;border-radius:6px}
+.warning{border-color:#d97706;background:#fffbeb}.error{border-color:#dc2626;background:#fef2f2}.success{border-color:#15803d;background:#f0fdf4}
+button,select{font:inherit;padding:.65rem .8rem;border:1px solid #cbd5e1;border-radius:7px}
+button{cursor:pointer;background:#12355b;color:white;border-color:#12355b;font-weight:650}button:disabled{opacity:.45;cursor:not-allowed}
+button.secondary{background:white;color:#12355b}.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,260px);gap:1rem;align-items:center}
+.record{border:1px solid #dbe3ee;border-radius:9px;padding:1rem;margin:.75rem 0}.meta{color:#475569;font-size:.92rem}.actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.75rem}
+label{display:block;font-weight:600;margin-bottom:.35rem}select{width:100%;background:#fff}.muted{color:#64748b}#status{white-space:pre-wrap}
+@media(max-width:650px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>Reprise contrôlée des paies historiques</h1><p>IMC-Clarodoro · Accès réservé au PDG</p></header>
+<main>
+<section class="card">
+<h2>Avant tout rapprochement</h2>
+<p>Les anciennes paies restent dans ce navigateur. Téléchargez une copie complète de la source locale et vérifiez le fichier avant d’activer les imports. Cette page ne supprime ni ne modifie les données locales.</p>
+<div class="notice warning" id="backupNotice">La sauvegarde n’est pas encore confirmée. L’import est désactivé.</div>
+<div class="actions">
+<button id="exportBackup" type="button">Télécharger la sauvegarde JSON</button>
+<label style="display:flex;gap:.5rem;align-items:center;font-weight:500"><input id="confirmBackup" type="checkbox" disabled> J’ai vérifié que la sauvegarde a été téléchargée.</label>
+</div>
+</section>
+<section class="card">
+<h2>Paies historiques à rapprocher</h2>
+<p id="summary" class="muted">Vérification de la session et des données…</p>
+<div id="status" role="status" aria-live="polite"></div>
+<div id="records"></div>
+</section>
+<div class="actions"><button class="secondary" type="button" onclick="window.location.href='PDG.html'">Retour au tableau PDG</button></div>
+</main>
+<script src="auth.js"></script>
+<script>
+(function(){
+"use strict";
+const LEGACY_KEY="imc_paies_personnel";
+let legacy={}; let staff=[]; let audits=[]; let backupConfirmed=false;
+const $=id=>document.getElementById(id);
+function status(message,kind){const el=$("status");el.textContent=message;el.className=kind?"notice "+kind:"";}
+function readLegacy(){try{const raw=localStorage.getItem(LEGACY_KEY);const value=raw?JSON.parse(raw):{};return value&&typeof value==="object"&&!Array.isArray(value)?value:{};}catch(_){throw new Error("Les données locales de paie sont illisibles. Aucune donnée n’a été modifiée.");}}
+function normalizedYear(v){return String(v||"").replace(/\s/g,"");}
+function monthText(v){return String(v||"").padStart(2,"0");}
+function amount(v){
+  if(v===null||v===undefined||v==="")return 0;
+  if(typeof v==="number")return Number.isFinite(v)&&v>=0?v:NaN;
+  let text=String(v).trim().replace(/\s/g,"").replace(/\$/g,"").replace(/HT/gi,"");
+  if(text.includes(".")&&text.includes(","))text=text.replace(/\./g,"").replace(",",".");
+  else if(text.includes(","))text=text.replace(",",".");
+  const n=Number(text);return Number.isFinite(n)&&n>=0?n:NaN;
+}
+function recordInfo(key,entry){const parts=String(key).split("|");return {key:String(key),year:normalizedYear(entry.annee||parts[0]),sourceId:String(entry.personnelId??parts[1]??""),month:monthText(entry.mois??parts[2]),base:amount(entry.base),bonuses:amount(entry.primes),deductions:amount(entry.deductions),status:String(entry.statut||"Non payé")};}
+async function hashKey(key){const bytes=new TextEncoder().encode(key);const digest=await crypto.subtle.digest("SHA-256",bytes);return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");}
+async function load(){
+  const user=await IMCAuth.verifySession();
+  if(!user||String(user.role).toUpperCase()!=="PDG"){status("Accès réservé à une session PDG active. Connectez-vous puis revenez à cette page.","error");$("summary").textContent="Accès refusé";return;}
+  try{
+    legacy=readLegacy();
+    const [peopleResponse,auditResponse]=await Promise.all([
+      fetch("/api/personnel/index.php",{credentials:"same-origin",cache:"no-store",headers:{Accept:"application/json"}}),
+      fetch("/api/payroll/reconcile.php",{credentials:"same-origin",cache:"no-store",headers:{Accept:"application/json"}})
+    ]);
+    const peoplePayload=await peopleResponse.json();const auditPayload=await auditResponse.json();
+    if(!peopleResponse.ok||!peoplePayload.success)throw new Error(peoplePayload.error||"Impossible de charger le personnel.");
+    if(!auditResponse.ok||!auditPayload.success)throw new Error(auditPayload.error||"Impossible de charger l’historique des rapprochements.");
+    staff=Array.isArray(peoplePayload.personnel)?peoplePayload.personnel:[];
+    audits=Array.isArray(auditPayload.reconciliations)?auditPayload.reconciliations:[];
+    render();
+  }catch(error){status(error.message||"Chargement impossible.","error");}
+}
+function getUnmatched(){
+  const ids=new Set(staff.map(p=>String(p.id)));
+  return Object.entries(legacy).filter(([key,value])=>{
+    if(!value||typeof value!=="object"||Array.isArray(value))return false;
+    const r=recordInfo(key,value);
+    return /^\d{4}-\d{4}$/.test(r.year)&&/^(0[1-9]|1[0-2])$/.test(r.month)&&r.sourceId!==""&&!ids.has(r.sourceId);
+  }).map(([key,value])=>({key,source:value,record:recordInfo(key,value)}));
+}
+function staffName(p){return [p.first_name,p.last_name].filter(Boolean).join(" ")+" — "+String(p.function_name||p.role_name||"Personnel");}
+async function render(){
+  const unmatched=getUnmatched();const auditHashes=new Set(audits.map(a=>String(a.source_key_hash).trim()));
+  const rows=await Promise.all(unmatched.map(async item=>({...item,hash:await hashKey(item.key)})));
+  const pending=rows.filter(r=>!auditHashes.has(r.hash));
+  $("summary").textContent=unmatched.length+" entrée(s) locale(s) non rapprochée(s) · "+pending.length+" à traiter · "+(unmatched.length-pending.length)+" déjà importée(s) côté serveur.";
+  const root=$("records");root.replaceChildren();
+  if(!rows.length){root.textContent="Aucune paie historique non rapprochée détectée pour le format reconnu.";return;}
+  rows.forEach(item=>{
+    const card=document.createElement("article");card.className="record";
+    const title=document.createElement("h3");title.textContent="Année "+item.record.year+" · "+item.record.month+" · Identifiant historique "+item.record.sourceId;card.appendChild(title);
+    const detail=document.createElement("p");detail.className="meta";detail.textContent="Base : "+item.record.base.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Primes : "+item.record.bonuses.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Déductions : "+item.record.deductions.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Statut : "+item.record.status;card.appendChild(detail);
+    if(auditHashes.has(item.hash)){const done=document.createElement("p");done.className="notice success";done.textContent="Cette source a déjà été importée. Les données locales sont conservées.";card.appendChild(done);root.appendChild(card);return;}
+    if(![item.record.base,item.record.bonuses,item.record.deductions].every(n=>Number.isFinite(n)&&n>=0)){
+      const invalid=document.createElement("p");invalid.className="notice error";invalid.textContent="Au moins un montant historique est illisible. Aucun import n’est proposé pour éviter de modifier la valeur source; exportez la sauvegarde et corrigez la donnée après vérification.";card.appendChild(invalid);root.appendChild(card);return;
+    }
+    const row=document.createElement("div");row.className="row";
+    const label=document.createElement("label");label.textContent="Choisir explicitement le membre du personnel";label.htmlFor="target-"+item.hash;
+    const select=document.createElement("select");select.id="target-"+item.hash;
+    const placeholder=document.createElement("option");placeholder.value="";placeholder.textContent="— Sélection obligatoire —";select.appendChild(placeholder);
+    staff.forEach(person=>{const option=document.createElement("option");option.value=String(person.id);option.textContent=staffName(person);select.appendChild(option);});
+    row.append(label,select);card.appendChild(row);
+    const confirm=document.createElement("button");confirm.type="button";confirm.textContent="Confirmer et importer cette paie";confirm.disabled=true;
+    const sync=()=>{confirm.disabled=!backupConfirmed||!select.value;};select.addEventListener("change",sync);
+    confirm.addEventListener("click",async()=>{
+      const target=select.value;if(!backupConfirmed||!target)return;
+      const person=staff.find(p=>String(p.id)===target);if(!person)return;
+      if(!window.confirm("Confirmer l’import de la paie de "+item.record.year+"/"+item.record.month+" vers "+staffName(person)+" ? Cette action sera journalisée et ne modifiera pas la source locale."))return;
+      confirm.disabled=true;
+      try{
+        const response=await fetch("/api/payroll/reconcile.php",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({source_key:item.key,source_staff_id:item.record.sourceId,target_staff_id:target,school_year_label:item.record.year,month:Number(item.record.month),base:item.record.base,bonuses:item.record.bonuses,deductions:item.record.deductions,status:item.record.status})});
+        const payload=await response.json();
+        if(!response.ok||!payload.success)throw new Error(payload.error||"Import refusé.");
+        status(payload.created?"Paie importée et rapprochement journalisé. La source locale est conservée.":"Cette paie avait déjà été importée. Aucun doublon créé; la source locale est conservée.","success");
+        const audit=await fetch("/api/payroll/reconcile.php",{credentials:"same-origin",cache:"no-store"});const auditData=await audit.json();if(audit.ok&&auditData.success)audits=auditData.reconciliations||[];
+        await render();
+      }catch(error){status(error.message||"Import impossible. Les données locales sont conservées.","error");confirm.disabled=false;}
+    });
+    const actions=document.createElement("div");actions.className="actions";actions.appendChild(confirm);card.appendChild(actions);
+    if(!backupConfirmed){const hint=document.createElement("p");hint.className="muted";hint.textContent="Téléchargez et confirmez d’abord la sauvegarde complète pour activer l’import.";card.appendChild(hint);}
+    root.appendChild(card);
+  });
+}
+$("exportBackup").addEventListener("click",()=>{
+  try{
+    const snapshot={format:"imc-clarodoro-payroll-backup-v1",exportedAt:new Date().toISOString(),storageKey:LEGACY_KEY,records:readLegacy()};
+    const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:"application/json;charset=utf-8"});
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="imc-clarodoro-paies-historiques-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    $("confirmBackup").disabled=false;$("backupNotice").textContent="Fichier de sauvegarde généré. Vérifiez le fichier téléchargé puis cochez la confirmation.";status("La sauvegarde a été générée. L’import reste bloqué jusqu’à confirmation explicite.","success");
+  }catch(error){status(error.message||"Impossible de créer la sauvegarde.","error");}
+});
+$("confirmBackup").addEventListener("change",async event=>{backupConfirmed=event.target.checked;if(backupConfirmed){$("backupNotice").textContent="Sauvegarde confirmée. Les rapprochements manuels sont activés.";status("Sauvegarde confirmée. Chaque rapprochement exigera encore une confirmation.","success");}else{$("backupNotice").textContent="La sauvegarde n’est pas encore confirmée. L’import est désactivé.";}await render();});
+load();
+})();
+</script>
+</body>
+</html>

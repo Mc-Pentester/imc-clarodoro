@@ -1,0 +1,138 @@
+name: Payroll legacy reconciliation runtime proof
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  payroll-reconciliation:
+    name: Payroll reconciliation PostgreSQL, idempotency and authorization
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP PostgreSQL and Node
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client nodejs
+
+      - name: Apply schema, migrations and isolated fixtures
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          php database/migrate.php --apply
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles(id,name) VALUES
+            ('00000000-0000-0000-0000-000000008001','PDG'),
+            ('00000000-0000-0000-0000-000000008002','Autre')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO users(id,username,password_hash,role_id,status) VALUES
+            ('00000000-0000-0000-0000-000000008011','reconcile-runtime',crypt('Reconcile-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000008001','ACTIVE'),
+            ('00000000-0000-0000-0000-000000008012','reconcile-other',crypt('Reconcile-Other-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000008002','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO school_years(id,label,start_date,end_date,status)
+          VALUES ('00000000-0000-0000-0000-000000008021','2026-2027','2026-09-01','2027-07-15','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO staff(id,first_name,last_name,function_name,status)
+          VALUES ('00000000-0000-4000-8000-000000008031','Reconcile','Target','Enseignant','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000008001',id FROM permissions
+          WHERE name IN ('paies.read','paies.create','paies.update','paies.reconcile')
+          ON CONFLICT DO NOTHING;
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000008002',id FROM permissions
+          WHERE name = 'paies.read'
+          ON CONFLICT DO NOTHING;
+          SQL
+
+      - name: PHP and UI JavaScript syntax
+        run: |
+          set -euo pipefail
+          php -l api/payroll/reconcile.php
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("payroll-recovery.html").read_text(encoding="utf-8")
+          scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
+          if not scripts:
+              raise SystemExit("No inline JavaScript found in payroll-recovery.html")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/payroll-recovery-{i}.js").write_text(script, encoding="utf-8")
+          PY
+          for file in /tmp/payroll-recovery-*.js; do node --check "$file"; done
+
+      - name: Start API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/payroll-reconcile-api.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove explicit reconciliation, idempotency, audit and authorization
+        run: |
+          set -Eeuo pipefail
+          trap 'rc=$?; echo "::error::Payroll reconciliation runtime failed rc=$rc command=[$BASH_COMMAND]"; cat /tmp/payroll-reconcile-api.log 2>/dev/null || true; exit $rc' ERR
+          BASE='http://127.0.0.1:8090'
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          COOKIE='/tmp/reconcile.cookies'
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -d '{"username":"reconcile-runtime","password":"Reconcile-Test-2026!"}' "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+
+          PAYLOAD='{"source_key":"2026-2027|legacy-staff-404|10","source_staff_id":"legacy-staff-404","target_staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"2026-2027","month":10,"base":1000,"bonuses":75,"deductions":25,"status":"Partiel"}'
+          CREATE_STATUS="$(curl -sS -o /tmp/reconcile-create.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/payroll/reconcile.php")"
+          test "$CREATE_STATUS" = '201'
+          PAYROLL_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/reconcile-create.json"),true); echo $d["payroll_id"]??"";')"
+          test -n "$PAYROLL_ID"
+          test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$PAYROLL_ID'")" = '1050.00'
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_reconciliation_audit WHERE payroll_entry_id='$PAYROLL_ID'")" = '1'
+
+          REIMPORT_STATUS="$(curl -sS -o /tmp/reconcile-again.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/payroll/reconcile.php")"
+          test "$REIMPORT_STATUS" = '200'
+          grep -q '"created":false' /tmp/reconcile-again.json
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_entries WHERE legacy_source_key IS NOT NULL")" = '1'
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_reconciliation_audit")" = '1'
+
+          DUPLICATE_PAYLOAD='{"source_key":"2026-2027|another-legacy-id|10","source_staff_id":"another-legacy-id","target_staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"2026-2027","month":10,"base":1,"bonuses":0,"deductions":0,"status":"UNPAID"}'
+          DUP_STATUS="$(curl -sS -o /tmp/reconcile-duplicate.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$DUPLICATE_PAYLOAD" "$BASE/api/payroll/reconcile.php")"
+          test "$DUP_STATUS" = '409'
+          ABSENT_PAYLOAD='{"source_key":"2026-2027|missing|11","source_staff_id":"missing","target_staff_id":"00000000-0000-4000-8000-000000008099","school_year_label":"2026-2027","month":11,"base":1,"bonuses":0,"deductions":0,"status":"UNPAID"}'
+          ABSENT_STATUS="$(curl -sS -o /tmp/reconcile-absent.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$ABSENT_PAYLOAD" "$BASE/api/payroll/reconcile.php")"
+          test "$ABSENT_STATUS" = '404'
+
+          AUDIT="$(curl -fsS -b "$COOKIE" "$BASE/api/payroll/reconcile.php")"
+          printf '%s' "$AUDIT" | grep -q "$PAYROLL_ID"
+          NO_CSRF="$(curl -sS -o /tmp/reconcile-no-csrf.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/payroll/reconcile.php" || true)"
+          test "$NO_CSRF" = '403'
+          OTHER_LOGIN="$(curl -fsS -c /tmp/reconcile-other.cookies -b /tmp/reconcile-other.cookies -H 'Content-Type: application/json' -d '{"username":"reconcile-other","password":"Reconcile-Other-2026!"}' "$BASE/api/auth/login.php")"
+          OTHER_CSRF="$(printf '%s' "$OTHER_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          DENIED="$(curl -sS -o /tmp/reconcile-denied.json -w '%{http_code}' -c /tmp/reconcile-other.cookies -b /tmp/reconcile-other.cookies -X POST -H "X-CSRF-Token: $OTHER_CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/payroll/reconcile.php")"
+          test "$DENIED" = '403'
+          echo 'PAYROLL LEGACY RECONCILIATION RUNTIME PROOF: PASS'
