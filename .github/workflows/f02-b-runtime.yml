@@ -10,6 +10,14 @@ on:
       - 'database/migrations/**'
       - 'database/schema.sql'
       - '.github/workflows/f02-b-runtime.yml'
+  pull_request:
+    paths:
+      - 'api/school-years/index.php'
+      - 'api/subjects/index.php'
+      - 'api/vacations/index.php'
+      - 'database/migrations/**'
+      - 'database/schema.sql'
+      - '.github/workflows/f02-b-runtime.yml'
   workflow_dispatch:
 
 permissions:
@@ -50,17 +58,21 @@ jobs:
           php database/migrate.php --apply
           php database/migrate.php --status
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
-          INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000002001','PDG');
+          INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000002001','PDG'), ('00000000-0000-0000-0000-000000002002','Autre');
           INSERT INTO permissions(name) VALUES
             ('annees.read'),('annees.create'),('annees.update'),
             ('matieres.read'),('matieres.create'),('matieres.update'),
-            ('vacances.read'),('vacances.create'),('vacances.update')
+            ('vacances.read'),('vacances.create'),('vacances.update'),('vacances.delete')
           ON CONFLICT (name) DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000002001',id FROM permissions
           WHERE name IN ('annees.read','annees.create','annees.update','matieres.read','matieres.create','matieres.update','vacances.read','vacances.create','vacances.update');
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000002002',id FROM permissions
+          WHERE name IN ('vacances.read','vacances.delete');
           INSERT INTO users(id,username,password_hash,role_id)
-          VALUES ('00000000-0000-0000-0000-000000002011','f02b-runtime',crypt('F02B-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000002001');
+          VALUES ('00000000-0000-0000-0000-000000002011','f02b-runtime',crypt('F02B-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000002001'),
+                 ('00000000-0000-0000-0000-000000002012','vacation-archiver',crypt('Archive-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000002002');
           SQL
       - name: PHP syntax
         run: |
@@ -83,9 +95,28 @@ jobs:
           printf '%s' "$SUBJECT" | grep -q '"name":"Mathématiques"'
           VAC="$(curl -fsS -c /tmp/f02b.cookies -b /tmp/f02b.cookies -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"name":"Vacances de Noël","start_date":"2026-12-21","end_date":"2027-01-04"}' http://127.0.0.1:8090/api/vacations/index.php)"
           printf '%s' "$VAC" | grep -q '"name":"Vacances de Noël"'
+          VAC_ID="$(printf '%s' "$VAC" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["vacation"]["id"]??"";')"
+          test -n "$VAC_ID"
           PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT label FROM school_years WHERE label='2026-2027';" | grep -qx '2026-2027'
           PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT name FROM subjects WHERE name='Mathématiques';" | grep -qx 'Mathématiques'
-          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT name FROM vacations WHERE name='Vacances de Noël';" | grep -qx 'Vacances de Noël'
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT name FROM vacations WHERE id='$VAC_ID';" | grep -qx 'Vacances de Noël'
+
+          ARCHIVE_LOGIN="$(curl -fsS -c /tmp/f02b-archiver.cookies -b /tmp/f02b-archiver.cookies -H 'Content-Type: application/json' -d '{"username":"vacation-archiver","password":"Archive-Test-2026!"}' http://127.0.0.1:8090/api/auth/login.php)"
+          ARCHIVE_CSRF="$(printf '%s' "$ARCHIVE_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$ARCHIVE_CSRF"
+
+          set +e
+          EDIT_STATUS="$(curl -sS -o /tmp/f02b-archive-edit.json -w '%{http_code}' -X PATCH -b /tmp/f02b-archiver.cookies -H "X-CSRF-Token: $ARCHIVE_CSRF" -H 'Content-Type: application/json' -d '{"name":"Modification interdite"}' "http://127.0.0.1:8090/api/vacations/index.php?id=$VAC_ID")"
+          set -e
+          test "$EDIT_STATUS" = '403'
+          ARCHIVE="$(curl -fsS -X PATCH -b /tmp/f02b-archiver.cookies -H "X-CSRF-Token: $ARCHIVE_CSRF" -H 'Content-Type: application/json' -d '{"status":"ARCHIVED"}' "http://127.0.0.1:8090/api/vacations/index.php?id=$VAC_ID")"
+          printf '%s' "$ARCHIVE" | grep -q '"status":"ARCHIVED"'
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT status FROM vacations WHERE id='$VAC_ID';" | grep -qx 'ARCHIVED'
+          VAC_LIST="$(curl -fsS -b /tmp/f02b.cookies http://127.0.0.1:8090/api/vacations/index.php)"
+          if printf '%s' "$VAC_LIST" | grep -q "$VAC_ID"; then
+            echo 'Archived vacation unexpectedly appears in active list' >&2
+            exit 1
+          fi
           echo 'F-02-B RUNTIME PROOF: PASS'
 
 # F-02-B: explicit runtime proof retrigger.
