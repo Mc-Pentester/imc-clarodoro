@@ -50,7 +50,14 @@ function status(message,kind){const el=$("status");el.textContent=message;el.cla
 function readLegacy(){try{const raw=localStorage.getItem(LEGACY_KEY);const value=raw?JSON.parse(raw):{};return value&&typeof value==="object"&&!Array.isArray(value)?value:{};}catch(_){throw new Error("Les données locales de paie sont illisibles. Aucune donnée n’a été modifiée.");}}
 function normalizedYear(v){return String(v||"").replace(/\s/g,"");}
 function monthText(v){return String(v||"").padStart(2,"0");}
-function amount(v){const n=Number(v||0);return Number.isFinite(n)&&n>=0?n:0;}
+function amount(v){
+  if(v===null||v===undefined||v==="")return 0;
+  if(typeof v==="number")return Number.isFinite(v)&&v>=0?v:NaN;
+  let text=String(v).trim().replace(/\\s/g,"").replace(/\\$/g,"").replace(/HT/gi,"");
+  if(text.includes(".")&&text.includes(","))text=text.replace(/\\./g,"").replace(",",".");
+  else if(text.includes(","))text=text.replace(",",".");
+  const n=Number(text);return Number.isFinite(n)&&n>=0?n:NaN;
+}
 function recordInfo(key,entry){const parts=String(key).split("|");return {key:String(key),year:normalizedYear(entry.annee||parts[0]),sourceId:String(entry.personnelId??parts[1]??""),month:monthText(entry.mois??parts[2]),base:amount(entry.base),bonuses:amount(entry.primes),deductions:amount(entry.deductions),status:String(entry.statut||"Non payé")};}
 async function hashKey(key){const bytes=new TextEncoder().encode(key);const digest=await crypto.subtle.digest("SHA-256",bytes);return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");}
 async function load(){
@@ -91,6 +98,9 @@ async function render(){
     const title=document.createElement("h3");title.textContent="Année "+item.record.year+" · "+item.record.month+" · Identifiant historique "+item.record.sourceId;card.appendChild(title);
     const detail=document.createElement("p");detail.className="meta";detail.textContent="Base : "+item.record.base.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Primes : "+item.record.bonuses.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Déductions : "+item.record.deductions.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Statut : "+item.record.status;card.appendChild(detail);
     if(auditHashes.has(item.hash)){const done=document.createElement("p");done.className="notice success";done.textContent="Cette source a déjà été importée. Les données locales sont conservées.";card.appendChild(done);root.appendChild(card);return;}
+    if(![item.record.base,item.record.bonuses,item.record.deductions].every(n=>Number.isFinite(n)&&n>=0)){
+      const invalid=document.createElement("p");invalid.className="notice error";invalid.textContent="Au moins un montant historique est illisible. Aucun import n’est proposé pour éviter de modifier la valeur source; exportez la sauvegarde et corrigez la donnée après vérification.";card.appendChild(invalid);root.appendChild(card);return;
+    }
     const row=document.createElement("div");row.className="row";
     const label=document.createElement("label");label.textContent="Choisir explicitement le membre du personnel";label.htmlFor="target-"+item.hash;
     const select=document.createElement("select");select.id="target-"+item.hash;
@@ -122,7 +132,7 @@ $("exportBackup").addEventListener("click",()=>{
   try{
     const snapshot={format:"imc-clarodoro-payroll-backup-v1",exportedAt:new Date().toISOString(),storageKey:LEGACY_KEY,records:readLegacy()};
     const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:"application/json;charset=utf-8"});
-    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="imc-clarodoro-paies-historiques-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="imc-clarodoro-paies-historiques-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
     $("confirmBackup").disabled=false;$("backupNotice").textContent="Fichier de sauvegarde généré. Vérifiez le fichier téléchargé puis cochez la confirmation.";status("La sauvegarde a été générée. L’import reste bloqué jusqu’à confirmation explicite.","success");
   }catch(error){status(error.message||"Impossible de créer la sauvegarde.","error");}
 });
