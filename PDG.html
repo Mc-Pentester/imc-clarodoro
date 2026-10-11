@@ -2748,7 +2748,46 @@ function totalSalairesAnnee() {
    TABLEAU DE BORD
 ============================================================ */
 
-function chargerTableauDeBord() {
+let depensesServeur = [];
+let chargementDepensesEnCours = false;
+
+async function chargerDepensesServeur() {
+    if (chargementDepensesEnCours) return depensesServeur;
+    chargementDepensesEnCours = true;
+    try {
+        const legacy = lireJSON(CLE_DEPENSES, {});
+        const historiques = Array.isArray(legacy[anneeConnectee]) ? legacy[anneeConnectee] : [];
+        for (const item of historiques) {
+            if (!item || item.id === undefined || item.id === null) continue;
+            const response = await fetch('/api/expenses/index.php', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    school_year_label: anneeConnectee,
+                    description: String(item.description || ''),
+                    amount: nombreMontant(item.montant ?? item.amount),
+                    expense_date: String(item.date || item.expense_date || ''),
+                    legacy_id: String(item.id)
+                })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.error || 'Import des dépenses historiques impossible.');
+        }
+        const response = await fetch('/api/expenses/index.php?school_year_label=' + encodeURIComponent(anneeConnectee), {
+            credentials: 'include', headers: { 'Accept': 'application/json' }, cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Chargement des dépenses impossible.');
+        depensesServeur = (Array.isArray(payload.expenses) ? payload.expenses : []).map(item => ({
+            id: String(item.id), legacy_id: item.legacy_id == null ? null : String(item.legacy_id),
+            description: item.description, montant: Number(item.amount),
+            date: String(item.expense_date || '').slice(0, 10)
+        }));
+        return depensesServeur;
+    } finally { chargementDepensesEnCours = false; }
+}
+
+async function chargerTableauDeBord() {
 
     const select =
         document.getElementById(
@@ -2780,11 +2819,16 @@ function chargerTableauDeBord() {
         );
 
 
-    const depenses =
-        lireJSON(
-            CLE_DEPENSES,
-            {}
-        );
+    let depensesAnnee = [];
+    try {
+        depensesAnnee = await chargerDepensesServeur();
+        document.getElementById("messageDepense").textContent = "";
+    } catch (error) {
+        const locales = lireJSON(CLE_DEPENSES, {});
+        depensesAnnee = Array.isArray(locales[anneeConnectee]) ? locales[anneeConnectee] : [];
+        document.getElementById("messageDepense").textContent =
+            "Serveur indisponible : affichage local en lecture seule. " + (error.message || "");
+    }
 
 
     let totalPrevu =
@@ -2797,18 +2841,6 @@ function chargerTableauDeBord() {
 
     let totalDepenses =
         0;
-
-
-    const depensesAnnee =
-        Array.isArray(
-            depenses[
-                anneeConnectee
-            ]
-        )
-            ? depenses[
-                anneeConnectee
-            ]
-            : [];
 
 
     depensesAnnee.forEach(
@@ -2948,124 +2980,35 @@ function chargerTableauDeBord() {
    DÉPENSES
 ============================================================ */
 
-function ajouterDepense() {
-
+async function ajouterDepense() {
     if (!IMCAuth.requirePermission("depenses.create")) {
         document.getElementById("messageDepense").textContent = "Permission refusée.";
         return;
     }
-
-    const description =
-        document
-            .getElementById(
-                "descriptionDepense"
-            )
-            .value
-            .trim();
-
-
-    const montant =
-        nombreMontant(
-            document.getElementById(
-                "montantDepense"
-            ).value
-        );
-
-
-    const date =
-        document.getElementById(
-            "dateDepense"
-        ).value;
-
-
-    if (
-        !description ||
-        montant <= 0 ||
-        !date
-    ) {
-
-        document.getElementById(
-            "messageDepense"
-        ).textContent =
-            "Veuillez remplir correctement tous les champs.";
-
+    const description = document.getElementById("descriptionDepense").value.trim();
+    const montant = nombreMontant(document.getElementById("montantDepense").value);
+    const date = document.getElementById("dateDepense").value;
+    if (!description || montant <= 0 || !date || !anneeConnectee) {
+        document.getElementById("messageDepense").textContent = "Veuillez remplir correctement tous les champs.";
         return;
-
     }
-
-
-    const depenses =
-        lireJSON(
-            CLE_DEPENSES,
-            {}
-        );
-
-
-    if (
-        !Array.isArray(
-            depenses[
-                anneeConnectee
-            ]
-        )
-    ) {
-
-        depenses[
-            anneeConnectee
-        ] = [];
-
+    try {
+        const response = await fetch('/api/expenses/index.php', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ school_year_label: anneeConnectee, description, amount: montant, expense_date: date })
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Enregistrement impossible.');
+        document.getElementById("descriptionDepense").value = "";
+        document.getElementById("montantDepense").value = "";
+        document.getElementById("dateDepense").value = "";
+        document.getElementById("messageDepense").textContent = "Dépense enregistrée sur le serveur.";
+        await chargerTableauDeBord();
+    } catch (error) {
+        document.getElementById("messageDepense").textContent =
+            "Dépense non enregistrée sur le serveur. Les données locales sont conservées. " + (error.message || "");
     }
-
-
-    depenses[
-        anneeConnectee
-    ].push({
-
-        id:
-            Date.now(),
-
-        description:
-            description,
-
-        montant:
-            montant,
-
-        date:
-            date
-
-    });
-
-
-    localStorage.setItem(
-        CLE_DEPENSES,
-        JSON.stringify(
-            depenses
-        )
-    );
-
-
-    document.getElementById(
-        "descriptionDepense"
-    ).value = "";
-
-
-    document.getElementById(
-        "montantDepense"
-    ).value = "";
-
-
-    document.getElementById(
-        "dateDepense"
-    ).value = "";
-
-
-    document.getElementById(
-        "messageDepense"
-    ).textContent =
-        "Dépense enregistrée avec succès.";
-
-
-    chargerTableauDeBord();
-
 }
 
 
@@ -3143,7 +3086,7 @@ function afficherDepenses(
 
                     <button
                         class="btn btn-rouge"
-                        onclick="supprimerDepense(${depense.id})">
+                        onclick="supprimerDepense('${depense.id}')">
 
                         Supprimer
 
@@ -3168,57 +3111,27 @@ function afficherDepenses(
    SUPPRIMER DÉPENSE
 ============================================================ */
 
-function supprimerDepense(
-    id
-) {
-
-    if (!IMCAuth.requirePermission("depenses.delete")) {
-        alert("Permission refusée.");
-        return;
+async function supprimerDepense(id) {
+    if (!IMCAuth.requirePermission("depenses.delete")) { alert("Permission refusée."); return; }
+    if (!confirm("Voulez-vous supprimer cette dépense ?")) return;
+    const expense = depensesServeur.find(item => String(item.id) === String(id));
+    if (!expense) { alert("Dépense indisponible côté serveur : aucune suppression effectuée."); return; }
+    try {
+        const response = await fetch('/api/expenses/index.php?expense_id=' + encodeURIComponent(String(id)), {
+            method: 'DELETE', credentials: 'include', headers: { 'Accept': 'application/json' }
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Suppression impossible.');
+        if (expense.legacy_id !== null) {
+            const local = lireJSON(CLE_DEPENSES, {});
+            local[anneeConnectee] = (Array.isArray(local[anneeConnectee]) ? local[anneeConnectee] : [])
+                .filter(item => String(item.id) !== String(expense.legacy_id));
+            localStorage.setItem(CLE_DEPENSES, JSON.stringify(local));
+        }
+        await chargerTableauDeBord();
+    } catch (error) {
+        alert("Suppression non confirmée : " + (error.message || "erreur serveur") + ". Les données locales sont conservées.");
     }
-
-    if (
-        !confirm(
-            "Voulez-vous supprimer cette dépense ?"
-        )
-    ) {
-
-        return;
-
-    }
-
-
-    const depenses =
-        lireJSON(
-            CLE_DEPENSES,
-            {}
-        );
-
-
-    depenses[
-        anneeConnectee
-    ] =
-        (
-            depenses[
-                anneeConnectee
-            ] ||
-            []
-        ).filter(
-            depense =>
-                depense.id !== id
-        );
-
-
-    localStorage.setItem(
-        CLE_DEPENSES,
-        JSON.stringify(
-            depenses
-        )
-    );
-
-
-    chargerTableauDeBord();
-
 }
 
 

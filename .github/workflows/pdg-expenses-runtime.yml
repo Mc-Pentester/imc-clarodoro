@@ -1,0 +1,133 @@
+name: PDG expenses PostgreSQL runtime proof
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  expenses-runtime:
+    name: PDG expenses API and PostgreSQL persistence
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Apply schema, seed isolated fixtures, and migrations
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000006001','PDG') ON CONFLICT (id) DO NOTHING;
+          INSERT INTO users(id,username,password_hash,role_id,status)
+          VALUES ('00000000-0000-0000-0000-000000006011','expense-runtime',crypt('Expense-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000006001','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO school_years(id,label,start_date,end_date,status)
+          VALUES ('00000000-0000-0000-0000-000000006021','EXP-2026-2027','2026-09-01','2027-07-15','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+          php database/migrate.php --apply
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000006001', id FROM permissions
+          WHERE name IN ('depenses.read','depenses.create','depenses.delete')
+          ON CONFLICT DO NOTHING;
+          SQL
+
+      - name: PHP syntax check
+        run: |
+          set -euo pipefail
+          php -l api/expenses/index.php
+          php -l config/auth.php
+
+      - name: Check embedded PDG JavaScript syntax
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          html = Path("PDG.html").read_text(encoding="utf-8")
+          scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
+          if not scripts:
+              raise SystemExit("No inline JavaScript found in PDG.html")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/pdg-inline-{i}.js").write_text(script, encoding="utf-8")
+          print(f"Extracted {len(scripts)} inline script(s)")
+          PY
+          for file in /tmp/pdg-inline-*.js; do node --check "$file"; done
+
+      - name: Start API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/expenses-api.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove authenticated expense CRUD and PostgreSQL persistence
+        run: |
+          set -Eeuo pipefail
+          trap 'rc=$?; echo "::error::Expenses runtime failed: rc=$rc command=[$BASH_COMMAND]"; cat /tmp/expenses-api.log 2>/dev/null || true; exit $rc' ERR
+          BASE='http://127.0.0.1:8090'
+          COOKIE='/tmp/expenses.cookies'
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -d '{"username":"expense-runtime","password":"Expense-Test-2026!"}' "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+
+          CREATE="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"school_year_label":"EXP-2026-2027","description":"Runtime test expense","amount":123.45,"expense_date":"2026-10-12","legacy_id":"legacy-runtime-001"}' "$BASE/api/expenses/index.php")"
+          printf '%s' "$CREATE" | grep -q '"amount":123.45'
+          EXPENSE_ID="$(printf '%s' "$CREATE" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["expense"]["id"]??"";')"
+          test -n "$EXPENSE_ID"
+
+          REIMPORT="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"school_year_label":"EXP-2026-2027","description":"Runtime test expense","amount":123.45,"expense_date":"2026-10-12","legacy_id":"legacy-runtime-001"}' "$BASE/api/expenses/index.php")"
+          printf '%s' "$REIMPORT" | grep -q '"created":false'
+          REIMPORT_ID="$(printf '%s' "$REIMPORT" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["expense"]["id"]??"";')"
+          test "$REIMPORT_ID" = "$EXPENSE_ID"
+          LEGACY_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM expenses WHERE school_year_id='00000000-0000-0000-0000-000000006021' AND legacy_id='legacy-runtime-001';")"
+          test "$LEGACY_COUNT" = '1'
+
+          LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/expenses/index.php?school_year_label=EXP-2026-2027")"
+          printf '%s' "$LIST" | grep -q "$EXPENSE_ID"
+          printf '%s' "$LIST" | grep -q 'Runtime test expense'
+          DB_ROW="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT description || '|' || amount::text FROM expenses WHERE id='$EXPENSE_ID';")"
+          test "$DB_ROW" = 'Runtime test expense|123.45'
+
+          set +e
+          NO_CSRF="$(curl -sS -o /tmp/expenses-no-csrf.json -w '%{http_code}' -X POST -b "$COOKIE" -H 'Content-Type: application/json' -d '{"school_year_label":"EXP-2026-2027","description":"Must be rejected","amount":10,"expense_date":"2026-10-12"}' "$BASE/api/expenses/index.php")"
+          set -e
+          test "$NO_CSRF" = '403'
+
+          DELETE_STATUS="$(curl -sS -o /tmp/expenses-delete.json -w '%{http_code}' -X DELETE -b "$COOKIE" -H "X-CSRF-Token: $CSRF" "$BASE/api/expenses/index.php?expense_id=$EXPENSE_ID")"
+          test "$DELETE_STATUS" = '200'
+          DB_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM expenses WHERE id='$EXPENSE_ID';")"
+          test "$DB_COUNT" = '0'
+          echo 'PDG EXPENSES POSTGRESQL RUNTIME PROOF: PASS'
