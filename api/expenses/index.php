@@ -35,7 +35,7 @@ if ($method === 'GET') {
         ? trim($_GET['school_year_label'])
         : '';
     $sql = 'SELECT e.id, sy.label AS school_year_label, e.description,
-                   e.amount, e.expense_date, e.created_at, e.updated_at
+                   e.amount, e.expense_date, e.legacy_id, e.created_at, e.updated_at
             FROM expenses e
             INNER JOIN school_years sy ON sy.id = e.school_year_id';
     $params = [];
@@ -69,6 +69,12 @@ if ($method === 'POST') {
     $label = isset($data['school_year_label']) && is_string($data['school_year_label'])
         ? trim($data['school_year_label'])
         : '';
+    $legacyId = isset($data['legacy_id']) && (is_string($data['legacy_id']) || is_int($data['legacy_id']))
+        ? trim((string)$data['legacy_id'])
+        : '';
+    if ($legacyId !== '' && strlen($legacyId) > 100) {
+        apiError(422, 'Identifiant historique invalide');
+    }
 
     if ($description === '' || strlen($description) > 2000) {
         apiError(422, 'Description invalide');
@@ -82,9 +88,10 @@ if ($method === 'POST') {
     }
     $schoolYearId = expenseSchoolYearId($pdo, $label);
     $stmt = $pdo->prepare(
-        'INSERT INTO expenses (school_year_id, description, amount, expense_date, created_by)
-         VALUES (:school_year_id, :description, :amount, :expense_date, :created_by)
-         RETURNING id, description, amount, expense_date'
+        'INSERT INTO expenses (school_year_id, description, amount, expense_date, created_by, legacy_id)
+         VALUES (:school_year_id, :description, :amount, :expense_date, :created_by, :legacy_id)
+         ON CONFLICT (school_year_id, legacy_id) WHERE legacy_id IS NOT NULL DO NOTHING
+         RETURNING id, description, amount, expense_date, legacy_id'
     );
     $stmt->execute([
         ':school_year_id' => $schoolYearId,
@@ -92,11 +99,24 @@ if ($method === 'POST') {
         ':amount' => number_format((float)$amount, 2, '.', ''),
         ':expense_date' => $date,
         ':created_by' => $user['id'],
+        ':legacy_id' => $legacyId !== '' ? $legacyId : null,
     ]);
     $expense = $stmt->fetch();
+    $created = (bool)$expense;
+    if (!$expense && $legacyId !== '') {
+        $existing = $pdo->prepare(
+            'SELECT id, description, amount, expense_date, legacy_id FROM expenses
+             WHERE school_year_id = :school_year_id AND legacy_id = :legacy_id LIMIT 1'
+        );
+        $existing->execute([':school_year_id' => $schoolYearId, ':legacy_id' => $legacyId]);
+        $expense = $existing->fetch();
+    }
+    if (!$expense) {
+        apiError(500, 'Impossible de confirmer l’enregistrement de la dépense');
+    }
     $expense['amount'] = (float)$expense['amount'];
-    http_response_code(201);
-    echo json_encode(['success' => true, 'expense' => $expense], JSON_UNESCAPED_UNICODE);
+    http_response_code($created ? 201 : 200);
+    echo json_encode(['success' => true, 'created' => $created, 'expense' => $expense], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
