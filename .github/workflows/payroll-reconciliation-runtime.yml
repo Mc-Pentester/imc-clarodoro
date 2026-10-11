@@ -54,7 +54,7 @@ jobs:
             ('00000000-0000-0000-0000-000000008012','reconcile-other',crypt('Reconcile-Other-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000008002','ACTIVE')
           ON CONFLICT (id) DO NOTHING;
           INSERT INTO school_years(id,label,start_date,end_date,status)
-          VALUES ('00000000-0000-0000-0000-000000008021','REC-2026-2027','2026-09-01','2027-07-15','ACTIVE')
+          VALUES ('00000000-0000-0000-0000-000000008021','2026-2027','2026-09-01','2027-07-15','ACTIVE')
           ON CONFLICT (id) DO NOTHING;
           INSERT INTO staff(id,first_name,last_name,function_name,status)
           VALUES ('00000000-0000-4000-8000-000000008031','Reconcile','Target','Enseignant','ACTIVE')
@@ -106,7 +106,7 @@ jobs:
           CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
           test -n "$CSRF"
 
-          PAYLOAD='{"source_key":"REC-2026-2027|legacy-staff-404|10","source_staff_id":"legacy-staff-404","target_staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"REC-2026-2027","month":10,"base":1000,"bonuses":75,"deductions":25,"status":"Partiel"}'
+          PAYLOAD='{"source_key":"2026-2027|legacy-staff-404|10","source_staff_id":"legacy-staff-404","target_staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"2026-2027","month":10,"base":1000,"bonuses":75,"deductions":25,"status":"Partiel"}'
           CREATE_STATUS="$(curl -sS -o /tmp/reconcile-create.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/payroll/reconcile.php")"
           test "$CREATE_STATUS" = '201'
           PAYROLL_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/reconcile-create.json"),true); echo $d["payroll_id"]??"";')"
@@ -120,10 +120,10 @@ jobs:
           test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_entries WHERE legacy_source_key IS NOT NULL")" = '1'
           test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_reconciliation_audit")" = '1'
 
-          DUPLICATE_PAYLOAD='{"source_key":"REC-2026-2027|another-legacy-id|10","source_staff_id":"another-legacy-id","target_staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"REC-2026-2027","month":10,"base":1,"bonuses":0,"deductions":0,"status":"UNPAID"}'
+          DUPLICATE_PAYLOAD='{"source_key":"2026-2027|another-legacy-id|10","source_staff_id":"another-legacy-id","target_staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"REC-2026-2027","month":10,"base":1,"bonuses":0,"deductions":0,"status":"UNPAID"}'
           DUP_STATUS="$(curl -sS -o /tmp/reconcile-duplicate.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$DUPLICATE_PAYLOAD" "$BASE/api/payroll/reconcile.php")"
           test "$DUP_STATUS" = '409'
-          ABSENT_PAYLOAD='{"source_key":"REC-2026-2027|missing|11","source_staff_id":"missing","target_staff_id":"00000000-0000-4000-8000-000000008099","school_year_label":"REC-2026-2027","month":11,"base":1,"bonuses":0,"deductions":0,"status":"UNPAID"}'
+          ABSENT_PAYLOAD='{"source_key":"2026-2027|missing|11","source_staff_id":"missing","target_staff_id":"00000000-0000-4000-8000-000000008099","school_year_label":"REC-2026-2027","month":11,"base":1,"bonuses":0,"deductions":0,"status":"UNPAID"}'
           ABSENT_STATUS="$(curl -sS -o /tmp/reconcile-absent.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$ABSENT_PAYLOAD" "$BASE/api/payroll/reconcile.php")"
           test "$ABSENT_STATUS" = '404'
 
