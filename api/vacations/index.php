@@ -45,8 +45,8 @@ if ($method === 'GET') {
     exit;
 }
 
-if (!in_array($method, ['POST', 'PATCH'], true)) {
-    header('Allow: GET, POST, PATCH');
+if (!in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+    header('Allow: GET, POST, PUT, PATCH');
     apiError(405, 'Méthode non autorisée');
 }
 
