@@ -76,7 +76,7 @@ if ($method === 'POST') {
         apiError(422, 'Identifiant historique invalide');
     }
 
-    if ($description === '' || strlen($description) > 2000) {
+    if ($description === '' || strlen($description) > 500) {
         apiError(422, 'Description invalide');
     }
     if (!is_numeric($amount) || !is_finite((float)$amount) || (float)$amount <= 0) {
