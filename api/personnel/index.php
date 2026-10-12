@@ -155,7 +155,8 @@ if ($method === 'POST') {
             ':email' => $email,
             ':user_id' => $userId,
         ]);
-        $staffId = $staffStmt->fetchColumn();
+        $staffId = (string) $staffStmt->fetchColumn();
+        writePersonnelAudit($pdo, (string) $actor['id'], $staffId, 'CREATE', ['role_name' => trim($roleName)]);
 
         $pdo->commit();
         personnelJson(['success' => true, 'id' => $staffId], 201);
