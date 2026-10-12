@@ -197,7 +197,7 @@ jobs:
           printf '%s\n' "$AUDIT_COUNTS" | grep -qx 'ARCHIVE:1'
           printf '%s\n' "$AUDIT_COUNTS" | grep -qx 'CREATE:1'
           printf '%s\n' "$AUDIT_COUNTS" | grep -qx 'UPDATE:1'
-          AUDIT_SECRET_CHECK="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT count(*) FROM staff_audit_log WHERE staff_id='$STAFF_ID' AND details::text ~* '(password|password_hash|F02G-Staff-2026!)';")"
+          AUDIT_SECRET_CHECK="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT count(*) FROM staff_audit_log WHERE staff_id='$STAFF_ID' AND (details ? 'password' OR details ? 'password_hash' OR details::text LIKE '%F02G-Staff-2026!%');")"
           test "$AUDIT_SECRET_CHECK" = '0'
 
           # F-02-CSRF: prove session restoration and CSRF enforcement end-to-end.
