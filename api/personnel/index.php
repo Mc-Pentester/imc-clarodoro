@@ -315,6 +315,10 @@ if ($method === 'DELETE') {
             $disable->execute([':id' => $staff['user_id']]);
         }
 
+        writePersonnelAudit($pdo, (string) $actor['id'], (string) $id, 'ARCHIVE', [
+            'account_disabled' => $staff['user_id'] !== null,
+        ]);
+
         $pdo->commit();
         personnelJson(['success' => true]);
     } catch (PDOException $e) {
