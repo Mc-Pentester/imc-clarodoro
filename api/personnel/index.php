@@ -112,6 +112,8 @@ if ($method === 'POST') {
         $roleName = 'Autre';
     }
 
+    requirePersonnelRoleAssignment($actor, $roleName);
+
     $pdo->beginTransaction();
 
     try {
