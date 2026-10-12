@@ -280,7 +280,7 @@ if (in_array($method, ['PUT', 'PATCH'], true)) {
 }
 
 if ($method === 'DELETE') {
-    requirePermission($pdo, 'personnel.delete');
+    $actor = requirePermission($pdo, 'personnel.delete');
     requireCsrfToken();
 
     $body = readJsonBody();
