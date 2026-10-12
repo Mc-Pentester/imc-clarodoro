@@ -260,6 +260,12 @@ if (in_array($method, ['PUT', 'PATCH'], true)) {
             $userUpdate->execute($params);
         }
 
+        writePersonnelAudit($pdo, (string) $actor['id'], (string) $id, 'UPDATE', [
+            'profile_updated' => true,
+            'username_changed' => $username !== null,
+            'password_changed' => $password !== '',
+        ]);
+
         $pdo->commit();
         personnelJson(['success' => true]);
     } catch (PDOException $e) {
