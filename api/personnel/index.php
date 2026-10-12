@@ -67,7 +67,7 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
-    requirePermission($pdo, 'personnel.create');
+    $actor = requirePermission($pdo, 'personnel.create');
     requireCsrfToken();
 
     $body = readJsonBody();
