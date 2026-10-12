@@ -60,7 +60,7 @@ jobs:
           VALUES
             ('00000000-0000-0000-0000-000000007001','PDG'),
             ('00000000-0000-0000-0000-000000007002','Directeur'),
-            ('00000000-0000-0000-0000-000000007003','Secretaire')
+            ('00000000-0000-0000-0000-000000007003','Secrétaire')
           ON CONFLICT (id) DO NOTHING;
 
           INSERT INTO permissions(name)
