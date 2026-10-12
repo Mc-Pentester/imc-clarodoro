@@ -94,7 +94,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "pg_restore a échoué (code $LASTEXITCODE). La base cible peut être partielle; la source n'a pas été modifiée. Inspectez la cible." }
         Write-Host '[OK] Restauration terminée dans une base séparée.'
         Write-Host "Base restaurée : $TargetDatabase"
-        Write-Host 'La base source n’a pas été modifiée. Vérifiez les données avant toute bascule.'
+        Write-Host "La base source n'a pas été modifiée. Vérifiez les données avant toute bascule."
     }
 } finally {
     if ($null -eq $previousPgPassword) { Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue }
