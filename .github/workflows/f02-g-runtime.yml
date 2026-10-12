@@ -57,7 +57,8 @@ jobs:
           INSERT INTO roles(id,name)
           VALUES
             ('00000000-0000-0000-0000-000000007001','PDG'),
-            ('00000000-0000-0000-0000-000000007002','Directeur')
+            ('00000000-0000-0000-0000-000000007002','Directeur'),
+            ('00000000-0000-0000-0000-000000007003','Secretaire')
           ON CONFLICT (id) DO NOTHING;
 
           INSERT INTO permissions(name)
@@ -80,10 +81,17 @@ jobs:
           WHERE name = 'personnel.read'
           ON CONFLICT DO NOTHING;
 
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000007003', id
+          FROM permissions
+          WHERE name IN ('personnel.read', 'personnel.create')
+          ON CONFLICT DO NOTHING;
+
           INSERT INTO users(id,username,password_hash,role_id,status)
           VALUES
             ('00000000-0000-0000-0000-000000007011','f02g-pdg',crypt('F02G-PDG-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007001','ACTIVE'),
-            ('00000000-0000-0000-0000-000000007012','f02g-directeur',crypt('F02G-DIR-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007002','ACTIVE')
+            ('00000000-0000-0000-0000-000000007012','f02g-directeur',crypt('F02G-DIR-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007002','ACTIVE'),
+            ('00000000-0000-0000-0000-000000007013','f02g-secretaire',crypt('F02G-SEC-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007003','ACTIVE')
           ON CONFLICT (id) DO NOTHING;
           SQL
 
