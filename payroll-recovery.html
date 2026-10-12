@@ -82,7 +82,9 @@ function getUnmatched(){
   return Object.entries(legacy).filter(([key,value])=>{
     if(!value||typeof value!=="object"||Array.isArray(value))return false;
     const r=recordInfo(key,value);
-    return /^\d{4}-\d{4}$/.test(r.year)&&/^(0[1-9]|1[0-2])$/.test(r.month)&&(!r.sourceId||!ids.has(r.sourceId));
+    const parts=String(key).split("|");
+    const keyIncomplete=parts.length!==3||!String(parts[1]||"").trim();
+    return /^\d{4}-\d{4}$/.test(r.year)&&/^(0[1-9]|1[0-2])$/.test(r.month)&&(keyIncomplete||!r.sourceId.trim()||!ids.has(r.sourceId));
   }).map(([key,value])=>({key,source:value,record:recordInfo(key,value)}));
 }
 function staffName(p){return [p.first_name,p.last_name].filter(Boolean).join(" ")+" — "+String(p.function_name||p.role_name||"Personnel");}
