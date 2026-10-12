@@ -82,7 +82,7 @@ function getUnmatched(){
   return Object.entries(legacy).filter(([key,value])=>{
     if(!value||typeof value!=="object"||Array.isArray(value))return false;
     const r=recordInfo(key,value);
-    return /^\d{4}-\d{4}$/.test(r.year)&&/^(0[1-9]|1[0-2])$/.test(r.month)&&r.sourceId!==""&&!ids.has(r.sourceId);
+    return /^\d{4}-\d{4}$/.test(r.year)&&/^(0[1-9]|1[0-2])$/.test(r.month)&&(!r.sourceId||!ids.has(r.sourceId));
   }).map(([key,value])=>({key,source:value,record:recordInfo(key,value)}));
 }
 function staffName(p){return [p.first_name,p.last_name].filter(Boolean).join(" ")+" — "+String(p.function_name||p.role_name||"Personnel");}
@@ -98,6 +98,10 @@ async function render(){
     const title=document.createElement("h3");title.textContent="Année "+item.record.year+" · "+item.record.month+" · Identifiant historique "+item.record.sourceId;card.appendChild(title);
     const detail=document.createElement("p");detail.className="meta";detail.textContent="Base : "+item.record.base.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Primes : "+item.record.bonuses.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Déductions : "+item.record.deductions.toLocaleString("fr-FR",{minimumFractionDigits:2})+" · Statut : "+item.record.status;card.appendChild(detail);
     if(auditHashes.has(item.hash)){const done=document.createElement("p");done.className="notice success";done.textContent="Cette source a déjà été importée. Les données locales sont conservées.";card.appendChild(done);root.appendChild(card);return;}
+    const keyParts=String(item.key).split("|");
+    if(!item.record.sourceId.trim()||keyParts.length!==3||!keyParts[1].trim()){
+      const review=document.createElement("p");review.className="notice warning";review.textContent="Identifiant historique absent ou clé source incomplète. Cette paie est affichée pour vérification, mais l’import est volontairement désactivé. N’attribuez aucun identifiant automatiquement : vérifiez la sauvegarde et les archives papier avant toute correction.";card.appendChild(review);root.appendChild(card);return;
+    }
     if(![item.record.base,item.record.bonuses,item.record.deductions].every(n=>Number.isFinite(n)&&n>=0)){
       const invalid=document.createElement("p");invalid.className="notice error";invalid.textContent="Au moins un montant historique est illisible. Aucun import n’est proposé pour éviter de modifier la valeur source; exportez la sauvegarde et corrigez la donnée après vérification.";card.appendChild(invalid);root.appendChild(card);return;
     }
