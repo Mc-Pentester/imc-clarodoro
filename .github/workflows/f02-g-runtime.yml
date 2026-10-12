@@ -4,6 +4,8 @@ name: F-02-G personnel runtime proof
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -57,7 +59,8 @@ jobs:
           INSERT INTO roles(id,name)
           VALUES
             ('00000000-0000-0000-0000-000000007001','PDG'),
-            ('00000000-0000-0000-0000-000000007002','Directeur')
+            ('00000000-0000-0000-0000-000000007002','Directeur'),
+            ('00000000-0000-0000-0000-000000007003','Secrétaire')
           ON CONFLICT (id) DO NOTHING;
 
           INSERT INTO permissions(name)
@@ -80,10 +83,17 @@ jobs:
           WHERE name = 'personnel.read'
           ON CONFLICT DO NOTHING;
 
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-0000-0000-000000007003', id
+          FROM permissions
+          WHERE name IN ('personnel.read', 'personnel.create')
+          ON CONFLICT DO NOTHING;
+
           INSERT INTO users(id,username,password_hash,role_id,status)
           VALUES
             ('00000000-0000-0000-0000-000000007011','f02g-pdg',crypt('F02G-PDG-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007001','ACTIVE'),
-            ('00000000-0000-0000-0000-000000007012','f02g-directeur',crypt('F02G-DIR-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007002','ACTIVE')
+            ('00000000-0000-0000-0000-000000007012','f02g-directeur',crypt('F02G-DIR-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007002','ACTIVE'),
+            ('00000000-0000-0000-0000-000000007013','f02g-secretaire',crypt('F02G-SEC-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000007003','ACTIVE')
           ON CONFLICT (id) DO NOTHING;
           SQL
 
@@ -143,6 +153,23 @@ jobs:
           echo "F02G CREATE WITHOUT PERMISSION STATUS: [$FORBIDDEN]"
           test "$FORBIDDEN" = '403'
 
+          # This actor HAS personnel.create; only the privileged-role guard should deny assignment.
+          SEC_COOKIE='/tmp/f02g-sec.cookies'
+          SEC_LOGIN="$(curl -fsS -c "$SEC_COOKIE" -b "$SEC_COOKIE" -H 'Content-Type: application/json' -d '{"username":"f02g-secretaire","password":"F02G-SEC-2026!"}' "$BASE/api/auth/login.php")"
+          SEC_CSRF="$(printf '%s' "$SEC_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$SEC_CSRF"
+
+          set +e
+          PRIVILEGED_ROLE_STATUS="$(curl -sS -o /tmp/f02g-role-guard.json -w '%{http_code}' -X POST -c "$SEC_COOKIE" -b "$SEC_COOKIE" \
+            -H "X-CSRF-Token: $SEC_CSRF" \
+            -H 'Content-Type: application/json' \
+            -d '{"first_name":"Denied","last_name":"PrivilegedRole","username":"f02g-denied-role","password":"F02G-Denied-2026!","role_name":"Directeur"}' \
+            "$BASE/api/personnel/index.php")"
+          set -e
+          test "$PRIVILEGED_ROLE_STATUS" = '403'
+          grep -q 'Seul le PDG peut attribuer ce rôle' /tmp/f02g-role-guard.json
+
+
           UPDATE="$(curl -fsS -X PUT \
             -c "$PDG_COOKIE" -b "$PDG_COOKIE" \
             -H "X-CSRF-Token: $PDG_CSRF" \
@@ -164,6 +191,14 @@ jobs:
 
           ARCHIVED_DB="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT s.status || '|' || u.status FROM staff s JOIN users u ON u.id=s.user_id WHERE s.id='$STAFF_ID';")"
           test "$ARCHIVED_DB" = 'ARCHIVED|INACTIVE'
+
+          AUDIT_COUNTS="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT action || ':' || count(*) FROM staff_audit_log WHERE staff_id='$STAFF_ID' GROUP BY action ORDER BY action;")"
+          printf '%s\n' "$AUDIT_COUNTS"
+          printf '%s\n' "$AUDIT_COUNTS" | grep -qx 'ARCHIVE:1'
+          printf '%s\n' "$AUDIT_COUNTS" | grep -qx 'CREATE:1'
+          printf '%s\n' "$AUDIT_COUNTS" | grep -qx 'UPDATE:1'
+          AUDIT_SECRET_CHECK="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT count(*) FROM staff_audit_log WHERE staff_id='$STAFF_ID' AND (details ? 'password' OR details ? 'password_hash' OR details::text LIKE '%F02G-Staff-2026!%');")"
+          test "$AUDIT_SECRET_CHECK" = '0'
 
           # F-02-CSRF: prove session restoration and CSRF enforcement end-to-end.
           ME="$(curl -fsS -b "$PDG_COOKIE" "$BASE/api/auth/me.php")"

@@ -37,6 +37,29 @@ function personnelOptionalText(array $data, string $key, int $max = 150): ?strin
     return $value;
 }
 
+function requirePersonnelRoleAssignment(array $actor, string $targetRole): void
+{
+    $target = mb_strtoupper(trim($targetRole), 'UTF-8');
+    $actorRole = mb_strtoupper(trim((string) ($actor['role_name'] ?? '')), 'UTF-8');
+    if (in_array($target, ['PDG', 'DIRECTEUR'], true) && $actorRole !== 'PDG') {
+        apiError(403, 'Seul le PDG peut attribuer ce rôle');
+    }
+}
+
+function writePersonnelAudit(PDO $pdo, string $actorUserId, ?string $staffId, string $action, array $details = []): void
+{
+    $stmt = $pdo->prepare(
+        'INSERT INTO staff_audit_log (actor_user_id, staff_id, action, details)
+         VALUES (:actor_user_id, :staff_id, :action, CAST(:details AS jsonb))'
+    );
+    $stmt->execute([
+        ':actor_user_id' => $actorUserId,
+        ':staff_id' => $staffId,
+        ':action' => $action,
+        ':details' => json_encode($details, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+    ]);
+}
+
 if ($method === 'GET') {
     requirePermission($pdo, 'personnel.read');
 
@@ -67,7 +90,7 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
-    requirePermission($pdo, 'personnel.create');
+    $actor = requirePermission($pdo, 'personnel.create');
     requireCsrfToken();
 
     $body = readJsonBody();
@@ -88,6 +111,8 @@ if ($method === 'POST') {
     if (!is_string($roleName) || trim($roleName) === '') {
         $roleName = 'Autre';
     }
+
+    requirePersonnelRoleAssignment($actor, $roleName);
 
     $pdo->beginTransaction();
 
@@ -130,7 +155,8 @@ if ($method === 'POST') {
             ':email' => $email,
             ':user_id' => $userId,
         ]);
-        $staffId = $staffStmt->fetchColumn();
+        $staffId = (string) $staffStmt->fetchColumn();
+        writePersonnelAudit($pdo, (string) $actor['id'], $staffId, 'CREATE', ['role_name' => trim($roleName)]);
 
         $pdo->commit();
         personnelJson(['success' => true, 'id' => $staffId], 201);
@@ -234,6 +260,12 @@ if (in_array($method, ['PUT', 'PATCH'], true)) {
             $userUpdate->execute($params);
         }
 
+        writePersonnelAudit($pdo, (string) $actor['id'], (string) $id, 'UPDATE', [
+            'profile_updated' => true,
+            'username_changed' => $username !== null,
+            'password_changed' => $password !== '',
+        ]);
+
         $pdo->commit();
         personnelJson(['success' => true]);
     } catch (PDOException $e) {
@@ -248,7 +280,7 @@ if (in_array($method, ['PUT', 'PATCH'], true)) {
 }
 
 if ($method === 'DELETE') {
-    requirePermission($pdo, 'personnel.delete');
+    $actor = requirePermission($pdo, 'personnel.delete');
     requireCsrfToken();
 
     $body = readJsonBody();
@@ -282,6 +314,10 @@ if ($method === 'DELETE') {
             );
             $disable->execute([':id' => $staff['user_id']]);
         }
+
+        writePersonnelAudit($pdo, (string) $actor['id'], (string) $id, 'ARCHIVE', [
+            'account_disabled' => $staff['user_id'] !== null,
+        ]);
 
         $pdo->commit();
         personnelJson(['success' => true]);
