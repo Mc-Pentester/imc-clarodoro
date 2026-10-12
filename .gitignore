@@ -30,6 +30,7 @@ Thumbs.db
 *.sql.gz
 *.dump
 *.backup
+*.backup.manifest.json
 
 # Secrets / credentials
 *.pem
