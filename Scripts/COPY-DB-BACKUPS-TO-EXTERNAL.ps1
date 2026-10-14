@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$SourceDirectory = (Join-Path $PSScriptRoot '..\backups'),
-    [string]$DestinationDirectory = 'F:\IMC-Clarodoro-Backups'
+    [string]$DestinationDirectory = '',
+    [string]$VolumeLabel = 'IMC_BACKUPS'
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -18,14 +19,26 @@ try {
     if (-not (Test-Path -LiteralPath $source -PathType Container)) {
         throw "Dossier source introuvable : $source"
     }
-    $driveRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($DestinationDirectory))
+    # Résout le support par son étiquette, pas par une lettre fixe (F:, E:, etc.).
+    # Une lettre peut changer d'un ordinateur à l'autre ou après reconnexion USB.
+    if ([string]::IsNullOrWhiteSpace($DestinationDirectory)) {
+        $volumes = @(Get-Volume -FileSystemLabel $VolumeLabel -ErrorAction SilentlyContinue |
+            Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Removable' })
+        if ($volumes.Count -ne 1) {
+            throw "Support USB attendu introuvable ou ambigu. Connectez un seul support amovible portant l'étiquette '$VolumeLabel'."
+        }
+        $DestinationDirectory = "$($volumes[0].DriveLetter):\IMC-Clarodoro-Backups"
+    }
+
+    $destinationFullPath = [IO.Path]::GetFullPath($DestinationDirectory)
+    $driveRoot = [IO.Path]::GetPathRoot($destinationFullPath)
     if ([string]::IsNullOrWhiteSpace($driveRoot) -or $driveRoot -eq [IO.Path]::GetPathRoot($source)) {
         throw 'La destination doit être sur un support distinct du dossier source.'
     }
     if (-not (Test-Path -LiteralPath $driveRoot -PathType Container)) {
         throw "Support externe indisponible : $driveRoot"
     }
-    New-Item -ItemType Directory -Path $DestinationDirectory -Force | Out-Null
+    New-Item -ItemType Directory -Path $destinationFullPath -Force | Out-Null
 
     $backups = @(Get-ChildItem -LiteralPath $source -Filter '*.backup' -File | Sort-Object Name)
     if ($backups.Count -eq 0) {
@@ -47,7 +60,7 @@ try {
             throw "Intégrité source invalide : $($backup.Name). Copie refusée."
         }
 
-        $destinationBackup = Join-Path $DestinationDirectory $backup.Name
+        $destinationBackup = Join-Path $destinationFullPath $backup.Name
         $destinationManifest = "$destinationBackup.manifest.json"
 
         if (Test-Path -LiteralPath $destinationBackup -PathType Leaf) {
@@ -76,7 +89,7 @@ try {
         $copied++
     }
 
-    Write-BackupLog "SUCCÈS : $copied paire(s) backup/manifeste vérifiée(s) sur $DestinationDirectory."
+    Write-BackupLog "SUCCÈS : $copied paire(s) backup/manifeste vérifiée(s) sur $destinationFullPath."
 } catch {
     try { Write-BackupLog "ÉCHEC : $($_.Exception.Message)" } catch {}
     exit 1
