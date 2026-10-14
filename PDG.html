@@ -595,6 +595,11 @@
             Sécurité du coffre-fort
         </button>
 
+        <button id="btnSauvegarderMaintenant" class="btn btn-vert" type="button" onclick="sauvegarderMaintenant()">
+            Sauvegarder maintenant
+        </button>
+        <div id="messageSauvegarde" class="message" role="status" aria-live="polite"></div>
+
     </section>
 
     <!-- ========================================================
@@ -1208,6 +1213,44 @@ document.addEventListener("DOMContentLoaded", function() {
   }
   // Sinon, afficher le formulaire de connexion par défaut
 });
+
+/* ============================================================
+   SAUVEGARDE MANUELLE
+============================================================ */
+async function sauvegarderMaintenant() {
+    const bouton = document.getElementById("btnSauvegarderMaintenant");
+    const message = document.getElementById("messageSauvegarde");
+    if (!bouton || !message || bouton.disabled) return;
+    bouton.disabled = true;
+    bouton.textContent = "Sauvegarde en cours…";
+    message.className = "message";
+    message.style.display = "block";
+    message.textContent = "Création et vérification de la sauvegarde PostgreSQL…";
+    try {
+        const response = await fetch("/api/admin/backup.php", {
+            method: "POST", credentials: "same-origin", cache: "no-store",
+            headers: { "Accept": "application/json", "Content-Type": "application/json" },
+            body: "{}"
+        });
+        let payload;
+        try { payload = await response.json(); } catch (_) { throw new Error("Réponse invalide du serveur."); }
+        if (!response.ok || !payload || payload.success !== true) {
+            throw new Error((payload && (payload.error || payload.message)) || "La sauvegarde a échoué.");
+        }
+        const size = Number(payload.sizeBytes);
+        const sizeText = Number.isFinite(size)
+            ? " (" + (size / 1048576).toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " Mo)" : "";
+        message.className = "message succes";
+        message.textContent = "Sauvegarde vérifiée : " + String(payload.file || "fichier créé") + sizeText
+            + ". La copie sur le support externe sera faite par la tâche périodique.";
+    } catch (error) {
+        message.className = "message erreur";
+        message.textContent = error && error.message ? error.message : "Impossible de créer la sauvegarde.";
+    } finally {
+        bouton.disabled = false;
+        bouton.textContent = "Sauvegarder maintenant";
+    }
+}
 
 /* ============================================================
    CONFIGURATION
