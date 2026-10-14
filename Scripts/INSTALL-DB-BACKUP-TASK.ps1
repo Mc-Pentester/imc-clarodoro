@@ -1,7 +1,7 @@
 param(
     [string]$TaskName = 'IMC-Clarodoro PostgreSQL Backup',
     [string]$BackupDirectory = (Join-Path $PSScriptRoot '..\backups'),
-    [string]$ScheduleTime = '02:00',
+    [string]$ScheduleTime = '14:30',
     [string]$PgBin = 'C:\Program Files\PostgreSQL\18\bin'
 )
 $ErrorActionPreference = 'Stop'
