@@ -3,8 +3,7 @@ param(
     [string]$BackupDirectory = (Join-Path $PSScriptRoot '..\backups'),
     [string]$ScheduleTime = '14:30',
     [string]$PgBin = 'C:\Program Files\PostgreSQL\18\bin',
-    [string]$ExternalBackupDirectory = 'F:\IMC-Clarodoro-Backups',
-    [string]$CopyTaskName = 'IMC-Clarodoro Backup Copy to F'
+    [string]$CopyTaskName = 'IMC-Clarodoro Backup Copy to USB'
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -62,7 +61,7 @@ Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Pr
 # Le script échoue sans supprimer les originaux si le support est absent ou si un hash diffère.
 $copyScript = Join-Path $PSScriptRoot 'COPY-DB-BACKUPS-TO-EXTERNAL.ps1'
 if (-not (Test-Path -LiteralPath $copyScript)) { throw 'Script de copie externe introuvable.' }
-$copyAction = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$copyScript`" -DestinationDirectory `"$ExternalBackupDirectory`""
+$copyAction = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$copyScript`""
 $copyTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration (New-TimeSpan -Days 3650)
 $copySettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $CopyTaskName -Action $copyAction -Trigger $copyTrigger -Principal $principal -Settings $copySettings -Force | Out-Null
@@ -72,6 +71,6 @@ Write-Host "Nom : $TaskName"
 Write-Host "Heure : $ScheduleTime chaque jour"
 Write-Host "Dossier : $backupFullPath"
 Write-Host "Compte : $identity"
-Write-Host "Copie externe : $ExternalBackupDirectory (toutes les 6 heures)"
+Write-Host "Copie externe : USB détecté par étiquette IMC_BACKUPS (toutes les 6 heures)"
 Write-Host "Tâche de copie : $CopyTaskName"
 Write-Host "Exécutez ensuite : Get-ScheduledTask -TaskName '$TaskName' | Get-ScheduledTaskInfo"
