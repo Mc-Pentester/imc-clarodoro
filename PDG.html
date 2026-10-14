@@ -1227,9 +1227,15 @@ async function sauvegarderMaintenant() {
     message.style.display = "block";
     message.textContent = "Création et vérification de la sauvegarde PostgreSQL…";
     try {
+        const csrfToken = IMCAuth.getCsrfToken();
+        if (!csrfToken) throw new Error("Session de sécurité absente. Reconnectez-vous avant de lancer la sauvegarde.");
         const response = await fetch("/api/admin/backup.php", {
             method: "POST", credentials: "same-origin", cache: "no-store",
-            headers: { "Accept": "application/json", "Content-Type": "application/json" },
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-CSRF-Token": csrfToken
+            },
             body: "{}"
         });
         let payload;
