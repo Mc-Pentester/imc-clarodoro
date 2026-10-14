@@ -25,14 +25,24 @@ $hostName = if ($env:DB_HOST) { $env:DB_HOST } else { 'localhost' }
 $port = if ($env:DB_PORT) { $env:DB_PORT } else { '5432' }
 $user = Get-RequiredEnvironmentVariable -Name 'DB_USER'
 $sourceDatabase = Get-RequiredEnvironmentVariable -Name 'DB_NAME'
-$password = Get-RequiredEnvironmentVariable -Name 'DB_PASSWORD'
+$password = [Environment]::GetEnvironmentVariable('DB_PASSWORD')
+$pgpassFile = [Environment]::GetEnvironmentVariable('PGPASSFILE')
+if ([string]::IsNullOrWhiteSpace($password)) {
+    if ([string]::IsNullOrWhiteSpace($pgpassFile) -or -not (Test-Path -LiteralPath $pgpassFile -PathType Leaf)) {
+        throw 'Définissez DB_PASSWORD ou un PGPASSFILE valide pour authentifier PostgreSQL.'
+    }
+}
 if ($port -notmatch '^\d{1,5}$' -or [int]$port -lt 1 -or [int]$port -gt 65535) { throw 'DB_PORT doit être un port TCP valide.' }
 if ($sourceDatabase -notmatch '^[A-Za-z0-9_]+$') { throw 'DB_NAME doit contenir uniquement lettres, chiffres et caractères soulignés.' }
 $pgDump = Get-PostgresTool -Name 'pg_dump'
 $pgRestore = Get-PostgresTool -Name 'pg_restore'
 $psql = Get-PostgresTool -Name 'psql'
 $previousPgPassword = $env:PGPASSWORD
-$env:PGPASSWORD = $password
+if (-not [string]::IsNullOrWhiteSpace($password)) {
+    $env:PGPASSWORD = $password
+} else {
+    Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+}
 try {
     if ($Mode -eq 'Backup') {
         $resolvedDirectory = [System.IO.Path]::GetFullPath($BackupDirectory)
