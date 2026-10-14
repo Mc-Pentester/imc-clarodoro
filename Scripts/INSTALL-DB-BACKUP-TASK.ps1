@@ -26,14 +26,14 @@ if (-not (Test-Path -LiteralPath $pgpass)) {
     Set-Content -LiteralPath $pgpass -Value $line -Encoding ascii -NoNewline
 }
 
-# Restreint le fichier pgpass au compte courant (hérité désactivé).
-$acl = Get-Acl -LiteralPath $pgpass
-$acl.SetAccessRuleProtection($true, $false)
-foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRule($rule) }
+# Restreint le fichier pgpass au compte courant avec l'outil Windows ACL.
+# Set-Acl peut échouer sur certaines configurations Windows en demandant
+# SeSecurityPrivilege. icacls modifie la DACL sans demander ce privilège.
 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$rule = New-Object System.Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'Allow')
-$acl.AddAccessRule($rule)
-Set-Acl -LiteralPath $pgpass -AclObject $acl
+& "$env:SystemRoot\System32\icacls.exe" $pgpass /inheritance:r /grant:r "$($identity):(F)" | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw "Impossible de restreindre les droits de $pgpass (icacls code $LASTEXITCODE). Aucun planificateur n'a été enregistré."
+}
 
 $runner = Join-Path $PSScriptRoot 'RUN-DB-BACKUP.ps1'
 $runnerContent = @"
