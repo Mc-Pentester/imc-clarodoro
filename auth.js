@@ -257,7 +257,8 @@
     requireRole: requireRole,
     hasRole: hasRole,
     hasPermission: hasPermission,
-    requirePermission: requirePermission
+    requirePermission: requirePermission,
+    getCsrfToken: function () { return csrfToken; }
   });
 
 })();
