@@ -95,5 +95,5 @@ echo json_encode([
     'file' => basename($created),
     'sizeBytes' => $actualSize,
     'sha256' => $actualHash,
-    'externalCopy' => 'La copie sur F: sera effectuée par la tâche périodique.',
+    'externalCopy' => 'La copie sur le support portant l’étiquette IMC_BACKUPS sera effectuée par la tâche périodique.',
 ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
