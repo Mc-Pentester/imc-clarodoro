@@ -23,7 +23,7 @@ try {
     # Une lettre peut changer d'un ordinateur à l'autre ou après reconnexion USB.
     if ([string]::IsNullOrWhiteSpace($DestinationDirectory)) {
         $volumes = @(Get-Volume -FileSystemLabel $VolumeLabel -ErrorAction SilentlyContinue |
-            Where-Object { $_.DriveLetter -and $_.DriveType -eq 'Removable' })
+            Where-Object { $_.DriveLetter })
         if ($volumes.Count -ne 1) {
             throw "Support USB attendu introuvable ou ambigu. Connectez un seul support amovible portant l'étiquette '$VolumeLabel'."
         }
