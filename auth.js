@@ -12,15 +12,7 @@
 
   const SESSION_KEY = "imc_auth_session";
   const pageName = (window.location.pathname.split("/").pop() || "").toLowerCase();
-  const VAULT_PAGES = new Set([
-    "pdg.html",
-    "payroll-recovery.html",
-    "finances.html",
-    "personnel.html",
-    "index.html",
-    "badge.html",
-    "resultats.html"
-  ]);
+  const VAULT_REQUIRED = pageName === "finances.html";
   let vaultReadyPromise = Promise.resolve(true);
   let vaultFailure = null;
   let serverUser = null;
@@ -28,8 +20,8 @@
   let csrfToken = null;
   const nativeFetch = window.fetch.bind(window);
 
-  function chargerCoffrePourPageSensible() {
-    if (!VAULT_PAGES.has(pageName) || window.IMCSecureStorage) return;
+  function chargerCoffreFinance() {
+    if (!VAULT_REQUIRED || window.IMCSecureStorage) return;
 
     window.IMC_VAULT_REQUIRED = true;
     document.documentElement.dataset.imcVault = "locked";
@@ -66,7 +58,7 @@
     });
   }
 
-  chargerCoffrePourPageSensible();
+  chargerCoffreFinance();
 
   function getCachedUser() { return serverUser ? { ...serverUser } : null; }
 
@@ -87,7 +79,7 @@
   }
 
   async function verifySession() {
-    if (VAULT_PAGES.has(pageName)) {
+    if (VAULT_REQUIRED) {
       const vaultReady = await vaultReadyPromise;
       if (!vaultReady || vaultFailure) {
         serverUser = null;
