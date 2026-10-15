@@ -245,5 +245,5 @@
 
   document.addEventListener("DOMContentLoaded", protegerActionsPersonnelSensibles);
 
-  window.IMCAuth = Object.freeze({ login, logout, isAuthenticated, currentUser, requireAuth, verifySession, refresh: function () { return false; }, isSessionExpired: function () { return !isAuthenticated(); }, requireRole, hasRole, hasPermission, requirePermission, requireSensitiveReauth });
+  window.IMCAuth = Object.freeze({ login, logout, isAuthenticated, currentUser, requireAuth, verifySession, refresh: function () { return false; }, isSessionExpired: function () { return !isAuthenticated(); }, requireRole, hasRole, hasPermission, requirePermission, requireSensitiveReauth, getCsrfToken: function () { return csrfToken; } });
 })();
