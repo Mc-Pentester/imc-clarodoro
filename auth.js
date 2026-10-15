@@ -178,5 +178,72 @@
     return true;
   }
 
-  window.IMCAuth = Object.freeze({ login, logout, isAuthenticated, currentUser, requireAuth, verifySession, refresh: function () { return false; }, isSessionExpired: function () { return !isAuthenticated(); }, requireRole, hasRole, hasPermission, requirePermission });
+  async function requireSensitiveReauth(actionLabel) {
+    if (!isAuthenticated()) return false;
+    const user = currentUser();
+    const password = window.prompt("Réauthentification requise pour " + (actionLabel || "cette opération") + ".\nSaisissez votre mot de passe actuel :");
+    if (password === null) return false;
+    if (!password) return false;
+
+    const response = await nativeFetch("/api/auth/login.php", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({ username: String(user.username), password: String(password) })
+    });
+
+    let payload = null;
+    try { payload = await response.json(); } catch (error) {}
+
+    if (!response.ok || !payload || !payload.success || !payload.user) {
+      throw new Error((payload && (payload.message || payload.error)) || "Réauthentification refusée.");
+    }
+
+    if (String(payload.user.id) !== String(user.userId) || String(payload.user.role) !== String(user.role)) {
+      throw new Error("Le compte réauthentifié ne correspond pas à la session courante.");
+    }
+
+    csrfToken = payload.csrfToken ? String(payload.csrfToken) : csrfToken;
+    serverUser = { userId: String(payload.user.id), username: String(payload.user.username), role: String(payload.user.role) };
+    serverSessionReady = true;
+    return true;
+  }
+
+  function protegerActionsPersonnelSensibles() {
+    if (pageName !== "personnel.html") return;
+
+    const actions = [
+      ["ajouterPersonnel", "la création d’un compte personnel"],
+      ["enregistrerModificationPersonnel", "la modification d’un compte personnel"],
+      ["supprimerPersonnel", "l’archivage d’un membre du personnel"]
+    ];
+
+    actions.forEach(function (entry) {
+      const name = entry[0];
+      const label = entry[1];
+      const original = window[name];
+      if (typeof original !== "function" || original.__sensitiveProtected) return;
+
+      const wrapped = async function () {
+        try {
+          const authorized = await requireSensitiveReauth(label);
+          if (!authorized) return;
+          return await original.apply(this, arguments);
+        } catch (error) {
+          const target = document.getElementById("messagePersonnel");
+          if (target) {
+            target.textContent = error && error.message ? error.message : "Réauthentification refusée.";
+            target.className = "message erreur";
+            target.style.display = "block";
+          }
+        }
+      };
+      wrapped.__sensitiveProtected = true;
+      window[name] = wrapped;
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", protegerActionsPersonnelSensibles);
+
+  window.IMCAuth = Object.freeze({ login, logout, isAuthenticated, currentUser, requireAuth, verifySession, refresh: function () { return false; }, isSessionExpired: function () { return !isAuthenticated(); }, requireRole, hasRole, hasPermission, requirePermission, requireSensitiveReauth });
 })();
