@@ -7,7 +7,7 @@ const context = {
   console,
   fetch: async () => ({ ok: false, json: async () => ({ success: false }) }),
   sessionStorage: { removeItem() {} },
-  location: { href: "" },
+  location: { href: "", pathname: "/index.html" },
   IMCSecureStorage: { lock() {} }
 };
 context.window = context;
