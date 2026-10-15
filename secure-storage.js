@@ -1,9 +1,13 @@
 /*
- * IMC-Clarodoro - coffre client-side minimal
+ * IMC-Clarodoro - coffre client-side minimal, à portée de page
+ *
+ * Le coffre est conservé pour les fonctions strictement locales qui en ont besoin
+ * (actuellement la page PDG). Les pages migrées vers l'API/PostgreSQL ne sont plus
+ * bloquées par le mot de passe maître.
  *
  * Les préférences générales restent dans localStorage.
- * Les données sensibles sont regroupées dans un coffre IndexedDB chiffré.
- * La clé de session n'est jamais persistée.
+ * Les données sensibles locales restent dans un coffre IndexedDB chiffré lorsqu'il
+ * est explicitement requis par la page.
  */
 (function () {
   "use strict";
@@ -13,6 +17,12 @@
   const RECORD_ID = "main";
   const ITERATIONS = 600000;
   const IDLE_TIMEOUT = 15 * 60 * 1000;
+
+  // Le coffre client-side n'est plus un verrou global de l'application.
+  // Les pages métier migrées vers l'API serveur n'en ont pas besoin.
+  const VAULT_REQUIRED_PAGES = new Set(["pdg.html"]);
+  const currentPage = String(window.location.pathname.split("/").pop() || "index.html").toLowerCase();
+  const vaultRequired = VAULT_REQUIRED_PAGES.has(currentPage);
 
   const SENSITIVE_KEYS = new Set([
     "imc_students",
@@ -176,6 +186,12 @@
   }
 
   async function initialiserCoffre() {
+    if (!vaultRequired) {
+      vaultReady = true;
+      window.dispatchEvent(new CustomEvent("imc-vault-not-required"));
+      return;
+    }
+
     const db = await ouvrirBase();
     let record = await lireEnregistrement(db);
 
@@ -239,6 +255,10 @@
   }
 
   async function sauvegarderCoffre() {
+    if (!vaultRequired) {
+      return;
+    }
+
     if (!vaultReady || !sessionKey) {
       throw new Error("Le coffre est verrouillé.");
     }
@@ -258,6 +278,10 @@
   }
 
   function planifierSauvegarde() {
+    if (!vaultRequired) {
+      return;
+    }
+
     saveChain = saveChain
       .then(sauvegarderCoffre)
       .catch(function (error) {
@@ -266,7 +290,7 @@
   }
 
   function verrouiller() {
-    if (!vaultReady) {
+    if (!vaultRequired || !vaultReady) {
       return;
     }
     sessionKey = null;
@@ -276,34 +300,32 @@
   }
 
   async function changerMotDePasse(ancienCode, nouveauCode, confirmation) {
-    // Vérification des préconditions
+    if (!vaultRequired) {
+      throw new Error("Cette page n'utilise pas le coffre client-side.");
+    }
+
     if (!vaultReady || !sessionKey) {
       throw new Error("Le coffre doit être déverrouillé pour changer le mot de passe.");
     }
 
-    // Vérification RBAC
     if (window.IMCAuth && typeof window.IMCAuth.requirePermission === "function") {
       if (!window.IMCAuth.requirePermission("vault.update")) {
         throw new Error("Permission refusée.");
       }
     }
 
-    // Validation de l'ancien code
     if (!ancienCode || typeof ancienCode !== "string" || ancienCode.length < 12) {
       throw new Error("Ancien code invalide.");
     }
 
-    // Validation du nouveau code
     if (!nouveauCode || typeof nouveauCode !== "string" || nouveauCode.length < 12) {
       throw new Error("Le nouveau code doit contenir au moins 12 caractères.");
     }
 
-    // Validation de la confirmation
     if (nouveauCode !== confirmation) {
       throw new Error("Les deux nouveaux codes ne correspondent pas.");
     }
 
-    // Ne pas modifier si le nouveau code est identique à l'ancien
     if (ancienCode === nouveauCode) {
       throw new Error("Le nouveau code doit être différent de l'ancien.");
     }
@@ -315,14 +337,12 @@
       throw new Error("Aucun coffre trouvé.");
     }
 
-    // Sauvegarde de l'ancien payload pour restauration en cas d'échec
     const oldPayload = currentRecord;
 
     try {
-      // Vérification de l'ancien code
       const oldSalt = base64ToBytes(currentRecord.salt);
       const oldKey = await deriveKey(ancienCode, oldSalt);
-      
+
       let vaultDataTest;
       try {
         vaultDataTest = await dechiffrer(currentRecord, oldKey);
@@ -330,21 +350,14 @@
         throw new Error("Ancien code incorrect.");
       }
 
-      // Validation de la cohérence des données
       if (!vaultDataTest || typeof vaultDataTest !== "object") {
         throw new Error("Données du coffre invalides.");
       }
 
-      // Génération du nouveau salt
       const newSalt = crypto.getRandomValues(new Uint8Array(16));
-
-      // Dérivation de la nouvelle clé
       const newKey = await deriveKey(nouveauCode, newSalt);
-
-      // Re-chiffrement avec la nouvelle clé
       const encrypted = await chiffrer(vaultDataTest, newKey);
 
-      // Validation du nouveau payload avant écriture
       let verificationData;
       try {
         verificationData = await dechiffrer(
@@ -355,12 +368,10 @@
         throw new Error("Échec de validation du nouveau chiffrement.");
       }
 
-      // Vérification de l'intégrité des données après re-chiffrement
       if (JSON.stringify(vaultDataTest) !== JSON.stringify(verificationData)) {
         throw new Error("Incohérence des données après re-chiffrement.");
       }
 
-      // Construction du nouveau payload
       const newPayload = {
         id: RECORD_ID,
         version: 1,
@@ -370,16 +381,13 @@
         ciphertext: encrypted.ciphertext
       };
 
-      // Écriture atomique du nouveau payload
       await ecrireEnregistrement(db, newPayload);
 
-      // Validation après écriture
       const writtenRecord = await lireEnregistrement(db);
       let finalVerification;
       try {
         finalVerification = await dechiffrer(writtenRecord, newKey);
       } catch (error) {
-        // En cas d'échec, tentative de restauration
         await ecrireEnregistrement(db, oldPayload);
         throw new Error("Échec de validation après écriture. Restauration effectuée.");
       }
@@ -389,15 +397,12 @@
         throw new Error("Incohérence des données après écriture. Restauration effectuée.");
       }
 
-      // Nettoyage sécurisé
       sessionKey = null;
       vaultData = Object.create(null);
       vaultReady = false;
 
       return true;
-
     } catch (error) {
-      // En cas d'erreur, tenter de restaurer l'ancien payload
       try {
         await ecrireEnregistrement(db, oldPayload);
       } catch (restoreError) {
@@ -409,7 +414,7 @@
   }
 
   function reinitialiserVerrouillageAutomatique() {
-    if (!vaultReady) {
+    if (!vaultRequired || !vaultReady) {
       return;
     }
 
@@ -449,58 +454,73 @@
     planifierSauvegarde();
   }
 
-  Storage.prototype.getItem = function (key) {
-    if (SENSITIVE_KEYS.has(String(key))) {
-      return vaultReady ? valeurSensible(String(key)) : null;
-    }
-    return nativeGetItem.call(this, key);
-  };
-
-  Storage.prototype.setItem = function (key, value) {
-    if (SENSITIVE_KEYS.has(String(key))) {
-      if (!vaultReady) {
-        throw new Error("Le coffre est verrouillé.");
+  // Le stockage sensible n'est intercepté que sur une page qui exige réellement
+  // le coffre. Sur les autres pages, l'API serveur/PostgreSQL est la source de vérité.
+  if (vaultRequired) {
+    Storage.prototype.getItem = function (key) {
+      if (SENSITIVE_KEYS.has(String(key))) {
+        return vaultReady ? valeurSensible(String(key)) : null;
       }
-      ecrireSensible(String(key), value);
-      return;
-    }
-    return nativeSetItem.call(this, key, value);
-  };
+      return nativeGetItem.call(this, key);
+    };
 
-  Storage.prototype.removeItem = function (key) {
-    if (SENSITIVE_KEYS.has(String(key))) {
-      if (vaultReady) {
-        delete vaultData[String(key)];
-        planifierSauvegarde();
+    Storage.prototype.setItem = function (key, value) {
+      if (SENSITIVE_KEYS.has(String(key))) {
+        if (!vaultReady) {
+          throw new Error("Le coffre est verrouillé.");
+        }
+        ecrireSensible(String(key), value);
+        return;
       }
-      return;
-    }
-    return nativeRemoveItem.call(this, key);
-  };
+      return nativeSetItem.call(this, key, value);
+    };
 
-  const overlay = afficherEtatVerrouillage();
-  const status = overlay.querySelector("#imcVaultStatus");
+    Storage.prototype.removeItem = function (key) {
+      if (SENSITIVE_KEYS.has(String(key))) {
+        if (vaultReady) {
+          delete vaultData[String(key)];
+          planifierSauvegarde();
+        }
+        return;
+      }
+      return nativeRemoveItem.call(this, key);
+    };
+  }
 
-  const ready = initialiserCoffre()
-    .then(function () {
-      retirerEtatVerrouillage(overlay);
-      ["click", "keydown", "pointermove", "touchstart"].forEach(function (eventName) {
-        window.addEventListener(eventName, reinitialiserVerrouillageAutomatique, { passive: true });
+  let ready;
+
+  if (!vaultRequired) {
+    // Pas de coffre, pas de prompt, pas d'overlay, pas de verrouillage de page.
+    ready = Promise.resolve(true);
+    vaultReady = true;
+  } else {
+    const overlay = afficherEtatVerrouillage();
+    const status = overlay.querySelector("#imcVaultStatus");
+
+    ready = initialiserCoffre()
+      .then(function () {
+        retirerEtatVerrouillage(overlay);
+        ["click", "keydown", "pointermove", "touchstart"].forEach(function (eventName) {
+          window.addEventListener(eventName, reinitialiserVerrouillageAutomatique, { passive: true });
+        });
+        reinitialiserVerrouillageAutomatique();
+        return true;
+      })
+      .catch(function (error) {
+        console.error(error);
+        status.textContent = "Le coffre est verrouillé. Rechargez la page pour réessayer.";
+        overlay.classList.add("imc-vault-error");
+        return false;
       });
-      reinitialiserVerrouillageAutomatique();
-      return true;
-    })
-    .catch(function (error) {
-      console.error(error);
-      status.textContent = "Le coffre est verrouillé. Rechargez la page pour réessayer.";
-      overlay.classList.add("imc-vault-error");
-      return false;
-    });
+  }
 
   window.IMCSecureStorage = Object.freeze({
     ready,
     isUnlocked: function () {
       return vaultReady;
+    },
+    isRequired: function () {
+      return vaultRequired;
     },
     lock: verrouiller,
     changePassword: changerMotDePasse
