@@ -5,15 +5,14 @@
  * Les données sensibles sont regroupées dans un coffre IndexedDB chiffré.
  * La clé de session n'est jamais persistée.
  *
- * Le coffre n'est activé que sur la page PDG, qui contient l'interface
- * de configuration du compte PDG et la gestion du coffre.
- * Les autres pages peuvent conserver ce script sans déclencher le verrou.
+ * Le coffre est activé uniquement sur les pages qui l'exigent explicitement
+ * via window.IMC_VAULT_REQUIRED. PDG.html conserve ce comportement par défaut.
  */
 (function () {
   "use strict";
 
   const pageName = (window.location.pathname.split("/").pop() || "").toLowerCase();
-  const VAULT_REQUIRED = pageName === "pdg.html";
+  const VAULT_REQUIRED = window.IMC_VAULT_REQUIRED === true || pageName === "pdg.html";
 
   if (!VAULT_REQUIRED) {
     window.IMCSecureStorage = Object.freeze({
@@ -23,7 +22,7 @@
       },
       lock: function () {},
       changePassword: async function () {
-        throw new Error("Le coffre-fort n'est disponible que sur la page PDG.");
+        throw new Error("Le coffre-fort n'est pas requis sur cette page.");
       }
     });
     return;
@@ -335,7 +334,6 @@
     try {
       const oldSalt = base64ToBytes(currentRecord.salt);
       const oldKey = await deriveKey(ancienCode, oldSalt);
-      
       let vaultDataTest;
       try {
         vaultDataTest = await dechiffrer(currentRecord, oldKey);
@@ -393,9 +391,7 @@
       sessionKey = null;
       vaultData = Object.create(null);
       vaultReady = false;
-
       return true;
-
     } catch (error) {
       try {
         await ecrireEnregistrement(db, oldPayload);
@@ -411,7 +407,6 @@
     if (!vaultReady) {
       return;
     }
-
     window.clearTimeout(idleTimer);
     idleTimer = window.setTimeout(verrouiller, IDLE_TIMEOUT);
   }
@@ -427,7 +422,6 @@
     const style = document.createElement("style");
     style.textContent = "#imcVaultOverlay{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:#102a43f2;font-family:Arial,sans-serif;color:#fff}#imcVaultOverlay .imc-vault-box{width:min(430px,90vw);padding:26px;border-radius:12px;background:#1f4e78;box-shadow:0 10px 35px #0008;text-align:center}#imcVaultOverlay p{line-height:1.5}.imc-vault-error{background:#7f1d1d!important}";
     document.head.appendChild(style);
-
     return overlay;
   }
 
