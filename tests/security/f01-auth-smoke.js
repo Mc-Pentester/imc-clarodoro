@@ -5,6 +5,8 @@ const auth = fs.readFileSync("auth.js", "utf8");
 
 const context = {
   console,
+  // Minimal browser lifecycle API required by the real auth.js at load time.
+  document: { addEventListener() {} },
   fetch: async () => ({ ok: false, json: async () => ({ success: false }) }),
   sessionStorage: { removeItem() {} },
   location: { href: "", pathname: "/index.html" },
