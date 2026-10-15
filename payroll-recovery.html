@@ -33,13 +33,15 @@ label{display:block;font-weight:600;margin-bottom:.35rem}select{width:100%;backg
 </section>
 <section class="card">
 <h2>Paies historiques à rapprocher</h2>
-<p id="summary" class="muted">Vérification de la session et des données…</p>
+<p id="summary" class="muted">Vérification de la session et du coffre…</p>
 <div id="status" role="status" aria-live="polite"></div>
 <div id="records"></div>
 </section>
 <div class="actions"><button class="secondary" type="button" onclick="window.location.href='PDG.html'">Retour au tableau PDG</button></div>
 </main>
 <script src="auth.js"></script>
+<script>window.IMC_VAULT_REQUIRED = true;</script>
+<script src="secure-storage.js"></script>
 <script>
 (function(){
 "use strict";
@@ -62,8 +64,10 @@ function recordInfo(key,entry){const parts=String(key).split("|");return {key:St
 async function hashKey(key){const bytes=new TextEncoder().encode(key);const digest=await crypto.subtle.digest("SHA-256",bytes);return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");}
 async function load(){
   const user=await IMCAuth.verifySession();
-  if(!user||String(user.role).toUpperCase()!=="PDG"){status("Accès réservé à une session PDG active. Connectez-vous puis revenez à cette page.","error");$("summary").textContent="Accès refusé";return;}
+  if(!user||!IMCAuth.requirePermission("paies.reconcile")){status("Accès réservé à une session PDG autorisée. Connectez-vous puis revenez à cette page.","error");$("summary").textContent="Accès refusé";return;}
   try{
+    await IMCSecureStorage.ready;
+    if(!IMCSecureStorage.isUnlocked()){throw new Error("Le coffre-fort doit être déverrouillé avant l’accès aux paies historiques.");}
     legacy=readLegacy();
     const [peopleResponse,auditResponse]=await Promise.all([
       fetch("/api/personnel/index.php",{credentials:"same-origin",cache:"no-store",headers:{Accept:"application/json"}}),
@@ -136,6 +140,7 @@ async function render(){
 }
 $("exportBackup").addEventListener("click",()=>{
   try{
+    if(!IMCSecureStorage.isUnlocked())throw new Error("Le coffre-fort est verrouillé.");
     const snapshot={format:"imc-clarodoro-payroll-backup-v1",exportedAt:new Date().toISOString(),storageKey:LEGACY_KEY,records:readLegacy()};
     const blob=new Blob([JSON.stringify(snapshot,null,2)],{type:"application/json;charset=utf-8"});
     const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="imc-clarodoro-paies-historiques-"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
