@@ -529,14 +529,6 @@
         Se connecter
     </button>
 
-    <button
-        class="btn btn-vert"
-        onclick="configurerMotDePasseWrapper()"
-        style="margin-top: 10px;"
-    >
-        Configurer le mot de passe
-    </button>
-
     <div id="messageErreur" style="color: red; margin-top: 10px; font-weight: bold;"></div>
 
     <p id="messageErreur"
@@ -1262,10 +1254,6 @@ async function sauvegarderMaintenant() {
    CONFIGURATION
 ============================================================ */
 
-// Le mot de passe doit être configuré via localStorage
-// Utiliser: localStorage.setItem('imc_pdg_password_hash', 'hash_du_mot_de_passe')
-const MOT_DE_PASSE_PDG = null;
-
 const CLE_ELEVES =
     "imc_students";
 
@@ -1520,27 +1508,6 @@ function chargerAnnees() {
    CONNEXION PDG
 ============================================================ */
 
-// Fonction de hashage sécurisée avec Web Crypto API (SHA-256)
-async function secureHash(str) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
-}
-
-// Fonction de hashage simple (fallback pour compatibilité)
-function simpleHash(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
-    }
-    return hash.toString(16);
-}
-
 async function connecterPDGWrapper() {
     await connecterPDG();
 }
@@ -1608,63 +1575,6 @@ async function deconnecterPDG() {
         "motDePasse"
     ).value = "";
 
-}
-
-/* ============================================================
-   CONFIGURATION DU MOT DE PASSE (Première installation)
-============================================================ */
-
-async function configurerMotDePasseWrapper() {
-    await configurerMotDePasse();
-}
-
-async function configurerMotDePasse() {
-    const nouveauMotDePasse = prompt(
-        "Configuration initiale - Entrez le mot de passe PDG:"
-    );
-    
-    if (!nouveauMotDePasse || nouveauMotDePasse.length < 4) {
-        alert("Le mot de passe doit contenir au moins 4 caractères.");
-        return false;
-    }
-    
-    const confirmation = prompt("Confirmez le mot de passe:");
-    
-    if (nouveauMotDePasse !== confirmation) {
-        alert("Les mots de passe ne correspondent pas.");
-        return false;
-    }
-    
-    // Stocker le hash sécurisé du mot de passe
-    const hash = await secureHash(nouveauMotDePasse);
-    localStorage.setItem('imc_pdg_password_hash', hash);
-    
-    alert("Mot de passe configuré avec succès!");
-    return true;
-}
-
-/* ============================================================
-   VÉRIFICATION DE CONFIGURATION
-============================================================ */
-
- async function verifierConfiguration() {
-    const passwordHash = localStorage.getItem('imc_pdg_password_hash');
-    
-    if (!passwordHash) {
-        // Premier démarrage - demander de configurer un mot de passe
-        const configurer = confirm(
-            "Aucun mot de passe PDG n'est configuré. Voulez-vous le configurer maintenant?"
-        );
-        
-        if (configurer) {
-            return await configurerMotDePasse();
-        } else {
-            alert("Impossible d'accéder à l'interface PDG sans mot de passe configuré.");
-            return false;
-        }
-    }
-    
-    return true;
 }
 
 /* ============================================================
