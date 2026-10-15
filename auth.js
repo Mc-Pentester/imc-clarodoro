@@ -11,10 +11,62 @@
   "use strict";
 
   const SESSION_KEY = "imc_auth_session";
+  const pageName = (window.location.pathname.split("/").pop() || "").toLowerCase();
+  const VAULT_PAGES = new Set([
+    "pdg.html",
+    "payroll-recovery.html",
+    "finances.html",
+    "personnel.html",
+    "index.html",
+    "badge.html",
+    "resultats.html"
+  ]);
+  let vaultReadyPromise = Promise.resolve(true);
+  let vaultFailure = null;
   let serverUser = null;
   let serverSessionReady = false;
   let csrfToken = null;
   const nativeFetch = window.fetch.bind(window);
+
+  function chargerCoffrePourPageSensible() {
+    if (!VAULT_PAGES.has(pageName) || window.IMCSecureStorage) return;
+
+    window.IMC_VAULT_REQUIRED = true;
+    document.documentElement.dataset.imcVault = "locked";
+
+    const style = document.createElement("style");
+    style.id = "imc-vault-page-lock";
+    style.textContent = 'html[data-imc-vault="locked"] body > * { visibility: hidden !important; }';
+    document.documentElement.appendChild(style);
+
+    vaultReadyPromise = new Promise(function (resolve, reject) {
+      const script = document.createElement("script");
+      script.src = "secure-storage.js";
+      script.async = false;
+      script.onload = function () {
+        if (!window.IMCSecureStorage || !window.IMCSecureStorage.ready) {
+          reject(new Error("Le coffre-fort n'est pas disponible."));
+          return;
+        }
+        window.IMCSecureStorage.ready.then(function () {
+          document.documentElement.removeAttribute("data-imc-vault");
+          const lockStyle = document.getElementById("imc-vault-page-lock");
+          if (lockStyle) lockStyle.remove();
+          resolve(true);
+        }).catch(reject);
+      };
+      script.onerror = function () {
+        reject(new Error("Impossible de charger le coffre-fort."));
+      };
+      document.documentElement.appendChild(script);
+    }).catch(function (error) {
+      vaultFailure = error;
+      console.error("Coffre-fort:", error);
+      return false;
+    });
+  }
+
+  chargerCoffrePourPageSensible();
 
   function getCachedUser() { return serverUser ? { ...serverUser } : null; }
 
@@ -35,6 +87,16 @@
   }
 
   async function verifySession() {
+    if (VAULT_PAGES.has(pageName)) {
+      const vaultReady = await vaultReadyPromise;
+      if (!vaultReady || vaultFailure) {
+        serverUser = null;
+        csrfToken = null;
+        serverSessionReady = true;
+        return null;
+      }
+    }
+
     try {
       const response = await fetch("/api/auth/me.php", { method: "GET", credentials: "same-origin", cache: "no-store", headers: { "Accept": "application/json" } });
       const payload = await response.json();
