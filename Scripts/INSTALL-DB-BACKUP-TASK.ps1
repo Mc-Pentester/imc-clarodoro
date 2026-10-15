@@ -57,8 +57,7 @@ $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 
-# Copie toutes les paires backup/manifeste vérifiées vers le support F: toutes les 6 heures.
-# Le script échoue sans supprimer les originaux si le support est absent ou si un hash diffère.
+# Copie périodique des sauvegardes vérifiées vers un support USB identifié par son étiquette.
 $copyScript = Join-Path $PSScriptRoot 'COPY-DB-BACKUPS-TO-EXTERNAL.ps1'
 if (-not (Test-Path -LiteralPath $copyScript)) { throw 'Script de copie externe introuvable.' }
 $copyAction = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$copyScript`""
@@ -71,6 +70,6 @@ Write-Host "Nom : $TaskName"
 Write-Host "Heure : $ScheduleTime chaque jour"
 Write-Host "Dossier : $backupFullPath"
 Write-Host "Compte : $identity"
-Write-Host "Copie externe : USB détecté par étiquette IMC_BACKUPS (toutes les 6 heures)"
+Write-Host "Copie externe : support USB portant l’étiquette IMC_BACKUPS (toutes les 6 heures)"
 Write-Host "Tâche de copie : $CopyTaskName"
 Write-Host "Exécutez ensuite : Get-ScheduledTask -TaskName '$TaskName' | Get-ScheduledTaskInfo"
