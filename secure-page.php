@@ -7,6 +7,8 @@ header('Cache-Control: no-store, private, max-age=0');
 header('Pragma: no-cache');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
+// Autoriser les fonctions caméra de même origine si une page les utilise.
+header('Permissions-Policy: camera=(self), microphone=(), geolocation=()');
 
 $pages = [
     'index.html' => ['public' => 'index.html', 'file' => 'index.php', 'permission' => 'eleves.read', 'role' => null],
