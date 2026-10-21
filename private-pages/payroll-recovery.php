@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/page_auth.php';
-imcRequirePageAccess('paies.reconcile');
+imcRequirePageAccess('paies.reconcile', null, $pdo ?? null);
 ?>
 <!doctype html>
 <html lang="fr">
