@@ -83,10 +83,10 @@ jobs:
           python3 - <<'PY'
           import re
           from pathlib import Path
-          html = Path("payroll-recovery.html").read_text(encoding="utf-8")
+          html = Path("private-pages/payroll-recovery.php").read_text(encoding="utf-8")
           scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
           if not scripts:
-              raise SystemExit("No inline JavaScript found in payroll-recovery.html")
+              raise SystemExit("No inline JavaScript found in private-pages/payroll-recovery.php")
           for i, script in enumerate(scripts):
               Path(f"/tmp/payroll-recovery-{i}.js").write_text(script, encoding="utf-8")
           PY
