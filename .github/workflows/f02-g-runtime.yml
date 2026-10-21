@@ -226,11 +226,11 @@ jobs:
       - name: Frontend authority guard
         run: |
           set -euo pipefail
-          if grep -nE 'localStorage\.(getItem|setItem|removeItem).*imc_personnel|IMCSecureStorage\.(getItem|setItem|removeItem).*imc_personnel' personnel.html PDG.html; then
+          if grep -nE 'localStorage\.(getItem|setItem|removeItem).*imc_personnel|IMCSecureStorage\.(getItem|setItem|removeItem).*imc_personnel' private-pages/personnel.php private-pages/PDG.php; then
             echo 'FAIL: personnel browser storage remains a source of truth'
             exit 1
           fi
-          grep -q 'api/personnel/index.php' personnel.html
+          grep -q 'api/personnel/index.php' private-pages/personnel.php
           echo 'F-02-G FRONTEND AUTHORITY CHECK: PASS'
           echo 'F-02-G RUNTIME PROOF: PASS'
 
