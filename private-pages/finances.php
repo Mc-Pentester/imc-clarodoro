@@ -1,0 +1,1654 @@
+<?php
+require_once __DIR__ . '/../config/page_auth.php';
+imcRequirePageAccess('finances.read');
+?>
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Finances - IMC Clarodaro</title>
+
+<style>
+
+*{
+    box-sizing:border-box
+}
+
+body{
+    margin:0;
+    font-family:"Times New Roman",serif;
+    font-size:12pt;
+    background:#f4f7fb;
+    color:#17202a
+}
+
+header{
+    background:linear-gradient(135deg,#145a32,#1e8449,#2471a3);
+    color:white;
+    padding:18px;
+    text-align:center
+}
+
+header h1{
+    margin:0;
+    font-size:24pt
+}
+
+header p{
+    margin:5px 0 0
+}
+
+.menu-principal{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:center;
+    gap:8px;
+    padding:12px;
+    background:white;
+    border-bottom:1px solid #ccd6dd
+}
+
+.menu-principal button{
+    border:0;
+    border-radius:9px;
+    padding:10px 15px;
+    font:700 12pt "Times New Roman";
+    color:white;
+    cursor:pointer
+}
+
+.menu-principal button:nth-child(1){background:#2874a6}
+.menu-principal button:nth-child(2){background:#8e44ad}
+.menu-principal button:nth-child(3){background:#16a085}
+.menu-principal button:nth-child(4){background:#d68910}
+.menu-principal button:nth-child(5){background:#c0392b}
+.menu-principal button:nth-child(6){background:#2e86c1}
+.menu-principal button:nth-child(7){background:#117864}
+.menu-principal button:nth-child(8){background:#884ea0}
+
+.menu-principal button:hover{
+    filter:brightness(1.1);
+    transform:translateY(-1px)
+}
+
+.menu-principal button.active{
+    outline:3px solid #f4d03f;
+    box-shadow:0 3px 8px #999
+}
+
+.container{
+    max-width:1250px;
+    margin:20px auto;
+    padding:0 15px
+}
+
+.card{
+    background:white;
+    border-radius:12px;
+    padding:18px;
+    margin-bottom:18px;
+    box-shadow:0 3px 12px #00000012
+}
+
+.card h2{
+    margin:0 0 14px;
+    color:#145a32
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+    gap:12px
+}
+
+label{
+    font-weight:bold;
+    display:block;
+    margin-bottom:5px
+}
+
+input,
+select,
+textarea{
+    width:100%;
+    padding:9px;
+    border:1px solid #aeb6bf;
+    border-radius:7px;
+    font:12pt "Times New Roman"
+}
+
+textarea{
+    min-height:70px;
+    resize:vertical
+}
+
+.action{
+    border:0;
+    border-radius:8px;
+    padding:10px 15px;
+    margin:5px 4px 0 0;
+    font:700 12pt "Times New Roman";
+    color:white;
+    cursor:pointer
+}
+
+.btn-save{background:#1e8449}
+.btn-edit{background:#2874a6}
+.btn-delete{background:#c0392b}
+.btn-secondary{background:#566573}
+.btn-payment{background:#117864}
+.btn-discount{background:#8e44ad}
+.btn-print{background:#d68910}
+
+.message{
+    padding:10px;
+    border-radius:7px;
+    margin-bottom:12px;
+    display:none;
+    font-weight:bold
+}
+
+.success{
+    background:#d5f5e3;
+    color:#145a32
+}
+
+.error{
+    background:#fadbd8;
+    color:#922b21
+}
+
+.table-wrap{
+    overflow-x:auto
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    min-width:850px
+}
+
+th,
+td{
+    border:1px solid #7f8c8d;
+    padding:8px;
+    text-align:center;
+    vertical-align:middle
+}
+
+th{
+    background:#d5f5e3;
+    color:#145a32
+}
+
+tr:nth-child(even) td{
+    background:#f8f9f9
+}
+
+.money{
+    font-weight:bold;
+    white-space:nowrap
+}
+
+.remaining{
+    color:#c0392b;
+    font-weight:bold
+}
+
+.paid{
+    color:#1e8449;
+    font-weight:bold
+}
+
+.partial{
+    color:#d68910;
+    font-weight:bold
+}
+
+.small{
+    font-size:10pt;
+    color:#566573
+}
+
+.student-list button{
+    width:100%;
+    text-align:left;
+    border:1px solid #ccd6dd;
+    background:#f8f9f9;
+    border-radius:7px;
+    padding:9px;
+    margin:4px 0;
+    cursor:pointer;
+    font:12pt "Times New Roman"
+}
+
+.student-list button:hover{
+    background:#eaf2f8
+}
+
+.student-list button.selected{
+    background:#d6eaf8;
+    border-color:#2874a6;
+    font-weight:bold
+}
+
+.hidden{
+    display:none!important
+}
+
+.summary{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+    gap:12px
+}
+
+.summary-box{
+    border-radius:10px;
+    padding:14px;
+    color:white
+}
+.summary-box h3{
+    margin:0 0 6px
+}
+
+.summary-box div{
+    font-size:17pt;
+    font-weight:bold
+}
+
+.box-blue{background:#2874a6}
+.box-green{background:#1e8449}
+.box-orange{background:#d68910}
+.box-red{background:#c0392b}
+.box-purple{background:#8e44ad}
+
+.modal{
+    position:fixed;
+    inset:0;
+    background:#0007;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:50
+}
+
+.modal-content{
+    background:white;
+    width:min(600px,94%);
+    max-height:90vh;
+    overflow:auto;
+    border-radius:12px;
+    padding:20px
+}
+
+.modal-content h2{
+    margin-top:0;
+    color:#145a32
+}
+
+.annee-affichee{
+    margin-top:8px;
+    padding:8px 10px;
+    border-radius:8px;
+    background:#eaf2f8;
+    color:#1f618d;
+    font-weight:bold;
+    text-align:center
+}
+
+.classes-buttons{
+    display:flex;
+    flex-wrap:wrap;
+    gap:7px;
+    margin-top:8px
+}
+
+.class-button{
+    border:0;
+    border-radius:8px;
+    padding:8px 11px;
+    font:700 11pt "Times New Roman";
+    cursor:pointer;
+    color:white;
+    background:#2874a6
+}
+
+.class-button:hover{
+    filter:brightness(1.08);
+    transform:translateY(-1px)
+}
+
+.class-button.selected{
+    outline:3px solid #f4d03f;
+    box-shadow:0 2px 6px #999
+}
+
+.all-classes{
+    background:#117864;
+    width:100%;
+    margin:0
+}
+
+
+/* =====================================================
+   TABLEAU FINANCIER DE L'ELEVE
+   ===================================================== */
+
+.tableau-resume-eleve{
+    margin-top:20px;
+    border:2px solid #145a32;
+    border-radius:10px;
+    overflow:hidden;
+    background:white
+}
+
+.tableau-resume-eleve h3{
+    margin:0;
+    padding:11px;
+    background:#145a32;
+    color:white;
+    text-align:center;
+    font-size:16pt
+}
+
+.tableau-resume-eleve table{
+    min-width:1250px
+}
+
+.tableau-resume-eleve th{
+    background:#d5f5e3;
+    color:#145a32;
+    font-weight:bold
+}
+
+.tableau-resume-eleve td{
+    background:white;
+    font-weight:bold
+}
+
+
+/* Cases des versements */
+
+.versement-input{
+    width:120px;
+    min-width:100px;
+    padding:7px;
+    text-align:center;
+    font-weight:bold;
+    border:2px solid #2874a6;
+    background:#ffffff;
+    border-radius:7px
+}
+
+.versement-input:focus{
+    outline:none;
+    border-color:#1e8449;
+    box-shadow:0 0 0 3px #d5f5e3
+}
+
+.calcul-auto{
+    background:#f4f7fb!important;
+    color:#1e8449;
+    font-weight:bold!important
+}
+
+.balance-auto{
+    background:#fff5f5!important;
+    color:#c0392b;
+    font-weight:bold!important
+}
+
+.total-auto{
+    background:#f0fff6!important;
+    color:#145a32;
+    font-weight:bold!important
+}
+
+
+/* Date et heure */
+
+.date-heure{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    align-items:center;
+    white-space:nowrap
+}
+
+.date-ligne{
+    font-weight:bold
+}
+
+.heure-ligne{
+    color:#566573;
+    font-size:10pt
+}
+
+.icone{
+    margin-right:3px
+}
+
+.versement-vide{
+    color:#7f8c8d;
+    font-weight:normal
+}
+
+.info-calcul{
+    margin-top:10px;
+    padding:9px;
+    border-radius:7px;
+    background:#eaf2f8;
+    color:#1f618d;
+    font-size:10.5pt;
+    text-align:center
+}
+
+
+/* Impression */
+
+@media print{
+
+    .no-print,
+    .menu-principal,
+    header{
+        display:none!important
+    }
+
+    body{
+        background:white
+    }
+
+    .card{
+        box-shadow:none;
+        border:1px solid #ccc
+    }
+
+    .tableau-resume-eleve{
+        border:2px solid #000
+    }
+
+    .versement-input{
+        border:0;
+        padding:0;
+        appearance:none
+    }
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+
+<header class="no-print">
+
+<h1>Finances</h1>
+
+<p>
+Institution Mixte Clarodaro — Clarodaro, la clarté du savoir!
+</p>
+
+</header>
+
+
+<nav class="menu-principal no-print">
+
+<button type="button" onclick="ouvrirPage('index.html')">
+Élèves</button>
+
+<button type="button" onclick="ouvrirPage('matieres.html')">
+Matières
+</button>
+
+<button type="button" onclick="ouvrirPage('resultats.html')">
+Résultats
+</button>
+
+<button type="button" class="active" onclick="ouvrirPage('finances.html')">
+Finances
+</button>
+
+<button type="button" onclick="ouvrirPage('personnel.html')">
+Personnel
+</button>
+
+<button type="button" onclick="ouvrirPage('annees-scolaires.html')">
+Année scolaire
+</button>
+
+<button type="button" onclick="ouvrirPage('vacances.html')">
+Vacances
+</button>
+
+<button type="button" onclick="ouvrirPage('pdg.html')">
+PDG
+</button>
+
+</nav>
+
+
+<div class="container">
+
+
+<div id="message" class="message"></div>
+
+
+<!-- PARAMETRES -->
+
+<section class="card no-print">
+
+<h2>Paramètres financiers</h2>
+
+<div class="grid">
+
+
+<div>
+
+<label>Année académique</label>
+
+<select id="annee"></select>
+
+<div id="anneeAffichee" class="annee-affichee"></div>
+
+</div>
+
+
+<div>
+
+<label>Classe</label>
+
+<button
+type="button"
+id="btnToutesClasses"
+class="class-button all-classes">
+
+Toutes les classes
+
+</button>
+
+<div id="listeClasses" class="classes-buttons hidden"></div>
+
+<input type="hidden" id="classe" value="">
+
+</div>
+
+
+<div>
+
+<label>Rechercher un élève</label>
+
+<input
+id="recherche"
+type="search"
+placeholder="Nom ou prénom">
+
+</div>
+
+
+</div>
+
+</section>
+
+
+<!-- LISTE DES ELEVES -->
+
+<section class="card no-print">
+
+<h2>Élèves</h2>
+
+<div id="listeEleves" class="student-list"></div>
+
+</section>
+
+
+<!-- FICHE ELEVE -->
+
+<section id="ficheEleve" class="card hidden">
+
+
+<h2>Situation financière de l'élève</h2>
+
+
+<div id="identiteEleve"></div>
+
+
+<!-- =====================================================
+     TABLEAU DEMANDE
+     ===================================================== -->
+
+<div id="resumeEleve" class="tableau-resume-eleve">
+
+
+<h3>
+Tableau financier de l'élève
+</h3>
+
+
+<div class="table-wrap">
+
+
+<table>
+
+
+<thead>
+
+<tr>
+
+<th>#</th>
+
+<th>Nom et Prénom</th>
+
+<th>Classe</th>
+
+<th>Montant à payer</th>
+
+<th>1er Versement</th>
+
+<th>2ème Versement</th>
+
+<th>3ème Versement</th>
+
+<th>Total</th>
+
+<th>Balance</th>
+
+<th>📅 Date</th>
+
+<th>🕐 Heure</th>
+
+</tr>
+
+</thead>
+
+
+<tbody id="tableResumeEleve"></tbody>
+
+
+</table>
+
+
+</div>
+
+
+<div class="info-calcul">
+
+💡 Les montants des versements sont saisissables directement.
+Le <strong>Total</strong> et la <strong>Balance</strong> sont calculés automatiquement.
+
+</div>
+
+
+</div>
+
+
+<hr>
+
+
+<!-- SITUATION -->
+
+<div class="grid">
+
+
+<div>
+
+<label>Tarif normal de la classe</label>
+
+<input
+id="tarifNormal"
+type="number"
+min="0"
+step="0.01">
+
+</div>
+
+
+<div>
+
+<label>Réduction exceptionnelle</label>
+
+<input
+id="reduction"
+type="number"
+min="0"
+step="0.01">
+
+</div>
+
+
+<div>
+
+<label>Montant réellement à payer</label>
+
+<input
+id="montantAPayer"
+type="number"
+readonly>
+
+</div>
+
+
+<div>
+
+<label>Total versé</label>
+
+<input
+id="totalVerse"
+type="number"
+readonly>
+
+</div>
+
+
+<div>
+
+<label>Reste à payer</label>
+
+<inputid="reste"
+type="number"
+readonly>
+
+</div>
+
+
+</div>
+
+
+<div style="margin-top:10px">
+
+<label>
+Motif de la réduction / observation
+</label>
+
+<textarea id="motifReduction"></textarea>
+
+</div>
+
+
+<button
+class="action btn-save"
+onclick="enregistrerSituation()">
+
+Enregistrer la situation
+
+</button>
+
+
+<button
+class="action btn-discount"
+onclick="ouvrirReduction()">
+
+Ajouter une réduction
+
+</button>
+
+
+<button
+class="action btn-payment"
+onclick="ouvrirVersement()">
+
++ Ajouter un versement
+
+</button>
+
+
+<button
+class="action btn-print no-print"
+onclick="imprimerFiche()">
+
+Imprimer
+
+</button>
+
+
+<!-- VERSEMENTS DETAILLES -->
+
+<h2 style="margin-top:22px">
+
+Versements de l'élève
+
+</h2>
+
+
+<div class="table-wrap">
+
+
+<table>
+
+
+<thead>
+
+<tr>
+
+<th>#</th>
+
+<th>📅 Date</th>
+
+<th>Versement</th>
+
+<th>Montant</th>
+
+<th>Mode</th>
+
+<th>Observation</th>
+
+<th class="no-print">
+Action
+</th>
+
+</tr>
+
+</thead>
+
+
+<tbody id="tableVersements"></tbody>
+
+
+</table>
+
+
+</div>
+
+
+</section>
+
+
+<!-- TARIFS -->
+
+<section class="card">
+
+<h2>Tarifs par classe</h2>
+
+<p class="small no-print">
+
+Les montants et les dates des versements sont modifiables pour chaque année.
+Le total est calculé automatiquement.
+
+</p>
+
+
+<div class="table-wrap">
+
+
+<table>
+
+
+<thead>
+
+<tr>
+
+<th>Classe</th>
+
+<th>1er versement</th>
+
+<th>2e versement</th>
+
+<th>3e versement</th>
+
+<th>Total</th>
+
+<th>Actions</th>
+
+</tr>
+
+</thead>
+
+
+<tbody id="tableTarifs"></tbody>
+
+
+</table>
+
+
+</div>
+
+</section>
+
+
+<!-- RESUME -->
+
+<section class="card">
+
+<h2>
+Résumé financier de l'année
+</h2>
+
+
+<div class="summary">
+
+
+<div class="summary-box box-blue">
+
+<h3>Total prévu</h3>
+
+<div id="resumePrevu">
+0 $ HT
+</div>
+
+</div>
+
+
+<div class="summary-box box-green">
+
+<h3>Total reçu</h3>
+
+<div id="resumeRecu">
+0 $ HT
+</div>
+
+</div>
+
+
+<div class="summary-box box-orange">
+
+<h3>Total restant</h3>
+
+<div id="resumeReste">
+0 $ HT
+</div>
+
+</div>
+
+
+<div class="summary-box box-red">
+
+<h3>Élèves non payés</h3>
+
+<div id="resumeNonPayes">
+0
+</div>
+
+</div>
+
+
+<div class="summary-box box-purple">
+
+<h3>Élèves partiellement payés</h3>
+
+<div id="resumePartiels">
+0
+</div>
+
+</div>
+
+
+</div>
+
+</section>
+
+
+<!-- SITUATION TOUS LES ELEVES -->
+
+<section class="card">
+
+<h2>
+Situation de tous les élèves
+</h2>
+
+
+<div class="table-wrap">
+
+
+<table>
+
+
+<thead>
+<tr>
+
+<th>#</th>
+
+<th>Nom et prénom</th>
+
+<th>Classe</th>
+
+<th>Montant à payer</th>
+
+<th>Total versé</th>
+
+<th>Reste</th>
+
+<th>Situation</th>
+
+</tr>
+
+</thead>
+
+
+<tbody id="tableSituations"></tbody>
+
+
+</table>
+
+
+</div>
+
+</section>
+
+
+</div>
+
+
+<!-- =====================================================
+     MODAL TARIF
+     ===================================================== -->
+
+<div id="modalTarif" class="modal no-print">
+
+
+<div class="modal-content">
+
+
+<h2>
+Modifier le tarif de la classe
+</h2>
+
+
+<input
+type="hidden"
+id="tarifClasseOriginal">
+
+
+<label>Classe</label>
+
+<input
+id="tarifClasseNom"
+readonly>
+
+
+<label style="margin-top:10px">
+
+Montant total de la classe ($ HT)
+
+</label>
+
+<input
+id="montantTotal"
+type="number"
+min="0"
+step="0.01">
+
+
+<p class="small">
+
+Ce montant est appliqué automatiquement à tous les élèves de cette classe.
+
+</p>
+
+
+<label style="margin-top:10px">
+
+1er versement — date/période
+
+</label>
+
+<input id="date1">
+
+
+<label style="margin-top:10px">
+
+Montant du 1er versement ($ HT)
+
+</label>
+
+<input
+id="montant1"
+type="number"
+min="0"
+step="0.01">
+
+
+<label style="margin-top:10px">
+
+2e versement — date/période
+
+</label>
+
+<input id="date2">
+
+
+<label style="margin-top:10px">
+
+Montant du 2e versement ($ HT)
+
+</label>
+
+<input
+id="montant2"
+type="number"
+min="0"
+step="0.01">
+
+
+<label style="margin-top:10px">
+
+3e versement — date/période
+
+</label>
+
+<input id="date3">
+
+
+<label style="margin-top:10px">
+
+Montant du 3e versement ($ HT)
+
+</label>
+
+<input
+id="montant3"
+type="number"
+min="0"
+step="0.01">
+
+
+<button
+class="action btn-save"
+onclick="enregistrerTarif()">
+
+Enregistrer
+
+</button>
+
+
+<button
+class="action btn-secondary"
+onclick="fermerModals()">
+
+Annuler
+
+</button>
+
+
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     MODAL VERSEMENT
+     ===================================================== -->
+
+<div id="modalVersement" class="modal no-print">
+
+
+<div class="modal-content">
+
+
+<h2>
+Ajouter un versement
+</h2>
+
+
+<label>
+Date
+</label>
+
+<input
+id="versementDate"
+type="date">
+
+
+<label style="margin-top:10px">
+
+Numéro du versement
+
+</label>
+
+<input
+id="versementNumero"
+readonly>
+
+
+<label style="margin-top:10px">
+
+Montant ($ HT)
+
+</label>
+
+<input
+id="versementMontant"
+type="number"
+min="0"
+step="0.01">
+
+
+<label style="margin-top:10px">
+
+Mode de paiement
+
+</label>
+
+<select id="versementMode">
+
+<option>Espèces</option>
+
+<option>Chèque</option>
+
+<option>Virement</option>
+
+<option>Autre</option>
+
+</select>
+
+
+<label style="margin-top:10px">
+
+Observation
+
+</label>
+
+<textarea id="versementObservation"></textarea>
+
+
+<button
+class="action btn-save"
+onclick="enregistrerVersement()">
+Enregistrer
+
+</button>
+
+
+<button
+class="action btn-secondary"
+onclick="fermerModals()">
+
+Annuler
+
+</button>
+
+
+</div>
+
+</div>
+
+
+<script src="auth.js"></script>
+<script>
+"use strict";
+
+const FINANCE_API = "/api/finance/index.php";
+const YEARS_API = "/api/school-years/index.php";
+
+let anneesServeur = [];
+let anneeServeurId = "";
+let etudiants = [];
+let factures = [];
+let tarifs = [];
+let eleveSelectionne = null;
+let classeSelectionnee = "";
+
+function ouvrirPage(page){ window.location.assign(page); }
+
+function afficherMessage(message, type="success"){
+  const box=document.getElementById("message");
+  box.textContent=message;
+  box.className="message "+type;
+  box.style.display="block";
+  clearTimeout(window.__financeMessageTimer);
+  window.__financeMessageTimer=setTimeout(()=>box.style.display="none",3500);
+}
+
+function formatMontant(value){
+  return Number(value||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" $ HT";
+}
+
+function escapeHtml(value){
+  return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+}
+
+async function apiJson(url, options={}){
+  const response=await fetch(url,{credentials:"same-origin",cache:"no-store",...options});
+  let payload=null;
+  try{ payload=await response.json(); }catch(_){}
+  if(!response.ok || !payload || payload.success!==true){
+    throw new Error((payload&&payload.message)||("Erreur HTTP "+response.status));
+  }
+  return payload;
+}
+
+function anneeActuelle(){ return anneeServeurId; }
+
+function factureEleve(studentId){
+  return factures
+    .filter(f=>f.student_id===studentId)
+    .sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||"")))[0] || null;
+}
+
+function tarifEleve(e){
+  return tarifs.find(t=>t.class_id===e.class_id) || null;
+}
+
+function montantAPayer(f){
+  return Math.max(0,Number(f?.amount||0)-Number(f?.reduction||0));
+}
+
+function totalVerse(f){
+  return (f?.paid_amount!=null ? Number(f.paid_amount) : (f?.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0));
+}
+
+function obtenirLigneFinance(e){
+  const f=factureEleve(e.id);
+  const t=tarifEleve(e);
+  const ap=f ? montantAPayer(f) : Number(t?.amount||0);
+  const tv=f ? totalVerse(f) : 0;
+  return {f,ap,tv,r:Math.max(0,ap-tv)};
+}
+
+async function chargerAnnees(){
+  const data=await apiJson(YEARS_API);
+  anneesServeur=data.schoolYears||[];
+  const select=document.getElementById("annee");
+  select.innerHTML="";
+  anneesServeur.forEach(y=>{
+    const option=document.createElement("option");
+    option.value=y.id;
+    option.textContent=y.label;
+    select.appendChild(option);
+  });
+  if(!anneesServeur.length) throw new Error("Aucune année scolaire disponible.");
+  const active=anneesServeur.find(y=>y.status==="ACTIVE")||anneesServeur[0];
+  anneeServeurId=active.id;
+  select.value=anneeServeurId;
+  document.getElementById("anneeAffichee").textContent="Année académique : "+active.label;
+}
+
+async function chargerFinance(){
+  if(!anneeServeurId) return;
+  const data=await apiJson(FINANCE_API+"?school_year_id="+encodeURIComponent(anneeServeurId));
+  etudiants=data.students||[];
+  factures=data.invoices||[];
+  tarifs=data.tariffs||[];
+  renderAll();
+}
+
+function renderAll(){
+  afficherClasses();
+  afficherEleves();
+  afficherSituations();
+  afficherResume();
+  afficherTarifs();
+  if(eleveSelectionne){
+    const found=etudiants.find(e=>e.id===eleveSelectionne.id);
+    if(found) { eleveSelectionne=found; chargerFicheEleve(); }
+    else { eleveSelectionne=null; document.getElementById("ficheEleve").classList.add("hidden"); }
+  }
+}
+
+function afficherClasses(){
+  const box=document.getElementById("listeClasses");
+  box.innerHTML="";
+  const classes=[...new Map(etudiants.filter(e=>e.class_name).map(e=>[e.class_id,e.class_name])).entries()]
+    .sort((a,b)=>a[1].localeCompare(b[1],"fr"));
+  classes.forEach(([id,name])=>{
+    const b=document.createElement("button");
+    b.type="button";
+    b.className="class-button"+(classeSelectionnee===id?" selected":"");
+    b.textContent=name;
+    b.onclick=()=>selectionnerClasse(id);
+    box.appendChild(b);
+  });
+  document.getElementById("btnToutesClasses").classList.toggle("selected",!classeSelectionnee);
+}
+
+function afficherToutesLesClasses(){
+  classeSelectionnee="";
+  eleveSelectionne=null;
+  document.getElementById("ficheEleve").classList.add("hidden");
+  document.getElementById("listeClasses").classList.remove("hidden");
+  afficherClasses(); afficherEleves(); afficherSituations();
+}
+
+function selectionnerClasse(id){
+  classeSelectionnee=id;
+  eleveSelectionne=null;
+  document.getElementById("ficheEleve").classList.add("hidden");
+  document.getElementById("listeClasses").classList.remove("hidden");
+  afficherClasses(); afficherEleves(); afficherSituations();
+}
+
+function afficherEleves(){
+  const list=document.getElementById("listeEleves");
+  const q=document.getElementById("recherche").value.trim().toLowerCase();
+  const rows=etudiants.filter(e=>{
+    const name=(e.last_name+" "+e.first_name).toLowerCase();
+    return (!q||name.includes(q))&&(!classeSelectionnee||e.class_id===classeSelectionnee);
+  }).sort((a,b)=>(a.last_name+" "+a.first_name).localeCompare(b.last_name+" "+b.first_name,"fr"));
+  list.innerHTML="";
+  if(!rows.length){ list.innerHTML="<p>Aucun élève trouvé.</p>"; return; }
+  rows.forEach(e=>{
+    const b=document.createElement("button");
+    b.type="button";
+    b.className=""+(eleveSelectionne?.id===e.id?"selected":"");
+    b.textContent=(e.last_name+" "+e.first_name)+(e.class_name?" — "+e.class_name:"");
+    b.onclick=()=>selectionnerEleve(e.id);
+    list.appendChild(b);
+  });
+}
+
+function selectionnerEleve(id){
+  eleveSelectionne=etudiants.find(e=>e.id===id)||null;
+  if(!eleveSelectionne) return;
+  document.getElementById("ficheEleve").classList.remove("hidden");
+  chargerFicheEleve();
+  afficherEleves();
+  document.getElementById("ficheEleve").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function afficherSituations(){
+  const tb=document.getElementById("tableSituations");
+  tb.innerHTML="";
+  const q=document.getElementById("recherche").value.trim().toLowerCase();
+  const rows=etudiants.filter(e=>{
+    const name=(e.last_name+" "+e.first_name).toLowerCase();
+    return (!q||name.includes(q))&&(!classeSelectionnee||e.class_id===classeSelectionnee);
+  });
+  rows.forEach((e,i)=>{
+    const x=obtenirLigneFinance(e);
+    const status=x.ap>0&&x.r===0?"Payé":x.tv>0?"Partiellement payé":"Non payé";
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${i+1}</td><td><strong>${escapeHtml(e.last_name+" "+e.first_name)}</strong></td><td>${escapeHtml(e.class_name||"")}</td><td>${formatMontant(x.ap)}</td><td>${formatMontant(x.tv)}</td><td class="${x.r>0?"remaining":"paid"}">${formatMontant(x.r)}</td><td class="${status==="Payé"?"paid":status==="Partiellement payé"?"partial":"remaining"}">${status}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function afficherResume(){
+  let prevu=0,recu=0,reste=0,non=0,part=0;
+  etudiants.forEach(e=>{
+    const x=obtenirLigneFinance(e);
+    prevu+=x.ap; recu+=x.tv; reste+=x.r;
+    if(x.ap>0&&x.tv===0) non++;
+    else if(x.tv>0&&x.r>0) part++;
+  });
+  document.getElementById("resumePrevu").textContent=formatMontant(prevu);
+  document.getElementById("resumeRecu").textContent=formatMontant(recu);
+  document.getElementById("resumeReste").textContent=formatMontant(reste);
+  document.getElementById("resumeNonPayes").textContent=non;
+  document.getElementById("resumePartiels").textContent=part;
+}
+
+function afficherTarifs(){
+  const tb=document.getElementById("tableTarifs");
+  tb.innerHTML="";
+  tarifs.forEach(t=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${escapeHtml(t.class_name||"")}</td><td>${formatMontant(t.installment1_amount)}<br><span class="small">${escapeHtml(t.installment1_label||"")}</span></td><td>${formatMontant(t.installment2_amount)}<br><span class="small">${escapeHtml(t.installment2_label||"")}</span></td><td>${formatMontant(t.installment3_amount)}<br><span class="small">${escapeHtml(t.installment3_label||"")}</span></td><td>${formatMontant(t.amount)}</td><td><button class="action btn-edit" onclick="modifierTarif('${t.class_id}')">Modifier</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function afficherTableauResumeEleve(e,f){
+  const tb=document.getElementById("tableResumeEleve");
+  tb.innerHTML="";
+  const x=obtenirLigneFinance(e);
+  const payments=(f?.payments||[]).sort((a,b)=>String(a.payment_date||"").localeCompare(String(b.payment_date||"")));
+  const byNumber=[1,2,3].map(n=>payments[n-1]||null);
+  const cells=byNumber.map((p,n)=>`<td><input class="versement-input" type="number" min="0" step="0.01" value="${p?Number(p.amount):""}" placeholder="0" onchange="enregistrerVersementDirect(${n+1},this.value)"></td>`).join("");
+  const last=payments[payments.length-1];
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>1</td><td>${escapeHtml(e.last_name+" "+e.first_name)}</td><td>${escapeHtml(e.class_name||"")}</td><td class="money">${formatMontant(x.ap)}</td>${cells}<td id="totalAutoEleve" class="money total-auto">${formatMontant(x.tv)}</td><td id="balanceAutoEleve" class="money balance-auto">${formatMontant(x.r)}</td><td>${last?escapeHtml(last.payment_date||"—"):"—"}</td><td>${last?escapeHtml(last.method||"—"):"—"}</td>`;
+  tb.appendChild(tr);
+}
+
+function chargerFicheEleve(){
+  if(!eleveSelectionne) return;
+  const f=factureEleve(eleveSelectionne.id);
+  const t=tarifEleve(eleveSelectionne);
+  const x=obtenirLigneFinance(eleveSelectionne);
+  document.getElementById("identiteEleve").innerHTML=`<p><strong>Nom et prénom :</strong> ${escapeHtml(eleveSelectionne.last_name+" "+eleveSelectionne.first_name)}</p><p><strong>Classe :</strong> ${escapeHtml(eleveSelectionne.class_name||"")}</p><p><strong>Année académique :</strong> ${escapeHtml(anneesServeur.find(y=>y.id===anneeServeurId)?.label||"")}</p>`;
+  document.getElementById("tarifNormal").value=f?Number(f.amount):Number(t?.amount||0);
+  document.getElementById("reduction").value=f?Number(f.reduction||0):0;
+  document.getElementById("montantAPayer").value=x.ap.toFixed(2);
+  document.getElementById("totalVerse").value=x.tv.toFixed(2);
+  document.getElementById("reste").value=x.r.toFixed(2);
+  document.getElementById("motifReduction").value=f?.reduction_reason||"";
+  afficherTableauResumeEleve(eleveSelectionne,f);
+  const tb=document.getElementById("tableVersements");
+  tb.innerHTML="";
+  const payments=f?.payments||[];
+  if(!payments.length){ tb.innerHTML="<tr><td colspan='7'>Aucun versement enregistré.</td></tr>"; return; }
+  payments.forEach((p,i)=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${i+1}</td><td>📅 ${escapeHtml(p.payment_date||"—")}</td><td>${i+1}e</td><td class="money">${formatMontant(p.amount)}</td><td>${escapeHtml(p.method||"")}</td><td>${escapeHtml(p.reference||"")}</td><td class="no-print"><button class="action btn-delete" onclick="supprimerVersement('${escapeHtml(p.id)}')">Supprimer</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function enregistrerSituation(){
+  if(!eleveSelectionne) return;
+  if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
+  const reduction=Number(document.getElementById("reduction").value||0);
+  const reason=document.getElementById("motifReduction").value.trim();
+  let f=factureEleve(eleveSelectionne.id);
+  try{
+    if(!f){
+      const t=tarifEleve(eleveSelectionne);
+      if(!t||Number(t.amount)<=0) throw new Error("Aucun tarif serveur pour cette classe.");
+      await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"invoice",student_id:eleveSelectionne.id,school_year_id:anneeServeurId,amount:Number(t.amount),reduction,reduction_reason:reason})});
+    }else{
+      await apiJson(FINANCE_API+"?invoice_id="+encodeURIComponent(f.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({reduction,reduction_reason:reason})});
+    }
+    await chargerFinance();
+    afficherMessage("Situation enregistrée.");
+  }catch(e){ afficherMessage(e.message,"error"); }
+}
+
+function ouvrirReduction(){
+  if(!eleveSelectionne) return;
+  document.getElementById("reduction").focus();
+}
+
+function modifierTarif(classId){
+  const t=tarifs.find(x=>x.class_id===classId);
+  if(!t) return afficherMessage("Tarif serveur introuvable.","error");
+  document.getElementById("tarifClasseOriginal").value=classId;
+  document.getElementById("tarifClasseNom").value=t.class_name||"";
+  document.getElementById("montantTotal").value=t.amount||0;
+  document.getElementById("date1").value=t.installment1_label||"";
+  document.getElementById("montant1").value=t.installment1_amount||0;
+  document.getElementById("date2").value=t.installment2_label||"";
+  document.getElementById("montant2").value=t.installment2_amount||0;
+  document.getElementById("date3").value=t.installment3_label||"";
+  document.getElementById("montant3").value=t.installment3_amount||0;
+  document.getElementById("modalTarif").style.display="flex";
+}
+
+async function enregistrerTarif(){
+  if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
+  const classId=document.getElementById("tarifClasseOriginal").value;
+  const body={
+    resource:"tariff",school_year_id:anneeServeurId,class_id:classId,
+    amount:Number(document.getElementById("montantTotal").value||0),
+    installment1_amount:Number(document.getElementById("montant1").value||0),
+    installment1_label:document.getElementById("date1").value.trim(),
+    installment2_amount:Number(document.getElementById("montant2").value||0),
+    installment2_label:document.getElementById("date2").value.trim(),
+    installment3_amount:Number(document.getElementById("montant3").value||0),
+    installment3_label:document.getElementById("date3").value.trim()
+  };
+  if(body.amount<0||body.installment1_amount<0||body.installment2_amount<0||body.installment3_amount<0) return afficherMessage("Les montants ne peuvent pas être négatifs.","error");
+  try{ await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); fermerModals(); await chargerFinance(); afficherMessage("Tarif enregistré."); }
+  catch(e){ afficherMessage(e.message,"error"); }
+}
+
+function ouvrirVersement(){
+  if(!eleveSelectionne) return afficherMessage("Sélectionnez un élève.","error");
+  const f=factureEleve(eleveSelectionne.id);
+  if(!f) return afficherMessage("Enregistrez d'abord la situation financière.","error");
+  document.getElementById("versementDate").value=new Date().toISOString().slice(0,10);
+  document.getElementById("versementNumero").value=(f.payments||[]).length+1;
+  document.getElementById("versementMontant").value="";
+  document.getElementById("versementObservation").value="";
+  document.getElementById("modalVersement").style.display="flex";
+}
+
+async function enregistrerVersement(){
+  if(!IMCAuth.requirePermission("finances.create")) return afficherMessage("Permission refusée.","error");
+  if(!eleveSelectionne) return;
+  const f=factureEleve(eleveSelectionne.id);
+  const amount=Number(document.getElementById("versementMontant").value||0);
+  if(!f||amount<=0) return afficherMessage("Versement invalide.","error");
+  try{
+    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,amount,payment_date:document.getElementById("versementDate").value,method:document.getElementById("versementMode").value,reference:document.getElementById("versementObservation").value.trim()})});
+    fermerModals(); await chargerFinance(); afficherMessage("Versement enregistré.");
+  }catch(e){ afficherMessage(e.message,"error"); }
+}
+
+async function enregistrerVersementDirect(numero,valeur){
+  if(!IMCAuth.requirePermission("finances.create")) return;
+  const f=factureEleve(eleveSelectionne?.id);
+  const amount=Number(valeur||0);
+  if(!f) return afficherMessage("Enregistrez d'abord la situation financière.","error");
+  if(amount<=0) return afficherMessage("Le montant doit être supérieur à 0.","error");
+  try{
+    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,amount,payment_date:new Date().toISOString().slice(0,10),method:"Espèces",reference:"Versement "+numero})});
+    await chargerFinance(); afficherMessage("Versement enregistré.");
+  }catch(e){ afficherMessage(e.message,"error"); }
+}
+
+async function supprimerVersement(id){
+  if(!IMCAuth.requirePermission("finances.delete")) return afficherMessage("Permission refusée.","error");
+  if(!confirm("Voulez-vous supprimer ce versement ?")) return;
+  try{
+    await apiJson(FINANCE_API+"?payment_id="+encodeURIComponent(id),{method:"DELETE"});
+    await chargerFinance(); afficherMessage("Versement supprimé.");
+  }catch(e){ afficherMessage(e.message,"error"); }
+}
+
+function fermerModals(){
+  document.getElementById("modalTarif").style.display="none";
+  document.getElementById("modalVersement").style.display="none";
+}
+
+function imprimerFiche(){
+  if(!eleveSelectionne) return afficherMessage("Sélectionnez un élève avant d'imprimer.","error");
+  window.print();
+}
+
+document.addEventListener("DOMContentLoaded",async()=>{
+  const authenticated=await IMCAuth.verifySession();
+  if(!authenticated){ window.location.href="index.html"; return; }
+  if(!IMCAuth.requirePermission("finances.read")){ afficherMessage("Permission refusée.","error"); return; }
+  document.getElementById("annee").addEventListener("change",async()=>{
+    anneeServeurId=document.getElementById("annee").value;
+    const y=anneesServeur.find(x=>x.id===anneeServeurId);
+    document.getElementById("anneeAffichee").textContent="Année académique : "+(y?.label||"");
+    eleveSelectionne=null; classeSelectionnee="";
+    document.getElementById("ficheEleve").classList.add("hidden");
+    try{ await chargerFinance(); }catch(e){ afficherMessage(e.message,"error"); }
+  });
+  document.getElementById("btnToutesClasses").addEventListener("click",afficherToutesLesClasses);
+  document.getElementById("recherche").addEventListener("input",()=>{afficherEleves();afficherSituations();});
+  try{
+    await chargerAnnees();
+    await chargerFinance();
+  }catch(e){ afficherMessage(e.message,"error"); }
+});
+</script>
+</body>
+
+</html>
