@@ -34,6 +34,35 @@ jobs:
             php -l "$file"
           done <<< "$files"
 
+      - name: Verify sensitive HTML files contain no protected page content
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          routes = {
+              "index.html": ("private-pages/index.php", "eleves.read", "<title>IMC-Clarodoro</title>"),
+              "PDG.html": ("private-pages/PDG.php", "paies.read", "<title>PDG - IMC Clarodaro</title>"),
+              "finances.html": ("private-pages/finances.php", "finances.read", "<title>Finances - IMC Clarodaro</title>"),
+              "personnel.html": ("private-pages/personnel.php", "personnel.read", "<title>Gestion du Personnel - IMC Clarodaro</title>"),
+              "badge.html": ("private-pages/badge.php", "badge.read", "<title>Badge élève - IMC Clarodaro</title>"),
+              "payroll-recovery.html": ("private-pages/payroll-recovery.php", "paies.reconcile", "<title>Reprise des paies historiques — IMC-Clarodoro</title>"),
+              "resultats.html": ("private-pages/resultats.php", "resultats.read", "<title>Résultats - IMC Clarodaro</title>"),
+          }
+          for public, (private, permission, marker) in routes.items():
+              public_text = Path(public).read_text(encoding="utf-8")
+              private_text = Path(private).read_text(encoding="utf-8")
+              if marker in public_text:
+                  raise SystemExit(f"Protected page title leaked in public stub: {public}")
+              if len(public_text) > 1500:
+                  raise SystemExit(f"Public stub unexpectedly large: {public}")
+              if "imcRequirePageAccess" not in private_text or permission not in private_text:
+                  raise SystemExit(f"Server authorization guard missing: {private}")
+              if marker not in private_text:
+                  raise SystemExit(f"Original page content missing from protected source: {private}")
+          print("SENSITIVE PAGE SOURCE SEPARATION: PASS")
+          PY
+
       - name: PowerShell syntax check
         shell: pwsh
         run: |
