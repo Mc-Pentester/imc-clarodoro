@@ -862,7 +862,17 @@ document.addEventListener("DOMContentLoaded", async function(){
   try {
     const authenticated = await IMCAuth.verifySession();
     if (!authenticated) return;
+    personnelConnecte = {
+      id: authenticated.userId,
+      nom: authenticated.username,
+      fonction: authenticated.role,
+      identifiant: authenticated.username,
+      classe: ""
+    };
+    document.getElementById("sectionConnexion").classList.add("hidden");
+    document.getElementById("interfacePersonnel").classList.remove("hidden");
     await chargerDonnees();
+    afficherInformationsEnseignant();
     document.getElementById("anneeRapportMensuel").value = new Date().getFullYear();
     document.getElementById("moisRapportMensuel").value = String(new Date().getMonth() + 1);
     document.getElementById("dateRapportJournalier").value = dateISO(new Date());
