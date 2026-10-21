@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/page_auth.php';
-imcRequirePageAccess('resultats.read');
+imcRequirePageAccess('resultats.read', null, $pdo ?? null);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
