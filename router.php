@@ -21,8 +21,8 @@ if ($path === '/') {
     exit;
 }
 
-if (isset($protected[$path])) {
-    $_GET['page'] = $protected[$path];
+if (isset($protected[$path]) || isset($protected[strtolower($path)])) {
+    $_GET['page'] = $protected[$path] ?? $protected[strtolower($path)];
     require __DIR__ . '/secure-page.php';
     exit;
 }
