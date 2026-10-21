@@ -3533,6 +3533,24 @@ window.addEventListener(
     }
 );
 
+
+/* Restaure l'interface après authentification contrôlée par le serveur. */
+document.addEventListener("DOMContentLoaded", async function () {
+    try {
+        const utilisateur = await IMCAuth.verifySession();
+        if (!utilisateur || String(utilisateur.role).toUpperCase() !== "PDG") return;
+        document.getElementById("zoneConnexion").classList.add("cache");
+        document.getElementById("zonePDG").classList.remove("cache");
+        document.getElementById("messageErreur").textContent = "";
+        await chargerAnnees();
+        initialiserMoisPaie();
+        await chargerPersonnelServeur();
+        chargerTableauDeBord();
+    } catch (error) {
+        const message = document.getElementById("messageErreur");
+        if (message) message.textContent = error && error.message ? error.message : "Impossible de restaurer la session PDG.";
+    }
+});
 </script>
 
 </body>
