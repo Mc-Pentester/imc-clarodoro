@@ -74,10 +74,19 @@ function imcPageAccess(PDO $pdo, string $permission, ?string $requiredRole = nul
     return ['allowed' => true, 'status' => 200, 'user' => $user];
 }
 
-function imcRequirePageAccess(string $permission, ?string $requiredRole = null): void
+function imcRequirePageAccess(string $permission, ?string $requiredRole = null, ?PDO $pdo = null): void
 {
-    $pdo = getDatabaseConnection();
-    $access = imcPageAccess($pdo, $permission, $requiredRole);
+    try {
+        $pdo = $pdo ?? getDatabaseConnection();
+        $access = imcPageAccess($pdo, $permission, $requiredRole);
+    } catch (Throwable $error) {
+        error_log('IMC protected page access check failed: ' . $error->getMessage());
+        http_response_code(503);
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Cache-Control: no-store, private');
+        exit('Service temporairement indisponible.');
+    }
+
     if ($access['allowed']) {
         return;
     }
