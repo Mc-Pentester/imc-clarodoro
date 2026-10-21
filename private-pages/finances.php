@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/../config/page_auth.php';
-imcRequirePageAccess('finances.read');
+imcRequirePageAccess('finances.read', null, $pdo ?? null);
 ?>
 <!DOCTYPE html>
 <html lang="fr">
