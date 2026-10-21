@@ -1,0 +1,8 @@
+Options -Indexes
+RewriteEngine On
+
+# Les pages sensibles passent toujours par l'autorisation PHP serveur.
+RewriteRule ^(index|PDG|finances|personnel|badge|payroll-recovery|resultats)\.html$ secure-page.php?page=$1.html [END,QSA]
+
+# Le répertoire de pages sources n'est jamais publiquement navigable.
+RewriteRule ^private-pages(?:/|$) - [F,END]
