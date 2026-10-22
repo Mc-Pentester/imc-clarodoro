@@ -11,7 +11,8 @@
   "use strict";
 
   const SESSION_KEY = "imc_auth_session";
-  const pageName = (window.location.pathname.split("/").pop() || "").toLowerCase();
+  const routedPage = new URLSearchParams(window.location.search).get("page");
+  const pageName = (routedPage || window.location.pathname.split("/").pop() || "").toLowerCase();
   const VAULT_REQUIRED = pageName === "finances.html";
   let vaultReadyPromise = Promise.resolve(true);
   let vaultFailure = null;

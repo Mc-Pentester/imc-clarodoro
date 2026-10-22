@@ -59,9 +59,16 @@ jobs:
           INSERT INTO staff(id,first_name,last_name,function_name,status)
           VALUES ('00000000-0000-4000-8000-000000008031','Reconcile','Target','Enseignant','ACTIVE')
           ON CONFLICT (id) DO NOTHING;
+          INSERT INTO permissions(name, description) VALUES
+            ('eleves.read','Accès aux pages élèves'),
+            ('finances.read','Accès aux pages finances'),
+            ('personnel.read','Accès aux pages personnel'),
+            ('badge.read','Accès aux pages badges'),
+            ('resultats.read','Accès aux pages résultats')
+          ON CONFLICT (name) DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000008001',id FROM permissions
-          WHERE name IN ('paies.read','paies.create','paies.update','paies.reconcile')
+          WHERE name IN ('paies.read','paies.create','paies.update','paies.reconcile','eleves.read','finances.read','personnel.read','badge.read','resultats.read')
           ON CONFLICT DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000008002',id FROM permissions
@@ -76,10 +83,10 @@ jobs:
           python3 - <<'PY'
           import re
           from pathlib import Path
-          html = Path("payroll-recovery.html").read_text(encoding="utf-8")
+          html = Path("private-pages/payroll-recovery.php").read_text(encoding="utf-8")
           scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
           if not scripts:
-              raise SystemExit("No inline JavaScript found in payroll-recovery.html")
+              raise SystemExit("No inline JavaScript found in private-pages/payroll-recovery.php")
           for i, script in enumerate(scripts):
               Path(f"/tmp/payroll-recovery-{i}.js").write_text(script, encoding="utf-8")
           PY
@@ -88,12 +95,65 @@ jobs:
       - name: Start API
         run: |
           set -euo pipefail
-          nohup php -S 127.0.0.1:8090 -t . >/tmp/payroll-reconcile-api.log 2>&1 &
+          nohup php -S 127.0.0.1:8090 router.php >/tmp/payroll-reconcile-api.log 2>&1 &
           for i in {1..30}; do
             curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
             sleep 1
           done
           curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+
+      - name: Chromium rendering smoke test for all main pages
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          node scripts/browser-html-smoke.mjs
+
+      - name: Prove server-side protection of sensitive HTML pages
+        run: |
+          set -Eeuo pipefail
+          BASE='http://127.0.0.1:8090'
+          pages=( 'index.html|<title>IMC-Clarodoro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodoro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' )
+          for item in "${pages[@]}"; do
+            page="${item%%|*}"
+            marker="${item#*|}"
+            status="$(curl -sS -o /tmp/page-protected.html -w '%{http_code}' "$BASE/$page")"
+            test "$status" = '401'
+            if grep -Fq "$marker" /tmp/page-protected.html; then
+              echo "::error::Unauthenticated response leaked protected HTML for $page"
+              exit 1
+            fi
+          done
+          test "$(curl -sS -o /tmp/private-direct.html -w '%{http_code}' "$BASE/private-pages/PDG.php")" = '404'
+
+          PDG_COOKIE='/tmp/page-protection-pdg.cookies'
+          curl -fsS -c "$PDG_COOKIE" -b "$PDG_COOKIE" -H 'Content-Type: application/json' -d '{"username":"reconcile-runtime","password":"Reconcile-Test-2026!"}' "$BASE/api/auth/login.php" >/tmp/page-protection-login.json
+          php -r '$d=json_decode(file_get_contents("/tmp/page-protection-login.json"),true); if(empty($d["success"])) exit(1);'
+          for item in "${pages[@]}"; do
+            page="${item%%|*}"
+            marker="${item#*|}"
+            status="$(curl -sS -o /tmp/page-protected.html -w '%{http_code}' -b "$PDG_COOKIE" "$BASE/$page")"
+            test "$status" = '200'
+            grep -Fq "$marker" /tmp/page-protected.html
+          done
+
+          OTHER_COOKIE='/tmp/page-protection-other.cookies'
+          curl -fsS -c "$OTHER_COOKIE" -b "$OTHER_COOKIE" -H 'Content-Type: application/json' -d '{"username":"reconcile-other","password":"Reconcile-Other-2026!"}' "$BASE/api/auth/login.php" >/tmp/page-protection-other-login.json
+          test "$(curl -sS -o /tmp/page-protection-denied.html -w '%{http_code}' -b "$OTHER_COOKIE" "$BASE/PDG.html")" = '403'
+
+          # Simule une session expirée dans le stockage de sessions PHP du serveur de test.
+          SESSION_ID="$(awk '$6 == "IMC_SESSION" {print $7}' "$PDG_COOKIE" | tail -n 1)"
+          test -n "$SESSION_ID"
+          php -r 'session_name("IMC_SESSION"); session_id($argv[1]); session_start(); $_SESSION["last_activity_at"] = time() - 3600; session_write_close();' "$SESSION_ID"
+          test "$(curl -sS -o /tmp/page-protection-expired.html -w '%{http_code}' -b "$PDG_COOKIE" "$BASE/finances.html")" = '401'
+
+          # Un compte désactivé ne doit pas recevoir de page protégée.
+          curl -fsS -c "$PDG_COOKIE" -b "$PDG_COOKIE" -H 'Content-Type: application/json' -d '{"username":"reconcile-runtime","password":"Reconcile-Test-2026!"}' "$BASE/api/auth/login.php" >/dev/null
+          psql 'postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro' -v ON_ERROR_STOP=1 -c "UPDATE users SET status='INACTIVE' WHERE username='reconcile-runtime'"
+          test "$(curl -sS -o /tmp/page-protection-disabled.html -w '%{http_code}' -b "$PDG_COOKIE" "$BASE/finances.html")" = '401'
+          psql 'postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro' -v ON_ERROR_STOP=1 -c "UPDATE users SET status='ACTIVE' WHERE username='reconcile-runtime'"
+          echo 'SERVER-SIDE SENSITIVE PAGE PROTECTION: PASS'
 
       - name: Prove explicit reconciliation, idempotency, audit and authorization
         run: |

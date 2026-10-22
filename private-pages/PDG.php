@@ -1,0 +1,3557 @@
+<?php
+require_once __DIR__ . '/../config/page_auth.php';
+imcRequirePageAccess('paies.read', 'PDG', $pdo ?? null);
+?>
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>PDG - IMC Clarodaro</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: "Times New Roman", serif;
+            font-size: 12pt;
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+
+        header {
+            background: #12355b;
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 25px;
+        }
+
+        header p {
+            margin: 5px 0 0;
+            font-size: 16px;
+        }
+
+        nav {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            background: white;
+            box-shadow: 0 2px 6px #0002;
+        }
+
+        nav button {
+            border: none;
+            border-radius: 6px;
+            padding: 10px 14px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        nav button:hover {
+            opacity: 0.8;
+            transform: scale(1.03);
+        }
+
+        .eleves {
+            background: #2563eb;
+        }
+
+        .matieres {
+            background: #7c3aed;
+        }
+
+        .resultats {
+            background: #0891b2;
+        }
+
+        .finances {
+            background: #16a34a;
+        }
+
+        .personnel {
+            background: #ea580c;
+        }
+
+        .annees {
+            background: #9333ea;
+        }
+
+        .vacances {
+            background: #0d9488;
+        }
+
+        .pdg {
+            background: #dc2626;
+        }
+
+        .conteneur {
+            max-width: 1400px;
+            margin: 25px auto;
+            padding: 0 15px;
+        }
+
+        .carte {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 10px #0001;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #12355b;
+            border-bottom: 2px solid #12355b;
+            padding-bottom: 8px;
+        }
+
+        h3 {
+            color: #12355b;
+        }
+
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: bold;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 12pt;
+        }
+
+        button {
+            font-family: inherit;
+            font-size: 12pt;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 6px;
+            padding: 10px 16px;
+            margin-top: 15px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            opacity: 0.85;
+        }
+
+        .formulaire {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .formulaire > div {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .btn-bleu {
+            background: #2563eb;
+        }
+
+        .btn-vert {
+            background: #16a34a;
+        }
+
+        .btn-rouge {
+            background: #dc2626;
+        }
+
+        .btn-orange {
+            background: #ea580c;
+        }
+
+        .btn-violet {
+            background: #7c3aed;
+        }
+
+        .connexion {
+            max-width: 450px;
+            margin: 45px auto;
+        }
+
+        .erreur {
+            color: #dc2626;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .message {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .message.succes {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .message.erreur {
+            background: #fadbd8;
+            color: #842029;
+        }
+
+        .cache {
+            display: none;
+        }
+
+        .statistiques {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 15px;
+        }
+
+        .statistique {
+            border-radius: 8px;
+            padding: 20px;
+            color: white;
+            text-align: center;
+        }
+
+        .statistique h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: white;
+        }
+
+        .statistique p {
+            margin: 0;
+            font-size: 25px;
+            font-weight: bold;
+        }
+
+        .bleu {
+            background: #2563eb;
+        }
+
+        .vert {
+            background: #16a34a;
+        }
+
+        .orange {
+            background: #ea580c;
+        }
+
+        .rouge {
+            background: #dc2626;
+        }
+
+        .violet {
+            background: #7c3aed;
+        }
+
+        .tableau-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th,
+        td {
+            border: 1px solid #cbd5e1;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background: #12355b;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        .solde-positif {
+            color: #15803d;
+            font-weight: bold;
+        }
+
+        .solde-negatif {
+            color: #dc2626;
+            font-weight: bold;
+        }
+
+        .tableau-wrapper {
+            overflow-x: auto;
+        }
+
+        .message {
+            margin-top: 10px;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .message.succes {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .message.erreur {
+            background: #fadbd8;
+            color: #842029;
+        }
+
+        .statut-paye {
+            color: #15803d;
+            font-weight: bold;
+        }
+
+        .statut-partiel {
+            color: #ea580c;
+            font-weight: bold;
+        }
+
+        .statut-non-paye {
+            color: #dc2626;
+            font-weight: bold;
+        }
+
+        /* =====================================================
+           PAIE DU PERSONNEL
+        ===================================================== */
+
+        .paie-controles {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            align-items: end;
+        }
+
+        .paie-controles .champ {
+            width: 100%;
+        }
+
+        .paie-input {
+            width: 130px;
+            min-width: 110px;
+            padding: 7px;
+            margin: 0;
+            text-align: right;
+        }
+
+        .paie-select {
+            width: 130px;
+            min-width: 120px;
+            padding: 7px;
+            margin: 0;
+        }
+
+        .net-paie {
+            font-weight: bold;
+            color: #12355b;
+            white-space: nowrap;
+        }
+
+        .total-paie {
+            background: #e2e8f0 !important;
+            font-weight: bold;
+        }
+
+        .info-paie {
+            background: #eff6ff;
+            border-left: 5px solid #2563eb;
+            padding: 12px;
+            margin-top: 15px;
+            border-radius: 5px;
+        }
+
+        .aucun-personnel {
+            padding: 20px;
+            text-align: center;
+            color: #64748b;
+            font-weight: bold;
+        }
+
+        .petit-texte {
+            font-size: 10.5pt;
+            color: #475569;
+        }
+
+        @media print {
+
+            nav,
+            .connexion,
+            .no-print,
+            .btn {
+                display: none !important;
+            }
+
+            body {
+                background: white;
+            }
+
+            .carte {
+                box-shadow: none;
+                border: 1px solid #999;
+            }
+
+            header {
+                background: white;
+                color: black;
+                border-bottom: 2px solid #12355b;
+            }
+
+            table {
+                font-size: 10pt;
+            }
+
+            .paie-input,
+            .paie-select {
+                border: none;
+                padding: 0;
+            }
+        }
+
+    </style>
+</head>
+
+<body>
+
+<header class="entete-ecole">
+
+    <div class="informations-ecole">
+
+        <h1>Institution Mixte Clarodaro</h1>
+
+        <p>Clarodaro, la clarté du savoir !</p>
+
+    </div>
+
+</header>
+
+
+<nav class="no-print">
+
+    <button class="eleves"
+        onclick="ouvrirPage('index.html')">
+        Élèves
+    </button>
+
+    <button class="matieres"
+        onclick="ouvrirPage('matieres.html')">
+        Matières
+    </button>
+
+    <button class="resultats"
+        onclick="ouvrirPage('resultats.html')">
+        Résultats
+    </button>
+
+    <button class="finances"
+        onclick="ouvrirPage('finances.html')">
+        Finances
+    </button>
+
+    <button class="personnel"
+        onclick="ouvrirPage('personnel.html')">
+        Personnel
+    </button>
+
+    <button class="annees"
+        onclick="ouvrirPage('annees-scolaires.html')">
+        Année scolaire
+    </button>
+
+    <button class="vacances"
+        onclick="ouvrirPage('vacances.html')">
+        Vacances
+    </button>
+
+    <button class="pdg"
+        onclick="ouvrirPage('pdg.html')">
+        PDG
+    </button>
+
+    <button class="pdg"
+        onclick="ouvrirPage('payroll-recovery.html')">
+        Reprise des paies
+    </button>
+
+</nav>
+
+
+<!-- ============================================================
+     CONNEXION
+============================================================ -->
+
+<div id="zoneConnexion"
+     class="connexion carte no-print">
+
+    <h2>Accès réservé au PDG</h2>
+
+    <label for="motDePasse">
+        Mot de passe
+    </label>
+
+    <input
+        type="password"
+        id="motDePasse"
+        placeholder="Entrez le mot de passe"
+    >
+
+    <button
+        class="btn btn-bleu"
+        onclick="connecterPDGWrapper()"
+    >
+        Se connecter
+    </button>
+
+    <div id="messageErreur" style="color: red; margin-top: 10px; font-weight: bold;"></div>
+
+
+</div>
+
+
+<!-- ============================================================
+     ZONE PDG
+============================================================ -->
+
+<main id="zonePDG"
+      class="conteneur cache">
+
+
+    <!-- ========================================================
+         TABLEAU DE BORD
+    ========================================================= -->
+
+    <section class="carte no-print">
+
+        <h2>Tableau de bord du PDG</h2>
+
+        <label for="anneeAcademique">
+            Année académique
+        </label>
+
+        <select
+            id="anneeAcademique"
+            onchange="chargerTableauDeBord()">
+        </select>
+
+        <button
+            class="btn btn-orange"
+            onclick="deconnecterPDG()">
+            Se déconnecter
+        </button>
+
+        <button
+            class="btn btn-bleu"
+            onclick="window.print()">
+            Imprimer le rapport
+        </button>
+
+        <button
+            class="btn btn-violet"
+            onclick="afficherGestionPersonnel()">
+            Gérer le personnel
+        </button>
+
+        <button
+            class="btn btn-orange"
+            onclick="afficherSecuriteVault()">
+            Sécurité du coffre-fort
+        </button>
+
+        <button id="btnSauvegarderMaintenant" class="btn btn-vert" type="button" onclick="sauvegarderMaintenant()">
+            Sauvegarder maintenant
+        </button>
+        <div id="messageSauvegarde" class="message" role="status" aria-live="polite"></div>
+
+    </section>
+
+    <!-- ========================================================
+         GESTION DU PERSONNEL
+    ========================================================= -->
+
+    <section class="carte no-print" id="sectionGestionPersonnel" style="display: none;">
+
+        <h2>Gestion des comptes du personnel</h2>
+
+        <div class="formulaire">
+            <div>
+                <label for="adminNom">Nom et prénom</label>
+                <input type="text" id="adminNom">
+            </div>
+
+            <div>
+                <label for="adminFonction">Fonction</label>
+                <select id="adminFonction">
+                    <option value="Directeur">Directeur</option>
+                    <option value="Enseignant">Enseignant</option>
+                    <option value="Secrétaire">Secrétaire</option>
+                    <option value="Comptable">Comptable</option>
+                    <option value="Autre">Autre</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="adminClasse">Classe (optionnel)</label>
+                <input type="text" id="adminClasse" placeholder="Ex: 1ère A.F.">
+            </div>
+
+            <div>
+                <label for="adminIdentifiant">Identifiant</label>
+                <input type="text" id="adminIdentifiant">
+            </div>
+
+            <div>
+                <label for="adminMotDePasse">Mot de passe</label>
+                <input type="password" id="adminMotDePasse">
+            </div>
+
+            <div>
+                <button class="btn btn-vert" onclick="ajouterPersonnelAdminWrapper()">
+                    Ajouter
+                </button>
+                <button class="btn btn-rouge" onclick="masquerGestionPersonnel()">
+                    Fermer
+                </button>
+            </div>
+        </div>
+
+        <div id="messageAdmin" class="message"></div>
+
+        <h3>Liste du personnel</h3>
+        <div class="tableau-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nom</th>
+                        <th>Fonction</th>
+                        <th>Identifiant</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableauPersonnelAdmin"></tbody>
+            </table>
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         RÉSUMÉ FINANCIER
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>Résumé financier</h2>
+
+        <div class="statistiques">
+
+            <div class="statistique bleu">
+
+                <h3>Total prévu</h3>
+
+                <p id="totalPrevu">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+
+            <div class="statistique vert">
+
+                <h3>Total reçu</h3>
+
+                <p id="totalRecu">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+
+            <div class="statistique orange">
+
+                <h3>Total salaires</h3>
+
+                <p id="totalSalaires">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+
+            <div class="statistique rouge">
+
+                <h3>Total dépenses</h3>
+
+                <p id="totalDepenses">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+
+            <div class="statistique violet">
+
+                <h3>Solde annuel</h3>
+
+                <p id="soldeAnnuel">
+                    0,00 $ HT
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         PAIE DU PERSONNEL
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>Paie du personnel</h2>
+        <p id="messagePaie" role="status" aria-live="polite"></p>
+
+        <p class="petit-texte">
+            Les membres du personnel affichés ici sont récupérés
+            automatiquement depuis la page <strong>Personnel</strong>.
+            Les informations de salaire sont enregistrées séparément
+            pour chaque année académique et chaque mois.
+        </p>
+
+
+        <div class="paie-controles no-print">
+
+            <div class="champ">
+
+                <label for="moisPaie">
+                    Mois de paie
+                </label>
+
+                <select
+                    id="moisPaie"
+                    onchange="afficherPaie()">
+
+                    <option value="01">
+                        Janvier
+                    </option>
+
+                    <option value="02">
+                        Février
+                    </option>
+
+                    <option value="03">
+                        Mars
+                    </option>
+
+                    <option value="04">
+                        Avril
+                    </option>
+
+                    <option value="05">
+                        Mai
+                    </option>
+
+                    <option value="06">
+                        Juin
+                    </option>
+
+                    <option value="07">
+                        Juillet
+                    </option>
+
+                    <option value="08">
+                        Août
+                    </option>
+
+                    <option value="09">
+                        Septembre
+                    </option>
+
+                    <option value="10">
+                        Octobre
+                    </option>
+
+                    <option value="11">
+                        Novembre
+                    </option>
+
+                    <option value="12">
+                        Décembre
+                    </option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+
+        <div class="info-paie">
+
+            <strong>
+                Année académique :
+            </strong>
+
+            <span id="anneePaieAffichee">
+                2026-2027
+            </span>
+
+            <br>
+
+            <strong>
+                Mois :
+            </strong>
+
+            <span id="moisPaieAffiche">
+                —
+            </span>
+
+        </div>
+
+
+        <div class="tableau-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            #
+                        </th>
+
+                        <th>
+                            Nom et prénom
+                        </th>
+
+                        <th>
+                            Fonction
+                        </th>
+
+                        <th>
+                            Classe
+                        </th>
+
+                        <th>
+                            Salaire de base
+                        </th>
+
+                        <th>
+                            Primes / Indemnités
+                        </th>
+
+                        <th>
+                            Déductions
+                        </th>
+
+                        <th>
+                            Salaire net
+                        </th>
+
+                        <th>
+                            Statut
+                        </th>
+
+                        <th class="no-print">
+                            Action
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="tableauPaie">
+
+                </tbody>
+
+
+                <tfoot>
+
+                    <tr class="total-paie">
+
+                        <td colspan="7">
+                            TOTAL DES SALAIRES NETS
+                        </td>
+
+                        <td id="totalPaieTableau">
+                            0,00 $ HT
+                        </td>
+
+                        <td colspan="2">
+                        </td>
+
+                    </tr>
+
+                </tfoot>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         AJOUTER UNE DÉPENSE
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>
+            Ajouter une dépense imprévue
+        </h2>
+
+        <label for="descriptionDepense">
+            Description de la dépense
+        </label>
+
+        <input
+            type="text"
+            id="descriptionDepense"
+            placeholder="Exemple : réparation, matériel..."
+        >
+
+
+        <label for="montantDepense">
+            Montant
+        </label>
+
+        <input
+            type="number"
+            id="montantDepense"
+            min="0"
+            step="0.01"
+            placeholder="Montant de la dépense"
+        >
+
+
+        <label for="dateDepense">
+            Date
+        </label>
+
+        <input
+            type="date"
+            id="dateDepense"
+        >
+
+
+        <button
+            class="btn btn-rouge"
+            onclick="ajouterDepense()">
+
+            Enregistrer la dépense
+
+        </button>
+
+
+        <p
+            id="messageDepense"
+            class="message">
+        </p>
+
+    </section>
+
+
+    <!-- ========================================================
+         LISTE DES DÉPENSES
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>
+            Liste des dépenses
+        </h2>
+
+        <div class="tableau-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            #
+                        </th>
+
+                        <th>
+                            Description
+                        </th>
+
+                        <th>
+                            Date
+                        </th>
+
+                        <th>
+                            Montant
+                        </th>
+
+                        <th class="no-print">
+                            Action
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="listeDepenses">
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         SITUATION FINANCIÈRE DES ÉLÈVES
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>
+            Situation financière des élèves
+        </h2>
+
+        <div class="tableau-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Élève
+                        </th>
+
+                        <th>
+                            Classe
+                        </th>
+
+                        <th>
+                            Total à payer
+                        </th>
+
+                        <th>
+                            Total payé
+                        </th>
+
+                        <th>
+                            Reste
+                        </th>
+
+                        <th>
+                            Statut
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="listeSituations">
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         RÉSUMÉ PAR CLASSE
+    ========================================================= -->
+
+    <section class="carte">
+
+        <h2>
+            Résumé par classe
+        </h2>
+
+        <div class="tableau-wrapper">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Classe
+                        </th>
+
+                        <th>
+                            Total prévu
+                        </th>
+
+                        <th>
+                            Total reçu
+                        </th>
+
+                        <th>
+                            Reste
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="resumeClasses">
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <!-- ========================================================
+         SÉCURITÉ DU COFFRE-FORT
+    ========================================================= -->
+
+    <section class="carte no-print" id="sectionSecuriteVault" style="display: none;">
+
+        <h2>Sécurité du coffre-fort</h2>
+
+        <div class="formulaire">
+            <div>
+                <label for="ancienCodeVault">Ancien code du coffre-fort</label>
+                <input type="password" id="ancienCodeVault">
+            </div>
+
+            <div>
+                <label for="nouveauCodeVault">Nouveau code du coffre-fort (12 caractères minimum)</label>
+                <input type="password" id="nouveauCodeVault">
+            </div>
+
+            <div>
+                <label for="confirmationCodeVault">Confirmer le nouveau code</label>
+                <input type="password" id="confirmationCodeVault">
+            </div>
+
+            <div>
+                <button class="btn btn-vert" onclick="changerCodeVault()">
+                    Changer le code du coffre-fort
+                </button>
+                <button class="btn btn-rouge" onclick="annulerChangementCode()">
+                    Annuler
+                </button>
+            </div>
+        </div>
+
+        <div id="messageVault" class="message"></div>
+
+    </section>
+
+
+</main>
+
+
+<script src="secure-storage.js"></script>
+<script src="auth.js"></script>
+<script>
+
+// Guard d'authentification - vérifier la session au chargement
+document.addEventListener("DOMContentLoaded", function() {
+  if (IMCAuth.isAuthenticated()) {
+    const user = IMCAuth.currentUser();
+    if (user && user.role === "PDG") {
+      // Session PDG valide - afficher directement l'interface
+      document.getElementById("zoneConnexion").classList.add("cache");
+      document.getElementById("zonePDG").classList.remove("cache");
+      chargerAnnees();
+      initialiserMoisPaie();
+      chargerTableauDeBord();
+    } else {
+      // Session mais pas PDG - détruire et afficher login
+      IMCAuth.logout();
+    }
+  }
+  // Sinon, afficher le formulaire de connexion par défaut
+});
+
+/* ============================================================
+   SAUVEGARDE MANUELLE
+============================================================ */
+async function sauvegarderMaintenant() {
+    const bouton = document.getElementById("btnSauvegarderMaintenant");
+    const message = document.getElementById("messageSauvegarde");
+    if (!bouton || !message || bouton.disabled) return;
+    bouton.disabled = true;
+    bouton.textContent = "Sauvegarde en cours…";
+    message.className = "message";
+    message.style.display = "block";
+    message.textContent = "Création et vérification de la sauvegarde PostgreSQL…";
+    try {
+        const csrfToken = IMCAuth.getCsrfToken();
+        if (!csrfToken) throw new Error("Session de sécurité absente. Reconnectez-vous avant de lancer la sauvegarde.");
+        const response = await fetch("/api/admin/backup.php", {
+            method: "POST", credentials: "same-origin", cache: "no-store",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "X-CSRF-Token": csrfToken
+            },
+            body: "{}"
+        });
+        let payload;
+        try { payload = await response.json(); } catch (_) { throw new Error("Réponse invalide du serveur."); }
+        if (!response.ok || !payload || payload.success !== true) {
+            throw new Error((payload && (payload.error || payload.message)) || "La sauvegarde a échoué.");
+        }
+        const size = Number(payload.sizeBytes);
+        const sizeText = Number.isFinite(size)
+            ? " (" + (size / 1048576).toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " Mo)" : "";
+        message.className = "message succes";
+        message.textContent = "Sauvegarde vérifiée : " + String(payload.file || "fichier créé") + sizeText
+            + ". La copie sur le support externe sera faite par la tâche périodique.";
+    } catch (error) {
+        message.className = "message erreur";
+        message.textContent = error && error.message ? error.message : "Impossible de créer la sauvegarde.";
+    } finally {
+        bouton.disabled = false;
+        bouton.textContent = "Sauvegarder maintenant";
+    }
+}
+
+/* ============================================================
+   CONFIGURATION
+============================================================ */
+
+const CLE_ELEVES =
+    "imc_students";
+
+const CLE_FINANCES =
+    "imc_finances";
+
+const CLE_TARIFS =
+    "imc_tarifs";
+
+const CLE_DEPENSES =
+    "imc_depenses";
+
+const CLE_ANNEE_ACTIVE =
+    "imc_active_year";
+
+/*
+   Nouvelle clé pour les paies.
+*/
+const CLE_PAIES_PERSONNEL =
+    "imc_paies_personnel";
+
+let paiesServeurCache = {};
+let paiesAnneesChargees = {};
+let chargementPaiesPromise = null;
+
+
+const classesDisponibles = [
+
+    "1ère Kind",
+    "2ème Kind",
+    "3ème Kind",
+    "1ère A.F.",
+    "2ème A.F.",
+    "3ème A.F.",
+    "4ème A.F.",
+    "5ème A.F.",
+    "6ème A.F.",
+    "7ème A.F.",
+    "8ème A.F.",
+    "9ème A.F."
+
+];
+
+
+const moisNoms = {
+
+    "01": "Janvier",
+    "02": "Février",
+    "03": "Mars",
+    "04": "Avril",
+    "05": "Mai",
+    "06": "Juin",
+    "07": "Juillet",
+    "08": "Août",
+    "09": "Septembre",
+    "10": "Octobre",
+    "11": "Novembre",
+    "12": "Décembre"
+
+};
+
+
+let anneeConnectee = "";
+
+
+/* ============================================================
+   NAVIGATION
+============================================================ */
+
+function ouvrirPage(page) {
+
+    window.location.href = page;
+
+}
+
+
+/* ============================================================
+   LECTURE LOCALSTORAGE
+============================================================ */
+
+function lireJSON(cle, valeurParDefaut) {
+
+    try {
+
+        const valeur =
+            localStorage.getItem(cle);
+
+        if (!valeur) {
+
+            return valeurParDefaut;
+
+        }
+
+        const donnees =
+            JSON.parse(valeur);
+
+        return donnees ?? valeurParDefaut;
+
+    } catch (erreur) {
+
+        console.error(
+            "Erreur lecture localStorage :",
+            cle,
+            erreur
+        );
+
+        return valeurParDefaut;
+
+    }
+
+}
+
+
+/* ============================================================
+   FORMAT MONTANT
+============================================================ */
+
+function formatMontant(montant) {
+
+    const nombre =
+        Number(montant) || 0;
+
+    return nombre.toLocaleString(
+        "fr-FR",
+        {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }
+    ) + " $ HT";
+
+}
+
+
+/* ============================================================
+   CONVERSION MONTANT
+============================================================ */
+
+function nombreMontant(valeur) {
+
+    if (
+        valeur === null ||
+        valeur === undefined ||
+        valeur === ""
+    ) {
+
+        return 0;
+
+    }
+
+    if (typeof valeur === "number") {
+
+        return Number.isFinite(valeur)
+            ? valeur
+            : 0;
+
+    }
+
+    let texte =
+        String(valeur)
+            .trim()
+            .replace(/\s/g, "")
+            .replace(/\$/g, "")
+            .replace(/HT/gi, "");
+
+
+    if (
+        texte.includes(".") &&
+        texte.includes(",")
+    ) {
+
+        texte =
+            texte
+                .replace(/\./g, "")
+                .replace(",", ".");
+
+    } else if (
+        texte.includes(",")
+    ) {
+
+        texte =
+            texte.replace(",", ".");
+
+    }
+
+
+    const nombre =
+        Number(texte);
+
+    return Number.isFinite(nombre)
+        ? nombre
+        : 0;
+
+}
+
+
+/* ============================================================
+   ANNÉES ACADÉMIQUES
+============================================================ */
+
+function chargerAnnees() {
+
+    const select =
+        document.getElementById(
+            "anneeAcademique"
+        );
+
+    select.innerHTML = "";
+
+    for (
+        let annee = 2026;
+        annee <= 2040;
+        annee++
+    ) {
+
+        const valeur =
+            annee + "-" + (annee + 1);
+
+        const option =
+            document.createElement(
+                "option"
+            );
+
+        option.value =
+            valeur;
+
+        option.textContent =
+            valeur;
+
+        select.appendChild(
+            option
+        );
+
+    }
+
+
+    const anneeActive =
+        localStorage.getItem(
+            CLE_ANNEE_ACTIVE
+        ) || "2026-2027";
+
+
+    select.value =
+        anneeActive;
+
+    anneeConnectee =
+        select.value;
+
+}
+
+
+/* ============================================================
+   CONNEXION PDG
+============================================================ */
+
+async function connecterPDGWrapper() {
+    await connecterPDG();
+}
+
+async function connecterPDG() {
+
+    const motDePasse = document.getElementById("motDePasse").value;
+
+    if (!motDePasse) {
+        document.getElementById("messageErreur").textContent = "Veuillez saisir votre mot de passe.";
+        return;
+    }
+
+    try {
+        const utilisateur = await IMCAuth.login({
+            username: "pdg",
+            password: motDePasse
+        });
+
+        if (String(utilisateur.role).toUpperCase() !== "PDG") {
+            await IMCAuth.logout();
+            document.getElementById("messageErreur").textContent = "Accès réservé au PDG.";
+            return;
+        }
+
+        document.getElementById("zoneConnexion").classList.add("cache");
+        document.getElementById("zonePDG").classList.remove("cache");
+        document.getElementById("messageErreur").textContent = "";
+
+        chargerAnnees();
+        initialiserMoisPaie();
+        await chargerPersonnelServeur();
+        chargerTableauDeBord();
+    } catch (error) {
+        document.getElementById("messageErreur").textContent =
+            error && error.message ? error.message : "Identifiant ou mot de passe incorrect.";
+    }
+}
+
+
+
+/* ============================================================
+   DÉCONNEXION
+============================================================ */
+
+async function deconnecterPDG() {
+
+    await IMCAuth.logout();
+
+
+    document
+        .getElementById(
+            "zonePDG"
+        )
+        .classList.add("cache");
+
+    document
+        .getElementById(
+            "zoneConnexion"
+        )
+        .classList.remove("cache");
+
+
+    document.getElementById(
+        "motDePasse"
+    ).value = "";
+
+}
+
+/* ============================================================
+   GESTION DU PERSONNEL (Admin)
+============================================================ */
+
+async function afficherGestionPersonnel() {
+    document.getElementById('sectionGestionPersonnel').style.display = 'block';
+    try {
+        await chargerPersonnelServeur();
+        chargerListePersonnelAdmin();
+    } catch (error) {
+        afficherMessageAdmin(error.message || 'Impossible de charger le personnel.', 'erreur');
+    }
+}
+
+function masquerGestionPersonnel() {
+    document.getElementById('sectionGestionPersonnel').style.display = 'none';
+}
+
+let personnelServeur = [];
+
+async function chargerPersonnelServeur() {
+    if (!IMCAuth.hasPermission('personnel.read')) {
+        personnelServeur = [];
+        return;
+    }
+    const response = await fetch('/api/personnel/index.php', { credentials:'include', headers:{Accept:'application/json'} });
+    const payload = await response.json();
+    if (!response.ok || !payload.success) throw new Error(payload.error || 'Impossible de charger le personnel.');
+    personnelServeur = Array.isArray(payload.personnel) ? payload.personnel : [];
+}
+
+function personnelServeurVersAffichage(p) {
+    return {
+        id: String(p.id),
+        nom: [p.first_name, p.last_name].filter(Boolean).join(' '),
+        fonction: p.function_name || p.role_name || '',
+        classe: p.class_name || '',
+        identifiant: p.username || '',
+        salaire: p.salary || 0,
+        salaireMensuel: p.salary || 0
+    };
+}
+
+function chargerListePersonnelAdmin() {
+    const tbody = document.getElementById('tableauPersonnelAdmin');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    personnelServeur.forEach(function(raw) {
+        const p = personnelServeurVersAffichage(raw);
+        const tr = document.createElement('tr');
+        [p.nom || '', p.fonction || '', p.identifiant || ''].forEach(function(value) {
+            const td = document.createElement('td'); td.textContent = String(value); tr.appendChild(td);
+        });
+        const actionsTd = document.createElement('td');
+        const button = document.createElement('button');
+        button.type='button'; button.className='btn btn-rouge'; button.textContent='Archiver';
+        button.addEventListener('click', function(){ supprimerPersonnelAdmin(p.id); });
+        actionsTd.appendChild(button); tr.appendChild(actionsTd); tbody.appendChild(tr);
+    });
+}
+
+/* ============================================================
+   SÉCURITÉ DU COFFRE-FORT
+============================================================ */
+
+function afficherSecuriteVault() {
+    if (!IMCAuth.hasPermission('vault.update')) {
+        afficherMessageVault('Permission refusée.', 'erreur');
+        return;
+    }
+
+    document.getElementById('sectionSecuriteVault').style.display = 'block';
+    viderFormulaireVault();
+}
+
+function annulerChangementCode() {
+    document.getElementById('sectionSecuriteVault').style.display = 'none';
+    viderFormulaireVault();
+}
+
+function viderFormulaireVault() {
+    document.getElementById('ancienCodeVault').value = '';
+    document.getElementById('nouveauCodeVault').value = '';
+    document.getElementById('confirmationCodeVault').value = '';
+    afficherMessageVault('', '');
+}
+
+function afficherMessageVault(message, type) {
+    const messageDiv = document.getElementById('messageVault');
+    if (message) {
+        messageDiv.textContent = message;
+        messageDiv.className = 'message ' + type;
+        messageDiv.style.display = 'block';
+    } else {
+        messageDiv.style.display = 'none';
+    }
+}
+
+async function changerCodeVault() {
+    const ancienCode = document.getElementById('ancienCodeVault').value;
+    const nouveauCode = document.getElementById('nouveauCodeVault').value;
+    const confirmation = document.getElementById('confirmationCodeVault').value;
+
+    try {
+        await IMCSecureStorage.changePassword(ancienCode, nouveauCode, confirmation);
+        afficherMessageVault('Le code du coffre-fort a été modifié avec succès. Le coffre-fort sera verrouillé.', 'ok');
+        
+        setTimeout(function() {
+            IMCSecureStorage.lock();
+        }, 2000);
+        
+    } catch (error) {
+        afficherMessageVault(error.message || 'Impossible de modifier le code du coffre-fort.', 'erreur');
+    }
+}
+
+async function ajouterPersonnelAdminWrapper() {
+    await ajouterPersonnelAdmin();
+}
+
+async function ajouterPersonnelAdmin() {
+    if (!IMCAuth.requirePermission('personnel.create')) { afficherMessageAdmin('Permission refusée.', 'erreur'); return; }
+    const nom=document.getElementById('adminNom').value.trim();
+    const fonction=document.getElementById('adminFonction').value;
+    const classe=document.getElementById('adminClasse').value.trim();
+    const identifiant=document.getElementById('adminIdentifiant').value.trim();
+    const motDePasse=document.getElementById('adminMotDePasse').value;
+    if(!nom||!fonction||!identifiant||!motDePasse){afficherMessageAdmin('Veuillez remplir tous les champs obligatoires.','erreur');return;}
+    const parts=nom.split(/\\s+/); const firstName=parts.shift()||nom; const lastName=parts.join(' ')||firstName;
+    try {
+        
+        const response=await fetch('/api/personnel/index.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({first_name:firstName,last_name:lastName,function_name:fonction,class_name:classe,username:identifiant,password:motDePasse,role_name:fonction})});
+        const payload=await response.json(); if(!response.ok||!payload.success) throw new Error(payload.error||'Impossible d’ajouter le personnel.');
+        document.getElementById('adminNom').value=''; document.getElementById('adminClasse').value=''; document.getElementById('adminIdentifiant').value=''; document.getElementById('adminMotDePasse').value='';
+        await chargerPersonnelServeur(); afficherMessageAdmin('Personnel ajouté avec succès.','succes'); chargerListePersonnelAdmin();
+    } catch(error) { afficherMessageAdmin(error.message||'Impossible d’ajouter le personnel.','erreur'); }
+}
+
+async function supprimerPersonnelAdmin(id) {
+    if (!IMCAuth.requirePermission('personnel.delete')) { afficherMessageAdmin('Permission refusée.', 'erreur'); return; }
+    if (!confirm('Êtes-vous sûr de vouloir archiver ce personnel ?')) return;
+    try {
+        
+        const response=await fetch('/api/personnel/index.php',{method:'DELETE',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({id:id})});
+        const payload=await response.json(); if(!response.ok||!payload.success) throw new Error(payload.error||'Impossible d’archiver le personnel.');
+        await chargerPersonnelServeur(); afficherMessageAdmin('Personnel archivé avec succès.','succes'); chargerListePersonnelAdmin();
+    } catch(error) { afficherMessageAdmin(error.message||'Impossible d’archiver le personnel.','erreur'); }
+}
+
+
+function afficherMessageAdmin(texte, type) {
+    const message = document.getElementById('messageAdmin');
+    message.textContent = texte;
+    message.className = 'message ' + type;
+    message.style.display = 'block';
+
+    setTimeout(() => {
+        message.style.display = 'none';
+    }, 3000);
+}
+
+function deconnecterPDG() {
+
+    // Détruire la session d'authentification
+    IMCAuth.logout();
+
+    document
+        .getElementById(
+            "zonePDG"
+        )
+        .classList.add("cache");
+
+    document
+        .getElementById(
+            "zoneConnexion"
+        )
+        .classList.remove("cache");
+
+
+    document.getElementById(
+        "motDePasse"
+    ).value = "";
+
+}
+
+
+/* ============================================================
+   TARIF PAR CLASSE
+============================================================ */
+
+function obtenirTarifClasse(
+    classe,
+    annee
+) {
+
+    const tarifs =
+        lireJSON(
+            CLE_TARIFS,
+            {}
+        );
+
+
+    const cle =
+        annee + "|" + classe;
+
+
+    const tarif =
+        tarifs[cle];
+
+
+    if (
+        !tarif ||
+        typeof tarif !== "object"
+    ) {
+
+        return 0;
+
+    }
+
+
+    if (
+        tarif.total !== undefined
+    ) {
+
+        return nombreMontant(
+            tarif.total
+        );
+
+    }
+
+
+    return (
+        nombreMontant(
+            tarif.montant1
+        ) +
+
+        nombreMontant(
+            tarif.montant2
+        ) +
+
+        nombreMontant(
+            tarif.montant3
+        )
+    );
+
+}
+
+
+/* ============================================================
+   FINANCE D'UN ÉLÈVE
+============================================================ */
+
+function obtenirFinanceEleve(
+    idEleve,
+    annee
+) {
+
+    const finances =
+        lireJSON(
+            CLE_FINANCES,
+            {}
+        );
+
+
+    const cle =
+        annee +
+        "|" +
+        String(idEleve);
+
+
+    const finance =
+        finances[cle];
+
+
+    if (
+        finance &&
+        typeof finance === "object"
+    ) {
+
+        if (
+            !Array.isArray(
+                finance.versements
+            )
+        ) {
+
+            finance.versements = [];
+
+        }
+
+        return finance;
+
+    }
+
+
+    return {
+
+        studentId:
+            idEleve,
+
+        annee:
+            annee,
+
+        tarifNormal:
+            0,
+
+        reduction:
+            0,
+
+        motifReduction:
+            "",
+
+        versements:
+            []
+
+    };
+
+}
+
+
+/* ============================================================
+   CALCUL FINANCIER
+============================================================ */
+
+function calculerFinanceEleve(
+    eleve,
+    annee
+) {
+
+    const finance =
+        obtenirFinanceEleve(
+            eleve.id,
+            annee
+        );
+
+
+    let tarifNormal =
+        nombreMontant(
+            finance.tarifNormal
+        );
+
+
+    if (
+        tarifNormal <= 0
+    ) {
+
+        tarifNormal =
+            obtenirTarifClasse(
+                eleve.classe,
+                annee
+            );
+
+    }
+
+
+    const reduction =
+        Math.min(
+            nombreMontant(
+                finance.reduction
+            ),
+            tarifNormal
+        );
+
+
+    const montantAPayer =
+        Math.max(
+            0,
+            tarifNormal -
+            reduction
+        );
+
+
+    let totalPaye = 0;
+
+
+    if (
+        Array.isArray(
+            finance.versements
+        )
+    ) {
+
+        finance.versements.forEach(
+            versement => {
+
+                totalPaye +=
+                    nombreMontant(
+                        versement.montant
+                    );
+
+            }
+        );
+
+    }
+
+
+    const reste =
+        Math.max(
+            0,
+            montantAPayer -
+            totalPaye
+        );
+
+
+    return {
+
+        finance:
+            finance,
+
+        tarifNormal:
+            tarifNormal,
+
+        reduction:
+            reduction,
+
+        montantAPayer:
+            montantAPayer,
+
+        totalPaye:
+            totalPaye,
+
+        reste:
+            reste
+
+    };
+
+}
+
+
+/* ============================================================
+   PERSONNEL
+============================================================ */
+
+function obtenirPersonnel() {
+    return personnelServeur.map(personnelServeurVersAffichage);
+}
+
+
+/* ============================================================
+   PAIES
+============================================================ */
+
+function obtenirPaies() {
+    return paiesServeurCache;
+}
+
+function statutPaieDepuisServeur(status) {
+    return ({ UNPAID: "Non payé", PARTIAL: "Partiel", PAID: "Payé" })[status] || "Non payé";
+}
+
+function clePaieServeur(entry) {
+    return clePaie(
+        String(entry.school_year_label).replace(/\s/g, ""),
+        entry.staff_id,
+        String(entry.payroll_month).padStart(2, "0")
+    );
+}
+
+async function chargerPaiesServeur(force = false) {
+    if (!anneeConnectee) return paiesServeurCache;
+    const anneeNormalisee = String(anneeConnectee).replace(/\s/g, "");
+    if (!force && paiesAnneesChargees[anneeNormalisee]) return paiesServeurCache;
+    if (chargementPaiesPromise) return chargementPaiesPromise;
+
+    chargementPaiesPromise = (async () => {
+        const url = "/api/payroll/index.php?school_year_label=" + encodeURIComponent(anneeNormalisee);
+        const charger = async () => {
+            const response = await fetch(url, {
+                credentials: "include",
+                headers: { Accept: "application/json" },
+                cache: "no-store"
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+                throw new Error(payload.error || "Impossible de charger les paies depuis PostgreSQL.");
+            }
+            return Array.isArray(payload.payroll) ? payload.payroll : [];
+        };
+
+        let entries = await charger();
+        const parCle = new Map(entries.map(entry => [clePaieServeur(entry), entry]));
+        const personnelIds = new Set(personnelServeur.map(p => String(p.id)));
+        const anciennesPaies = lireJSON(CLE_PAIES_PERSONNEL, {});
+        const avertissements = [];
+
+        if (anciennesPaies && typeof anciennesPaies === "object" && !Array.isArray(anciennesPaies)
+            && IMCAuth.hasPermission("paies.create")) {
+            for (const [legacyKey, paie] of Object.entries(anciennesPaies)) {
+                if (!paie || typeof paie !== "object") continue;
+                const morceaux = String(legacyKey).split("|");
+                if (morceaux.length !== 3) continue;
+                const legacyYear = morceaux[0].replace(/\s/g, "");
+                const staffId = String(paie.personnelId ?? morceaux[1]);
+                const monthText = String(paie.mois ?? morceaux[2]).padStart(2, "0");
+                if (legacyYear !== anneeNormalisee || !/^(0[1-9]|1[0-2])$/.test(monthText)) continue;
+                if (!personnelIds.has(staffId)) {
+                    const warning = "Des paies historiques ne correspondent à aucun membre du personnel disponible sur le serveur; elles restent locales et n’ont pas été effacées.";
+                    if (!avertissements.includes(warning)) avertissements.push(warning);
+                    continue;
+                }
+                const key = clePaie(anneeNormalisee, staffId, monthText);
+                if (parCle.has(key)) continue;
+
+                try {
+                    const response = await fetch("/api/payroll/index.php", {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            staff_id: staffId,
+                            school_year_label: anneeNormalisee,
+                            month: Number(monthText),
+                            base: paie.base ?? 0,
+                            bonuses: paie.primes ?? 0,
+                            deductions: paie.deductions ?? 0,
+                            status: paie.statut || "Non payé"
+                        })
+                    });
+                    const payload = await response.json();
+                    if (!response.ok || !payload.success) {
+                        throw new Error(payload.error || "Import de la paie historique refusé.");
+                    }
+                    parCle.set(key, payload.payroll);
+                } catch (error) {
+                    avertissements.push(String(error.message || error));
+                }
+            }
+        }
+
+        entries = await charger();
+        for (const entry of entries) {
+            const key = clePaieServeur(entry);
+            paiesServeurCache[key] = {
+                personnelId: entry.staff_id,
+                annee: String(entry.school_year_label).replace(/\s/g, ""),
+                mois: String(entry.payroll_month).padStart(2, "0"),
+                base: Number(entry.base_amount),
+                primes: Number(entry.bonus_amount),
+                deductions: Number(entry.deduction_amount),
+                net: Number(entry.net_amount),
+                statut: statutPaieDepuisServeur(entry.status),
+                dateEnregistrement: entry.recorded_at,
+                id: entry.id
+            };
+        }
+        paiesAnneesChargees[anneeNormalisee] = true;
+
+        const message = document.getElementById("messagePaie");
+        if (message) {
+            message.textContent = avertissements.length
+                ? "Certaines paies historiques restent locales et n’ont pas été importées : " + avertissements.join(" ")
+                : "";
+        }
+        return paiesServeurCache;
+    })();
+
+    try {
+        return await chargementPaiesPromise;
+    } finally {
+        chargementPaiesPromise = null;
+    }
+}
+
+/* ============================================================
+   CLÉ D'UNE PAIE
+============================================================ */
+
+function clePaie(
+    annee,
+    idPersonnel,
+    mois
+) {
+
+    return (
+        annee +
+        "|" +
+        String(idPersonnel) +
+        "|" +
+        mois
+    );
+
+}
+
+
+/* ============================================================
+   MOIS ACTUEL
+============================================================ */
+
+function moisActuel() {
+
+    return String(
+        new Date().getMonth() + 1
+    ).padStart(2, "0");
+
+}
+
+
+/* ============================================================
+   INITIALISER LE MOIS
+============================================================ */
+
+function initialiserMoisPaie() {
+
+    const select =
+        document.getElementById(
+            "moisPaie"
+        );
+
+
+    if (!select) {
+
+        return;
+
+    }
+
+
+    select.value =
+        moisActuel();
+
+
+    afficherNomMoisPaie();
+
+}
+
+
+/* ============================================================
+   NOM DU MOIS
+============================================================ */
+
+function obtenirMoisSelectionne() {
+
+    const select =
+        document.getElementById(
+            "moisPaie"
+        );
+
+
+    if (!select) {
+
+        return moisActuel();
+
+    }
+
+
+    return select.value;
+
+}
+
+
+/* ============================================================
+   AFFICHER MOIS
+============================================================ */
+
+function afficherNomMoisPaie() {
+
+    const mois =
+        obtenirMoisSelectionne();
+
+
+    const affichage =
+        document.getElementById(
+            "moisPaieAffiche"
+        );
+
+
+    if (affichage) {
+
+        affichage.textContent =
+            moisNoms[mois] ||
+            mois;
+
+    }
+
+
+    const annee =
+        document.getElementById(
+            "anneePaieAffichee"
+        );
+
+
+    if (annee) {
+
+        annee.textContent =
+            anneeConnectee;
+
+    }
+
+}
+
+
+/* ============================================================
+   CALCUL SALAIRE NET
+============================================================ */
+
+function calculerSalaireNet(
+    paie
+) {
+
+    const base =
+        nombreMontant(
+            paie.base
+        );
+
+
+    const primes =
+        nombreMontant(
+            paie.primes
+        );
+
+
+    const deductions =
+        nombreMontant(
+            paie.deductions
+        );
+
+
+    return Math.max(
+        0,
+        base +
+        primes -
+        deductions
+    );
+
+}
+
+
+/* ============================================================
+   AFFICHER PAIE DU PERSONNEL
+============================================================ */
+
+async function afficherPaie() {
+
+    try {
+        await chargerPaiesServeur();
+    } catch (error) {
+        const message = document.getElementById("messagePaie");
+        if (message) message.textContent = "Lecture des paies indisponible : " + (error.message || "");
+    }
+
+    afficherNomMoisPaie();
+
+
+    const tbody =
+        document.getElementById(
+            "tableauPaie"
+        );
+
+
+    if (!tbody) {
+
+        return;
+
+    }
+
+
+    tbody.innerHTML = "";
+
+
+    const personnel =
+        obtenirPersonnel();
+
+
+    const paies =
+        obtenirPaies();
+
+
+    const mois =
+        obtenirMoisSelectionne();
+
+
+    let total =
+        0;
+
+
+    if (
+        personnel.length === 0
+    ) {
+
+        tbody.innerHTML =
+            `
+            <tr>
+                <td
+                    colspan="10"
+                    class="aucun-personnel">
+                    Aucun personnel enregistré dans personnel.html.
+                </td>
+            </tr>
+            `;
+
+
+        document.getElementById(
+            "totalPaieTableau"
+        ).textContent =
+            formatMontant(0);
+
+
+        return;
+
+    }
+
+
+    personnel.forEach(
+        (personne, index) => {
+
+            const idPersonnel =
+                personne.id ||
+                personne.identifiant ||
+                index;
+
+
+            const cle =
+                clePaie(
+                    anneeConnectee,
+                    idPersonnel,
+                    mois
+                );
+
+
+            const paie =
+                paies[cle] || {
+
+                    base:
+                        nombreMontant(
+                            personne.salaire
+                        ) ||
+                        nombreMontant(
+                            personne.salaireMensuel
+                        ) ||
+                        0,
+
+                    primes:
+                        0,
+
+                    deductions:
+                        0,
+
+                    statut:
+                        "Non payé"
+
+                };
+
+
+            const net =
+                calculerSalaireNet(
+                    paie
+                );
+
+
+            total +=
+                net;
+
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.innerHTML =
+                `
+
+                <td>
+                    ${index + 1}
+                </td>
+
+
+                <td>
+                    ${echapperHTML(
+                        personne.nom ||
+                        ""
+                    )}
+                </td>
+
+
+                <td>
+                    ${echapperHTML(
+                        personne.fonction ||
+                        ""
+                    )}
+                </td>
+
+
+                <td>
+                    ${echapperHTML(
+                        personne.classe ||
+                        ""
+                    )}
+                </td>
+
+
+                <td>
+
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        class="paie-input"
+                        id="base_${idPersonnel}"
+                        value="${nombreMontant(
+                            paie.base
+                        )}"
+                    >
+
+                </td>
+
+
+                <td>
+
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        class="paie-input"
+                        id="prime_${idPersonnel}"
+                        value="${nombreMontant(
+                            paie.primes
+                        )}"
+                    >
+
+                </td>
+
+
+                <td>
+
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        class="paie-input"
+                        id="deduction_${idPersonnel}"
+                        value="${nombreMontant(
+                            paie.deductions
+                        )}"
+                    >
+
+                </td>
+
+
+                <td
+                    class="net-paie"
+                    id="net_${idPersonnel}">
+
+                    ${formatMontant(
+                        net
+                    )}
+
+                </td>
+
+
+                <td>
+
+                    <select
+                        class="paie-select"
+                        id="statut_${idPersonnel}">
+
+                        <option
+                            value="Non payé"
+                            ${
+                                paie.statut ===
+                                "Non payé"
+                                    ? "selected"
+                                    : ""
+                            }>
+                            Non payé
+                        </option>
+
+                        <option
+                            value="Partiel"
+                            ${
+                                paie.statut ===
+                                "Partiel"
+                                    ? "selected"
+                                    : ""
+                            }>
+                            Partiel
+                        </option>
+
+                        <option
+                            value="Payé"
+                            ${
+                                paie.statut ===
+                                "Payé"
+                                    ? "selected"
+                                    : ""
+                            }>
+                            Payé
+                        </option>
+
+                    </select>
+
+                </td>
+
+
+                <td class="no-print">
+
+                    <button
+                        type="button"
+                        class="btn btn-vert"
+                        onclick="enregistrerPaie('${String(
+                            idPersonnel
+                        ).replace(/'/g, "\\'")}')">
+
+                        Enregistrer
+
+                    </button>
+
+                </td>
+
+                `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+
+    document.getElementById(
+        "totalPaieTableau"
+    ).textContent =
+        formatMontant(
+            total
+        );
+
+}
+
+
+/* ============================================================
+   ENREGISTRER UNE PAIE
+============================================================ */
+
+async function enregistrerPaie(idPersonnel) {
+    if (!IMCAuth.hasPermission("paies.create") && !IMCAuth.hasPermission("paies.update")) {
+        alert("Permission refusée.");
+        return;
+    }
+
+    const mois = obtenirMoisSelectionne();
+    const id = String(idPersonnel);
+    const baseElement = document.getElementById("base_" + id);
+    const primeElement = document.getElementById("prime_" + id);
+    const deductionElement = document.getElementById("deduction_" + id);
+    const statutElement = document.getElementById("statut_" + id);
+    if (!baseElement || !primeElement || !deductionElement || !statutElement) return;
+
+    const base = nombreMontant(baseElement.value);
+    const primes = nombreMontant(primeElement.value);
+    const deductions = nombreMontant(deductionElement.value);
+    const statut = statutElement.value;
+
+    try {
+        const response = await fetch("/api/payroll/index.php", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                staff_id: id,
+                school_year_label: anneeConnectee,
+                month: Number(mois),
+                base,
+                bonuses: primes,
+                deductions,
+                status: statut
+            })
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || "La paie n’a pas été enregistrée.");
+        }
+
+        const entry = payload.payroll;
+        const key = clePaie(
+            String(entry.school_year_label).replace(/\s/g, ""),
+            entry.staff_id,
+            String(entry.payroll_month).padStart(2, "0")
+        );
+        paiesServeurCache[key] = {
+            personnelId: entry.staff_id,
+            annee: String(entry.school_year_label).replace(/\s/g, ""),
+            mois: String(entry.payroll_month).padStart(2, "0"),
+            base: Number(entry.base_amount),
+            primes: Number(entry.bonus_amount),
+            deductions: Number(entry.deduction_amount),
+            net: Number(entry.net_amount),
+            statut: statutPaieDepuisServeur(entry.status),
+            dateEnregistrement: entry.recorded_at,
+            id: entry.id
+        };
+        paiesAnneesChargees[String(anneeConnectee).replace(/\s/g, "")] = true;
+        const message = document.getElementById("messagePaie");
+        if (message) message.textContent = "Paie enregistrée dans PostgreSQL.";
+
+        await afficherPaie();
+        await chargerTableauDeBord();
+
+        const bouton = window.event && window.event.currentTarget;
+        if (bouton) {
+            const ancien = bouton.textContent;
+            bouton.textContent = "✓ Enregistré";
+            setTimeout(() => { bouton.textContent = ancien; }, 1500);
+        }
+    } catch (error) {
+        const message = document.getElementById("messagePaie");
+        if (message) message.textContent = "Paie non enregistrée. Les données locales historiques sont conservées. " + (error.message || "");
+        else alert(error.message || "Impossible d’enregistrer la paie sur le serveur.");
+    }
+}
+
+/* ============================================================
+   TOTAL DES SALAIRES POUR L'ANNÉE
+============================================================ */
+
+function totalSalairesAnnee() {
+
+    const paies =
+        obtenirPaies();
+
+
+    let total =
+        0;
+
+
+    Object.keys(
+        paies
+    ).forEach(
+        cle => {
+
+            if (
+                cle.startsWith(
+                    anneeConnectee +
+                    "|"
+                )
+            ) {
+
+                total +=
+                    calculerSalaireNet(
+                        paies[cle]
+                    );
+
+            }
+
+        }
+    );
+
+
+    return total;
+
+}
+
+
+/* ============================================================
+   TABLEAU DE BORD
+============================================================ */
+
+let depensesServeur = [];
+let chargementDepensesEnCours = false;
+
+async function chargerDepensesServeur() {
+    if (chargementDepensesEnCours) return depensesServeur;
+    chargementDepensesEnCours = true;
+    try {
+        const legacy = lireJSON(CLE_DEPENSES, {});
+        const historiques = Array.isArray(legacy[anneeConnectee]) ? legacy[anneeConnectee] : [];
+        for (const item of historiques) {
+            if (!item || item.id === undefined || item.id === null) continue;
+            const response = await fetch('/api/expenses/index.php', {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    school_year_label: anneeConnectee,
+                    description: String(item.description || ''),
+                    amount: nombreMontant(item.montant ?? item.amount),
+                    expense_date: String(item.date || item.expense_date || ''),
+                    legacy_id: String(item.id)
+                })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.error || 'Import des dépenses historiques impossible.');
+        }
+        const response = await fetch('/api/expenses/index.php?school_year_label=' + encodeURIComponent(anneeConnectee), {
+            credentials: 'include', headers: { 'Accept': 'application/json' }, cache: 'no-store'
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Chargement des dépenses impossible.');
+        depensesServeur = (Array.isArray(payload.expenses) ? payload.expenses : []).map(item => ({
+            id: String(item.id), legacy_id: item.legacy_id == null ? null : String(item.legacy_id),
+            description: item.description, montant: Number(item.amount),
+            date: String(item.expense_date || '').slice(0, 10)
+        }));
+        return depensesServeur;
+    } finally { chargementDepensesEnCours = false; }
+}
+
+async function chargerTableauDeBord() {
+
+    const select =
+        document.getElementById(
+            "anneeAcademique"
+        );
+
+
+    if (!select) {
+
+        return;
+
+    }
+
+
+    anneeConnectee =
+        select.value;
+
+    if (!personnelServeur.length) {
+        try { await chargerPersonnelServeur(); } catch (_) {}
+    }
+    try { await chargerPaiesServeur(); } catch (_) {}
+
+    localStorage.setItem(
+        CLE_ANNEE_ACTIVE,
+        anneeConnectee
+    );
+
+
+    const eleves =
+        lireJSON(
+            CLE_ELEVES,
+            []
+        );
+
+
+    let depensesAnnee = [];
+    try {
+        depensesAnnee = await chargerDepensesServeur();
+        document.getElementById("messageDepense").textContent = "";
+    } catch (error) {
+        const locales = lireJSON(CLE_DEPENSES, {});
+        depensesAnnee = Array.isArray(locales[anneeConnectee]) ? locales[anneeConnectee] : [];
+        document.getElementById("messageDepense").textContent =
+            "Serveur indisponible : affichage local en lecture seule. " + (error.message || "");
+    }
+
+
+    let totalPrevu =
+        0;
+
+
+    let totalRecu =
+        0;
+
+
+    let totalDepenses =
+        0;
+
+
+    depensesAnnee.forEach(
+        depense => {
+
+            totalDepenses +=
+                nombreMontant(
+                    depense.montant
+                );
+
+        }
+    );
+
+
+    const elevesAnnee =
+        eleves.filter(
+            eleve => {
+
+                return (
+                    !eleve.annee ||
+                    String(
+                        eleve.annee
+                    ) ===
+                    String(
+                        anneeConnectee
+                    )
+                );
+
+            }
+        );
+
+
+    elevesAnnee.forEach(
+        eleve => {
+
+            const finance =
+                calculerFinanceEleve(
+                    eleve,
+                    anneeConnectee
+                );
+
+
+            totalPrevu +=
+                finance.montantAPayer;
+
+
+            totalRecu +=
+                finance.totalPaye;
+
+        }
+    );
+
+
+    const totalSalaires =
+        totalSalairesAnnee();
+
+
+    const soldeAnnuel =
+        totalRecu -
+        totalSalaires -
+        totalDepenses;
+
+
+    document.getElementById(
+        "totalPrevu"
+    ).textContent =
+        formatMontant(
+            totalPrevu
+        );
+
+
+    document.getElementById(
+        "totalRecu"
+    ).textContent =
+        formatMontant(
+            totalRecu
+        );
+
+
+    document.getElementById(
+        "totalSalaires"
+    ).textContent =
+        formatMontant(
+            totalSalaires
+        );
+
+
+    document.getElementById(
+        "totalDepenses"
+    ).textContent =
+        formatMontant(
+            totalDepenses
+        );
+
+
+    const elementSolde =
+        document.getElementById(
+            "soldeAnnuel"
+        );
+
+
+    elementSolde.textContent =
+        formatMontant(
+            soldeAnnuel
+        );
+
+
+    elementSolde.className =
+        soldeAnnuel >= 0
+            ? "solde-positif"
+            : "solde-negatif";
+
+
+    await afficherPaie();
+
+
+    afficherDepenses(
+        depensesAnnee
+    );
+
+
+    afficherSituations(
+        eleves,
+        anneeConnectee
+    );
+
+
+    afficherResumeClasses(
+        eleves,
+        anneeConnectee
+    );
+
+}
+
+
+/* ============================================================
+   DÉPENSES
+============================================================ */
+
+async function ajouterDepense() {
+    if (!IMCAuth.requirePermission("depenses.create")) {
+        document.getElementById("messageDepense").textContent = "Permission refusée.";
+        return;
+    }
+    const description = document.getElementById("descriptionDepense").value.trim();
+    const montant = nombreMontant(document.getElementById("montantDepense").value);
+    const date = document.getElementById("dateDepense").value;
+    if (!description || montant <= 0 || !date || !anneeConnectee) {
+        document.getElementById("messageDepense").textContent = "Veuillez remplir correctement tous les champs.";
+        return;
+    }
+    try {
+        const response = await fetch('/api/expenses/index.php', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ school_year_label: anneeConnectee, description, amount: montant, expense_date: date })
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Enregistrement impossible.');
+        document.getElementById("descriptionDepense").value = "";
+        document.getElementById("montantDepense").value = "";
+        document.getElementById("dateDepense").value = "";
+        document.getElementById("messageDepense").textContent = "Dépense enregistrée sur le serveur.";
+        await chargerTableauDeBord();
+    } catch (error) {
+        document.getElementById("messageDepense").textContent =
+            "Dépense non enregistrée sur le serveur. Les données locales sont conservées. " + (error.message || "");
+    }
+}
+
+
+/* ============================================================
+   AFFICHER DÉPENSES
+============================================================ */
+
+function afficherDepenses(
+    depenses
+) {
+
+    const tbody =
+        document.getElementById(
+            "listeDepenses"
+        );
+
+
+    tbody.innerHTML = "";
+
+
+    if (
+        !Array.isArray(
+            depenses
+        ) ||
+        depenses.length === 0
+    ) {
+
+        tbody.innerHTML =
+            `
+            <tr>
+                <td colspan="5">
+                    Aucune dépense enregistrée.
+                </td>
+            </tr>
+            `;
+
+        return;
+
+    }
+
+
+    depenses.forEach(
+        (depense, index) => {
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.innerHTML =
+                `
+
+                <td>
+                    ${index + 1}
+                </td>
+
+                <td>
+                    ${echapperHTML(
+                        depense.description
+                    )}
+                </td>
+
+                <td>
+                    ${depense.date || ""}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        depense.montant
+                    )}
+                </td>
+
+                <td class="no-print">
+
+                    <button
+                        class="btn btn-rouge"
+                        onclick="supprimerDepense('${depense.id}')">
+
+                        Supprimer
+
+                    </button>
+
+                </td>
+
+                `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   SUPPRIMER DÉPENSE
+============================================================ */
+
+async function supprimerDepense(id) {
+    if (!IMCAuth.requirePermission("depenses.delete")) { alert("Permission refusée."); return; }
+    if (!confirm("Voulez-vous supprimer cette dépense ?")) return;
+    const expense = depensesServeur.find(item => String(item.id) === String(id));
+    if (!expense) { alert("Dépense indisponible côté serveur : aucune suppression effectuée."); return; }
+    try {
+        const response = await fetch('/api/expenses/index.php?expense_id=' + encodeURIComponent(String(id)), {
+            method: 'DELETE', credentials: 'include', headers: { 'Accept': 'application/json' }
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'Suppression impossible.');
+        if (expense.legacy_id !== null) {
+            const local = lireJSON(CLE_DEPENSES, {});
+            local[anneeConnectee] = (Array.isArray(local[anneeConnectee]) ? local[anneeConnectee] : [])
+                .filter(item => String(item.id) !== String(expense.legacy_id));
+            localStorage.setItem(CLE_DEPENSES, JSON.stringify(local));
+        }
+        await chargerTableauDeBord();
+    } catch (error) {
+        alert("Suppression non confirmée : " + (error.message || "erreur serveur") + ". Les données locales sont conservées.");
+    }
+}
+
+
+/* ============================================================
+   SITUATION FINANCIÈRE DES ÉLÈVES
+============================================================ */
+
+function afficherSituations(
+    eleves,
+    annee
+) {
+
+    const tbody =
+        document.getElementById(
+            "listeSituations"
+        );
+
+
+    tbody.innerHTML = "";
+
+
+    const elevesAnnee =
+        eleves.filter(
+            eleve => {
+
+                return (
+                    !eleve.annee ||
+                    String(
+                        eleve.annee
+                    ) ===
+                    String(
+                        annee
+                    )
+                );
+
+            }
+        );
+
+
+    if (
+        elevesAnnee.length === 0
+    ) {
+
+        tbody.innerHTML =
+            `
+            <tr>
+                <td colspan="6">
+                    Aucun élève trouvé.
+                </td>
+            </tr>
+            `;
+
+        return;
+
+    }
+
+
+    elevesAnnee.forEach(
+        eleve => {
+
+            const calcul =
+                calculerFinanceEleve(
+                    eleve,
+                    annee
+                );
+
+
+            const nomComplet =
+                (
+                    eleve.nom ||
+                    ""
+                ) +
+                " " +
+                (
+                    eleve.prenom ||
+                    ""
+                );
+
+
+            let statut =
+                "Non payé";
+
+
+            let classeStatut =
+                "statut-non-paye";
+
+
+            if (
+                calcul.montantAPayer > 0 &&
+                calcul.reste === 0
+            ) {
+
+                statut =
+                    "Payé";
+
+                classeStatut =
+                    "statut-paye";
+
+            } else if (
+                calcul.totalPaye > 0
+            ) {
+
+                statut =
+                    "Partiellement payé";
+
+                classeStatut =
+                    "statut-partiel";
+
+            }
+
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.innerHTML =
+                `
+
+                <td>
+                    ${echapperHTML(
+                        nomComplet.trim()
+                    )}
+                </td>
+
+                <td>
+                    ${echapperHTML(
+                        eleve.classe || ""
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        calcul.montantAPayer
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        calcul.totalPaye
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        calcul.reste
+                    )}
+                </td>
+
+                <td
+                    class="${classeStatut}">
+
+                    ${statut}
+
+                </td>
+
+                `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+}
+
+
+/* ============================================================
+   RÉSUMÉ PAR CLASSE
+============================================================ */
+
+function afficherResumeClasses(
+    eleves,
+    annee
+) {
+
+    const tbody =
+        document.getElementById(
+            "resumeClasses"
+        );
+
+
+    tbody.innerHTML = "";
+
+
+    classesDisponibles.forEach(
+        classe => {
+
+            const elevesClasse =
+                eleves.filter(
+                    eleve => {
+
+                        return (
+                            eleve.classe ===
+                            classe &&
+
+                            (
+                                !eleve.annee ||
+                                String(
+                                    eleve.annee
+                                ) ===
+                                String(
+                                    annee
+                                )
+                            )
+                        );
+
+                    }
+                );
+
+
+            if (
+                elevesClasse.length === 0
+            ) {
+
+                return;
+
+            }
+
+
+            let totalPrevu =
+                0;
+
+
+            let totalRecu =
+                0;
+
+
+            elevesClasse.forEach(
+                eleve => {
+
+                    const calcul =
+                        calculerFinanceEleve(
+                            eleve,
+                            annee
+                        );
+
+
+                    totalPrevu +=
+                        calcul.montantAPayer;
+
+
+                    totalRecu +=
+                        calcul.totalPaye;
+
+                }
+            );
+
+
+            const reste =
+                Math.max(
+                    0,
+                    totalPrevu -
+                    totalRecu
+                );
+
+
+            const tr =
+                document.createElement(
+                    "tr"
+                );
+
+
+            tr.innerHTML =
+                `
+
+                <td>
+                    ${echapperHTML(
+                        classe
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        totalPrevu
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        totalRecu
+                    )}
+                </td>
+
+                <td>
+                    ${formatMontant(
+                        reste
+                    )}
+                </td>
+
+                `;
+
+
+            tbody.appendChild(
+                tr
+            );
+
+        }
+    );
+
+
+    if (
+        tbody.innerHTML === ""
+    ) {
+
+        tbody.innerHTML =
+            `
+            <tr>
+                <td colspan="4">
+                    Aucune donnée disponible.
+                </td>
+            </tr>
+            `;
+
+    }
+
+}
+
+
+/* ============================================================
+   PROTECTION HTML
+============================================================ */
+
+function echapperHTML(
+    texte
+) {
+
+    return String(
+        texte ?? ""
+    )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+}
+
+
+/* ============================================================
+   TOUCHE ENTRÉE POUR LE MOT DE PASSE
+============================================================ */
+
+document
+    .getElementById(
+        "motDePasse"
+    )
+    .addEventListener(
+        "keydown",
+        function(event) {
+
+            if (
+                event.key === "Enter"
+            ) {
+
+                connecterPDG();
+
+            }
+
+        }
+    );
+
+
+/* ============================================================
+   ACTUALISATION AUTOMATIQUE SI personnel.html EST MODIFIÉ
+============================================================ */
+
+window.addEventListener(
+    "storage",
+    function(event) {
+
+        if (
+            event.key ===
+            CLE_PAIES_PERSONNEL
+        ) {
+
+            chargerTableauDeBord();
+
+        }
+
+
+        if (
+            event.key ===
+            CLE_FINANCES ||
+            event.key ===
+            CLE_TARIFS
+        ) {
+
+            chargerTableauDeBord();
+
+        }
+
+    }
+);
+
+
+/* Restaure l'interface après authentification contrôlée par le serveur. */
+document.addEventListener("DOMContentLoaded", async function () {
+    try {
+        const utilisateur = await IMCAuth.verifySession();
+        if (!utilisateur || String(utilisateur.role).toUpperCase() !== "PDG") return;
+        document.getElementById("zoneConnexion").classList.add("cache");
+        document.getElementById("zonePDG").classList.remove("cache");
+        document.getElementById("messageErreur").textContent = "";
+        await chargerAnnees();
+        initialiserMoisPaie();
+        await chargerPersonnelServeur();
+        chargerTableauDeBord();
+    } catch (error) {
+        const message = document.getElementById("messageErreur");
+        if (message) message.textContent = error && error.message ? error.message : "Impossible de restaurer la session PDG.";
+    }
+});
+</script>
+
+</body>
+</html>
