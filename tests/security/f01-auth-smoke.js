@@ -5,11 +5,16 @@ const auth = fs.readFileSync("auth.js", "utf8");
 
 const context = {
   console,
-  // Minimal browser lifecycle API required by the real auth.js at load time.
+  // Browser primitives used by the real auth.js module.
+  URLSearchParams,
+  URL,
+  Request,
+  Headers,
+  // Minimal browser lifecycle API required by auth.js at load time.
   document: { addEventListener() {} },
   fetch: async () => ({ ok: false, json: async () => ({ success: false }) }),
   sessionStorage: { removeItem() {} },
-  location: { href: "", pathname: "/index.html" },
+  location: { href: "", pathname: "/index.html", search: "", origin: "http://localhost" },
   IMCSecureStorage: { lock() {} }
 };
 context.window = context;
