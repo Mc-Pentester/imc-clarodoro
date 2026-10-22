@@ -60,6 +60,11 @@ try {
         const prefix = route + " [" + viewport.name + "]";
         if (!response) failures.push(prefix + ": no HTTP response");
         else if (response.status() >= 500) failures.push(prefix + ": HTTP " + response.status());
+        const finalUrl = new URL(view.url);
+        const expectedRoute = route.toLowerCase();
+        const isExpectedPage = finalUrl.pathname.toLowerCase().endsWith("/" + expectedRoute)
+          || (finalUrl.pathname.toLowerCase().endsWith("/secure-page.php") && (finalUrl.searchParams.get("page") || "").toLowerCase() === expectedRoute);
+        if (!isExpectedPage) failures.push(prefix + ": unexpected redirect; expected " + route + " or secure-page.php?page=" + route + ", got " + view.url);
         if (view.width <= 0 || view.height <= 0 || view.text.length < 8 || !view.visibleContent) failures.push(prefix + ": blank page or no visible content (title=" + view.title + ", url=" + view.url + ")");
         const leaked = visibleCodePatterns.find(pattern => pattern.test(view.text));
         if (leaked) failures.push(prefix + ": source code appears in visible text (" + leaked + ")");
