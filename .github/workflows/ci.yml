@@ -24,9 +24,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Vérifie uniquement les commits de cet audit; la branche de sécurité hérite
-          # d'anciens changements indépendants qui ne font pas partie de ce patch.
-          git diff --check c06f50a9522bdd1bfb5c6890d2aaf7edb03b873c...HEAD
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            git diff --check "${{ github.event.pull_request.head.sha }}^" "${{ github.event.pull_request.head.sha }}"
+          else
+            git diff --check HEAD^ HEAD
+          fi
 
       - name: PHP syntax check
         shell: bash
