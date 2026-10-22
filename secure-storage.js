@@ -199,6 +199,11 @@
     const db = await ouvrirBase();
     let record = await lireEnregistrement(db);
 
+    if (!record && window.IMC_VAULT_REQUIRE_EXISTING === true) {
+      db.close();
+      throw new Error("Aucun coffre-fort existant sur cet appareil. Réinitialisation bloquée.");
+    }
+
     if (!record) {
       const password = demanderMotDePasse(true);
       const confirmation = window.prompt("Confirmez le mot de passe maître :");
