@@ -1,8 +1,26 @@
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
   const form = document.getElementById('reset-form');
   if (!form) return;
   const status = document.getElementById('status');
+  const vaultStatus = document.getElementById('vault-status');
+  const fields = document.getElementById('reset-fields');
   const button = document.getElementById('submit-button');
+
+  // Le formulaire reste désactivé tant que le coffre local existant n'est pas déverrouillé.
+  try {
+    const vault = window.IMCSecureStorage;
+    if (!vault || !vault.ready) throw new Error('Le coffre-fort n’est pas disponible.');
+    const ready = await vault.ready;
+    if (!ready || !vault.isUnlocked()) throw new Error('Le coffre-fort n’a pas été déverrouillé.');
+    fields.disabled = false;
+    vaultStatus.textContent = 'Coffre-fort déverrouillé. Vous pouvez continuer.';
+    vaultStatus.className = 'success';
+  } catch (error) {
+    vaultStatus.textContent = error.message || 'Accès refusé : déverrouillez le coffre-fort existant.';
+    vaultStatus.className = 'error';
+    return;
+  }
+
   form.addEventListener('submit', async function (event) {
     event.preventDefault();
     status.textContent = '';
@@ -10,6 +28,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const recoveryToken = document.getElementById('recovery-token').value;
     const newPassword = document.getElementById('new-password').value;
     const confirmation = document.getElementById('confirm-password').value;
+
+    if (!window.IMCSecureStorage || !window.IMCSecureStorage.isUnlocked()) {
+      status.textContent = 'Le coffre-fort est verrouillé. Rechargez la page et déverrouillez-le.';
+      status.className = 'error';
+      fields.disabled = true;
+      return;
+    }
     if (recoveryToken.length < 32) {
       status.textContent = 'Code de récupération invalide.';
       status.className = 'error';
@@ -25,6 +50,7 @@ document.addEventListener('DOMContentLoaded', function () {
       status.className = 'error';
       return;
     }
+
     button.disabled = true;
     try {
       const response = await fetch('/api/auth/reset-pdg-password.php', {
