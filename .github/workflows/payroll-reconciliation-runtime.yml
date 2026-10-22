@@ -103,6 +103,13 @@ jobs:
           curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
 
 
+      - name: Chromium rendering smoke test for all main pages
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          node scripts/browser-html-smoke.mjs
+
       - name: Prove server-side protection of sensitive HTML pages
         run: |
           set -Eeuo pipefail
