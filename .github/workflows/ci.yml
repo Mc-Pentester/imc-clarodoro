@@ -24,11 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            git diff --check "${{ github.event.pull_request.head.sha }}^" "${{ github.event.pull_request.head.sha }}"
-          else
-            git diff --check HEAD^ HEAD
-          fi
+          git diff --check HEAD^ HEAD
 
       - name: PHP syntax check
         shell: bash
