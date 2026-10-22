@@ -5,34 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <meta name="referrer" content="no-referrer">
-  <title>Réinitialiser le mot de passe — IMC-Clarodoro</title>
+  <title>Récupération du compte PDG — IMC-Clarodoro</title>
   <link rel="stylesheet" href="/reset-pdg-password.css">
-  <script>window.IMC_VAULT_REQUIRED = true; window.IMC_VAULT_REQUIRE_EXISTING = true;</script>
-  <script src="/secure-storage.js" defer></script>
-  <script src="/reset-pdg-password.js" defer></script>
 </head>
 <body>
   <main class="card">
     <div class="brand-mark" aria-hidden="true">IMC</div>
     <p class="eyebrow">RÉCUPÉRATION DU COMPTE</p>
-    <h1>Réinitialiser le mot de passe PDG</h1>
-    <p class="intro">Utilisez le code de récupération configuré par l’administrateur du serveur. Cette opération ne supprime ni le compte ni les données de l’établissement.</p>
-    <p id="vault-status" role="status" aria-live="polite">Déverrouillez le coffre-fort existant sur cet appareil pour continuer.</p>
-    <form id="reset-form" autocomplete="off">
-      <fieldset id="reset-fields" disabled>
-      <label for="recovery-token">Code de récupération</label>
-      <input id="recovery-token" name="recoveryToken" type="password" autocomplete="off" required minlength="32" aria-describedby="token-help">
-      <small id="token-help">Le code n’est pas votre ancien mot de passe.</small>
-      <label for="new-password">Nouveau mot de passe</label>
-      <input id="new-password" name="newPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="200">
-      <label for="confirm-password">Confirmer le nouveau mot de passe</label>
-      <input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="200">
-      <button type="submit" id="submit-button">Réinitialiser le mot de passe</button>
-      <p id="status" role="status" aria-live="polite"></p>
-      </fieldset>
-    </form>
+    <h1>Récupération du compte PDG</h1>
+    <p class="intro">Pour protéger le compte PDG, la réinitialisation par navigateur est désactivée. Le coffre-fort local est une protection complémentaire de l’interface, pas une preuve d’autorisation côté serveur.</p>
+    <p class="error" role="status">Aucune réinitialisation ne peut être effectuée depuis cette page.</p>
+    <h2>Que faire ?</h2>
+    <ol>
+      <li>Contactez l’administrateur autorisé de l’ordinateur ou du serveur IMC-Clarodoro.</li>
+      <li>L’administrateur exécute localement le script <code>Scripts/RESET-PDG-PASSWORD.php</code> en ligne de commande.</li>
+      <li>Après confirmation du succès, connectez-vous avec le nouveau mot de passe.</li>
+    </ol>
+    <p>Cette procédure conserve le compte PDG et les données PostgreSQL. Elle ne modifie ni les rôles ni les permissions.</p>
     <a class="back-link" href="/PDG.html">Retour à la connexion PDG</a>
-    <p class="security-note">Après la réinitialisation, retirez ou faites tourner le code de récupération dans la configuration du serveur.</p>
   </main>
 </body>
 </html>
