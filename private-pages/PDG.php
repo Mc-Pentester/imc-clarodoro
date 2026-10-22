@@ -1684,11 +1684,11 @@ async function changerCodeVault() {
     try {
         await IMCSecureStorage.changePassword(ancienCode, nouveauCode, confirmation);
         afficherMessageVault('Le code du coffre-fort a été modifié avec succès. Le coffre-fort sera verrouillé.', 'ok');
-        
+
         setTimeout(function() {
             IMCSecureStorage.lock();
         }, 2000);
-        
+
     } catch (error) {
         afficherMessageVault(error.message || 'Impossible de modifier le code du coffre-fort.', 'erreur');
     }
@@ -1708,7 +1708,7 @@ async function ajouterPersonnelAdmin() {
     if(!nom||!fonction||!identifiant||!motDePasse){afficherMessageAdmin('Veuillez remplir tous les champs obligatoires.','erreur');return;}
     const parts=nom.split(/\\s+/); const firstName=parts.shift()||nom; const lastName=parts.join(' ')||firstName;
     try {
-        
+
         const response=await fetch('/api/personnel/index.php',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({first_name:firstName,last_name:lastName,function_name:fonction,class_name:classe,username:identifiant,password:motDePasse,role_name:fonction})});
         const payload=await response.json(); if(!response.ok||!payload.success) throw new Error(payload.error||'Impossible d’ajouter le personnel.');
         document.getElementById('adminNom').value=''; document.getElementById('adminClasse').value=''; document.getElementById('adminIdentifiant').value=''; document.getElementById('adminMotDePasse').value='';
@@ -1720,7 +1720,7 @@ async function supprimerPersonnelAdmin(id) {
     if (!IMCAuth.requirePermission('personnel.delete')) { afficherMessageAdmin('Permission refusée.', 'erreur'); return; }
     if (!confirm('Êtes-vous sûr de vouloir archiver ce personnel ?')) return;
     try {
-        
+
         const response=await fetch('/api/personnel/index.php',{method:'DELETE',credentials:'include',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({id:id})});
         const payload=await response.json(); if(!response.ok||!payload.success) throw new Error(payload.error||'Impossible d’archiver le personnel.');
         await chargerPersonnelServeur(); afficherMessageAdmin('Personnel archivé avec succès.','succes'); chargerListePersonnelAdmin();

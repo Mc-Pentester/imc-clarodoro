@@ -454,7 +454,7 @@ th{
     </button>
 
     <div id="messageConnexion" class="message"></div>
-    
+
     <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px; font-size: 12px;">
       <strong>Information:</strong> Les comptes du personnel doivent être créés par l'administrateur via la page PDG.
     </div>
