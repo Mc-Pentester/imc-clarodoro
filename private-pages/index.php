@@ -975,8 +975,12 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 <script>
 
 // Guard d'authentification
-document.addEventListener("DOMContentLoaded", function() {
-  IMCAuth.requireAuth("personnel.html");
+document.addEventListener("DOMContentLoaded", async function() {
+  const user = await IMCAuth.verifySession();
+  if (!user) {
+    IMCAuth.requireAuth("personnel.html");
+    return;
+  }
 });
 
 const ACTIVE_YEAR_KEY = "imc_active_year";
