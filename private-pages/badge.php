@@ -682,10 +682,7 @@ button:hover{
 <script src="auth.js"></script>
 <script>
 
-// Guard d'authentification
-document.addEventListener("DOMContentLoaded", function() {
-  IMCAuth.requireAuth("personnel.html");
-});
+// La session est vérifiée avant la garde d'authentification dans l'initialisation.
 
 /* =========================
    DONNÉES
@@ -1625,7 +1622,11 @@ ${badgeClone.outerHTML}
 ========================= */
 
 document.addEventListener("DOMContentLoaded", async function() {
-    IMCAuth.requireAuth("personnel.html");
+    const user = await IMCAuth.verifySession();
+    if (!user) {
+        IMCAuth.requireAuth("personnel.html");
+        return;
+    }
 
     try {
         await chargerEleves();
