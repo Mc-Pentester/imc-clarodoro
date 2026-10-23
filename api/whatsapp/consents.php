@@ -93,16 +93,46 @@ $stmt = $pdo->prepare(
      RETURNING id, parent_id, purpose, phone_e164, status, consent_source,
                evidence_reference, consented_at, revoked_at, updated_at'
 );
-$stmt->execute([
-    ':parent_id' => $parentId,
-    ':purpose' => $purpose,
-    ':phone' => $phone,
-    ':status' => $status,
-    ':source' => $source,
-    ':evidence' => $evidence,
-    ':consented_at' => $consentedAt,
-    ':revoked_at' => $revokedAt,
-    ':actor' => $user['id'],
-]);
+$pdo->beginTransaction();
+try {
+    $previousStmt = $pdo->prepare(
+        'SELECT id, status FROM whatsapp_consents WHERE parent_id = :parent_id AND purpose = :purpose FOR UPDATE'
+    );
+    $previousStmt->execute([':parent_id' => $parentId, ':purpose' => $purpose]);
+    $previous = $previousStmt->fetch();
 
-echo json_encode(['success' => true, 'consent' => $stmt->fetch()], JSON_UNESCAPED_UNICODE);
+    $stmt->execute([
+        ':parent_id' => $parentId,
+        ':purpose' => $purpose,
+        ':phone' => $phone,
+        ':status' => $status,
+        ':source' => $source,
+        ':evidence' => $evidence,
+        ':consented_at' => $consentedAt,
+        ':revoked_at' => $revokedAt,
+        ':actor' => $user['id'],
+    ]);
+    $consent = $stmt->fetch();
+
+    $audit = $pdo->prepare(
+        'INSERT INTO whatsapp_consent_audit
+            (consent_id, parent_id, purpose, previous_status, new_status, actor_user_id)
+         VALUES (:consent_id, :parent_id, :purpose, :previous_status, :new_status, :actor)'
+    );
+    $audit->execute([
+        ':consent_id' => $consent['id'],
+        ':parent_id' => $parentId,
+        ':purpose' => $purpose,
+        ':previous_status' => $previous['status'] ?? null,
+        ':new_status' => $status,
+        ':actor' => $user['id'],
+    ]);
+    $pdo->commit();
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    throw $e;
+}
+
+echo json_encode(['success' => true, 'consent' => $consent], JSON_UNESCAPED_UNICODE);
