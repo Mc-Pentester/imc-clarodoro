@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_consents (
     CONSTRAINT whatsapp_consents_parent_purpose_unique UNIQUE (parent_id, purpose),
     CONSTRAINT whatsapp_consents_status_timestamps CHECK (
         (status = 'OPTED_IN' AND consented_at IS NOT NULL AND revoked_at IS NULL)
-        OR (status = 'OPTED_OUT' AND revoked_at IS NOT NULL)
+        OR (status = 'OPTED_OUT' AND consented_at IS NULL AND revoked_at IS NOT NULL)
         OR (status = 'PENDING' AND consented_at IS NULL AND revoked_at IS NULL)
     )
 );
