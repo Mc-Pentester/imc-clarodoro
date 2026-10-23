@@ -49,6 +49,21 @@ function historyTableExists(PDO $pdo): bool
     return (bool) $stmt->fetchColumn();
 }
 
+function hasApplicationTables(PDO $pdo): bool
+{
+    $stmt = $pdo->query(
+        "SELECT EXISTS (
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_type = 'BASE TABLE'
+              AND table_name <> '" . MIGRATION_TABLE . "'
+        )"
+    );
+
+    return (bool) $stmt->fetchColumn();
+}
+
 function ensureHistoryTable(PDO $pdo): void
 {
     $pdo->exec(
@@ -83,10 +98,16 @@ function appliedMigrations(PDO $pdo): array
 
 function printStatus(PDO $pdo, array $files): void
 {
+    $historyExists = historyTableExists($pdo);
     $applied = appliedMigrations($pdo);
 
     fwrite(STDOUT, "Database : " . (string) $pdo->query('SELECT current_database()')->fetchColumn() . PHP_EOL);
-    fwrite(STDOUT, "Migration history : " . (historyTableExists($pdo) ? 'PRESENT' : 'MISSING') . PHP_EOL);
+    fwrite(STDOUT, "Migration history : " . ($historyExists ? 'PRESENT' : 'MISSING') . PHP_EOL);
+
+    if (!$historyExists && hasApplicationTables($pdo)) {
+        fwrite(STDOUT, "ATTENTION : schéma existant sans historique; --apply est bloqué pour éviter de rejouer les migrations historiques." . PHP_EOL);
+    }
+
     fwrite(STDOUT, PHP_EOL);
 
     foreach ($files as $file) {
@@ -113,6 +134,15 @@ function printStatus(PDO $pdo, array $files): void
 
 function applyMigrations(PDO $pdo, array $files): void
 {
+    // Fail closed: never infer an empty migration history for a populated database.
+    // Otherwise --apply could replay every historical migration against live data.
+    if (!historyTableExists($pdo) && hasApplicationTables($pdo)) {
+        throw new RuntimeException(
+            'Application refusée : le schéma contient déjà des tables mais schema_migrations est absent. ' .
+            'Établir et vérifier un baseline de migration avant toute application.'
+        );
+    }
+
     ensureHistoryTable($pdo);
     $applied = appliedMigrations($pdo);
 
@@ -144,6 +174,7 @@ function applyMigrations(PDO $pdo, array $files): void
         fwrite(STDOUT, "APPLY    " . $filename . PHP_EOL);
 
         try {
+            $pdo->beginTransaction();
             $pdo->exec($sql);
 
             $stmt = $pdo->prepare(
@@ -156,7 +187,12 @@ function applyMigrations(PDO $pdo, array $files): void
                 ':filename' => $filename,
                 ':checksum' => $checksum,
             ]);
+            $pdo->commit();
+            $applied[$filename] = $checksum;
         } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             throw new RuntimeException(
                 'Migration échouée : ' . $filename . ' — ' . $e->getMessage(),
                 0,
