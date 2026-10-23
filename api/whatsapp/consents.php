@@ -49,7 +49,7 @@ if (!is_string($parentId) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-
 if (!in_array($purpose, ['ATTENDANCE', 'RESULTS_AVAILABLE', 'PAYMENT_REMINDER', 'GENERAL'], true)) {
     apiError(422, 'Finalité WhatsApp invalide');
 }
-if (!is_string($phone) || !preg_match('/^\\+[1-9][0-9]{7,14}$/', $phone)) {
+if (!is_string($phone) || !preg_match('/^\+[1-9][0-9]{7,14}$/', $phone)) {
     apiError(422, 'Le téléphone doit être au format international E.164');
 }
 if (!in_array($status, ['PENDING', 'OPTED_IN', 'OPTED_OUT'], true)) {
