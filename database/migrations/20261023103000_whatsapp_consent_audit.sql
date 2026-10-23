@@ -18,3 +18,19 @@ CREATE TABLE IF NOT EXISTS whatsapp_consent_audit (
 );
 CREATE INDEX IF NOT EXISTS idx_whatsapp_consent_audit_parent_time
     ON whatsapp_consent_audit(parent_id, action_at DESC);
+
+-- Enforce append-only behavior for the application/database roles.
+CREATE OR REPLACE FUNCTION prevent_whatsapp_consent_audit_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'whatsapp_consent_audit is append-only';
+END;
+$$;
+
+DROP TRIGGER IF EXISTS whatsapp_consent_audit_no_mutation
+    ON whatsapp_consent_audit;
+CREATE TRIGGER whatsapp_consent_audit_no_mutation
+    BEFORE UPDATE OR DELETE ON whatsapp_consent_audit
+    FOR EACH ROW EXECUTE FUNCTION prevent_whatsapp_consent_audit_mutation();
