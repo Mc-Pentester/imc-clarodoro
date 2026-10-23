@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_consents (
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (
         status IN ('PENDING', 'OPTED_IN', 'OPTED_OUT')
     ),
-    consent_source VARCHAR(50),
+    consent_source VARCHAR(255),
     evidence_reference VARCHAR(255),
     consented_at TIMESTAMPTZ,
     revoked_at TIMESTAMPTZ,
