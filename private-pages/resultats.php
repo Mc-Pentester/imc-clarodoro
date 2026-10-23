@@ -1085,11 +1085,6 @@ body {
 <script src="auth.js"></script>
 <script>
 
-// Guard d'authentification
-document.addEventListener("DOMContentLoaded", function() {
-  IMCAuth.requireAuth("personnel.html");
-});
-
 /* =========================================================
    STOCKAGE
 ========================================================= */

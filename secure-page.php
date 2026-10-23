@@ -18,6 +18,7 @@ $pages = [
     'badge.html' => ['public' => 'badge.html', 'file' => 'badge.php', 'permission' => 'badge.read', 'role' => null],
     'payroll-recovery.html' => ['public' => 'payroll-recovery.html', 'file' => 'payroll-recovery.php', 'permission' => 'paies.reconcile', 'role' => null],
     'resultats.html' => ['public' => 'resultats.html', 'file' => 'resultats.php', 'permission' => 'resultats.read', 'role' => null],
+    'vacations.html' => ['public' => 'vacations.html', 'file' => 'vacations.php', 'permission' => 'vacances.read', 'role' => null],
 ];
 
 $requestedPage = isset($_GET['page']) && is_string($_GET['page']) ? strtolower(basename($_GET['page'])) : '';

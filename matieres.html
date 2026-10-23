@@ -339,7 +339,7 @@ th {
 document.addEventListener("DOMContentLoaded", async function () {
     const user = await IMCAuth.verifySession();
     if (!user) {
-        window.location.href = "personnel.html";
+        window.location.href = "index.html";
         return;
     }
     await chargerMatieres();

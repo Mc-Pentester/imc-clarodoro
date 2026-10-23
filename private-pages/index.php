@@ -974,11 +974,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 <script src="auth.js"></script>
 <script>
 
-// Guard d'authentification
-document.addEventListener("DOMContentLoaded", function() {
-  IMCAuth.requireAuth("personnel.html");
-});
-
 const ACTIVE_YEAR_KEY = "imc_active_year";
 
     let students = [];

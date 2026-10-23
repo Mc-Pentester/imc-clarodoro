@@ -13,6 +13,7 @@ $protected = [
     '/badge.html' => 'badge.html',
     '/payroll-recovery.html' => 'payroll-recovery.html',
     '/resultats.html' => 'resultats.html',
+    '/vacations.html' => 'vacations.html',
 ];
 
 if ($path === '/') {

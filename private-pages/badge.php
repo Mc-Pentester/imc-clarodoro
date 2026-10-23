@@ -682,11 +682,6 @@ button:hover{
 <script src="auth.js"></script>
 <script>
 
-// Guard d'authentification
-document.addEventListener("DOMContentLoaded", function() {
-  IMCAuth.requireAuth("personnel.html");
-});
-
 /* =========================
    DONNÉES
 ========================= */
@@ -720,7 +715,7 @@ async function chargerEleves(){
         }
 
         if (response.status === 401 || response.status === 403) {
-            IMCAuth.requireAuth("personnel.html");
+            window.location.href = "/badge.html";
             throw new Error("Accès refusé. Veuillez vous reconnecter ou vérifier vos permissions.");
         }
 
@@ -1625,8 +1620,7 @@ ${badgeClone.outerHTML}
 ========================= */
 
 document.addEventListener("DOMContentLoaded", async function() {
-    IMCAuth.requireAuth("personnel.html");
-
+    await IMCAuth.verifySession();
     try {
         await chargerEleves();
         chargerAnnee(null);

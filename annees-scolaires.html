@@ -318,7 +318,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     if (!IMCAuth.verifySession) return;
     const user = await IMCAuth.verifySession();
     if (!user) {
-        window.location.href = "personnel.html";
+        window.location.href = "index.html";
         return;
     }
     await chargerDonnees();
