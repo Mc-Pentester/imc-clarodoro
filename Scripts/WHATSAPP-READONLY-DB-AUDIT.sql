@@ -56,49 +56,46 @@ WHERE con.contype = 'f'
   AND ns.nspname NOT IN ('pg_catalog', 'information_schema')
 ORDER BY ns.nspname, src.relname, con.conname;
 
--- 3. Totaux de qualité des contacts : agrégats uniquement, sans données personnelles.
--- Si une table/colonne attendue est absente, noter l'erreur et comparer avec la section 1.
-SELECT 'students' AS table_name,
-       count(*) AS total_rows,
-       count(*) FILTER (WHERE phone IS NULL OR btrim(phone) = '') AS missing_or_blank_phone
-FROM public.students
-UNION ALL
-SELECT 'parents',
-       count(*),
-       count(*) FILTER (WHERE phone IS NULL OR btrim(phone) = '')
-FROM public.parents;
+-- 3. Agrégats conditionnels : chaque contrôle vérifie d'abord l'existence de sa table.
+-- Les valeurs sont des agrégats; aucune donnée personnelle n'est affichée.
+DO $audit$
+DECLARE total_rows BIGINT; missing_rows BIGINT; links BIGINT; linked_students BIGINT;
+        linked_parents BIGINT; primary_links BIGINT; without_link BIGINT; multi_link BIGINT;
+        t TEXT;
+BEGIN
+    IF to_regclass('public.students') IS NOT NULL THEN
+        EXECUTE 'SELECT count(*), count(*) FILTER (WHERE phone IS NULL OR btrim(phone) = '''') FROM public.students'
+          INTO total_rows, missing_rows;
+        RAISE NOTICE 'students: total=%, téléphone manquant/vide=%', total_rows, missing_rows;
+    ELSE RAISE NOTICE 'SKIP: public.students absent'; END IF;
 
--- 4. Relations parent-élève et anomalies d'association, agrégats uniquement.
-SELECT
-    count(*) AS total_links,
-    count(DISTINCT student_id) AS students_with_at_least_one_link,
-    count(DISTINCT parent_id) AS parents_linked_to_students,
-    count(*) FILTER (WHERE is_primary) AS links_marked_primary
-FROM public.student_parents;
+    IF to_regclass('public.parents') IS NOT NULL THEN
+        EXECUTE 'SELECT count(*), count(*) FILTER (WHERE phone IS NULL OR btrim(phone) = '''') FROM public.parents'
+          INTO total_rows, missing_rows;
+        RAISE NOTICE 'parents: total=%, téléphone manquant/vide=%', total_rows, missing_rows;
+    ELSE RAISE NOTICE 'SKIP: public.parents absent'; END IF;
 
-SELECT
-    count(*) FILTER (WHERE link_count = 0) AS students_without_parent_link,
-    count(*) FILTER (WHERE link_count > 1) AS students_with_multiple_parent_links
-FROM (
-    SELECT s.id, count(sp.parent_id) AS link_count
-    FROM public.students s
-    LEFT JOIN public.student_parents sp ON sp.student_id = s.id
-    GROUP BY s.id
-) AS links_per_student;
+    IF to_regclass('public.student_parents') IS NOT NULL THEN
+        EXECUTE 'SELECT count(*), count(DISTINCT student_id), count(DISTINCT parent_id), count(*) FILTER (WHERE is_primary) FROM public.student_parents'
+          INTO links, linked_students, linked_parents, primary_links;
+        RAISE NOTICE 'student_parents: liens=%, élèves liés=%, parents liés=%, liens primaires=%',
+          links, linked_students, linked_parents, primary_links;
+        IF to_regclass('public.students') IS NOT NULL THEN
+            EXECUTE 'SELECT count(*) FILTER (WHERE link_count = 0), count(*) FILTER (WHERE link_count > 1) FROM (SELECT s.id, count(sp.parent_id) AS link_count FROM public.students s LEFT JOIN public.student_parents sp ON sp.student_id = s.id GROUP BY s.id) x'
+              INTO without_link, multi_link;
+            RAISE NOTICE 'élèves sans lien parent=%, élèves avec plusieurs liens=%', without_link, multi_link;
+        END IF;
+    ELSE RAISE NOTICE 'SKIP: public.student_parents absent'; END IF;
 
--- 5. Chaîne financière : facture -> élève et paiement -> facture.
--- Totaux et statuts uniquement; aucun montant individuel n'est affiché.
-SELECT 'invoices' AS table_name, count(*) AS total_rows FROM public.invoices
-UNION ALL
-SELECT 'payments', count(*) FROM public.payments;
-
--- 6. Résumé de la disponibilité des données liées aux notifications.
-SELECT 'enrollments' AS table_name, count(*) AS total_rows FROM public.enrollments
-UNION ALL
-SELECT 'grades', count(*) FROM public.grades
-UNION ALL
-SELECT 'result_carnets', count(*) FROM public.result_carnets
-UNION ALL
-SELECT 'attendance', count(*) FROM public.attendance;
+    FOREACH t IN ARRAY ARRAY['invoices','payments','enrollments','grades','result_carnets','attendance'] LOOP
+        IF to_regclass('public.' || t) IS NOT NULL THEN
+            EXECUTE format('SELECT count(*) FROM public.%I', t) INTO total_rows;
+            RAISE NOTICE '%: total=%', t, total_rows;
+        ELSE
+            RAISE NOTICE 'SKIP: public.% absent', t;
+        END IF;
+    END LOOP;
+END
+$audit$;
 
 ROLLBACK;
