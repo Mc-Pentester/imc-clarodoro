@@ -31,5 +31,6 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_consents_status_purpose
 INSERT INTO permissions (name, description)
 VALUES
     ('whatsapp.consent.read', 'Consulter les consentements WhatsApp'),
-    ('whatsapp.consent.manage', 'Enregistrer ou retirer un consentement WhatsApp')
+    ('whatsapp.consent.manage', 'Enregistrer ou retirer un consentement WhatsApp'),
+    ('whatsapp.message.send', 'Envoyer un modèle WhatsApp autorisé')
 ON CONFLICT (name) DO NOTHING;
