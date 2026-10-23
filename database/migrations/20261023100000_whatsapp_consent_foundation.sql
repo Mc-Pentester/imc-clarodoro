@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_consents (
     purpose VARCHAR(40) NOT NULL CHECK (
         purpose IN ('ATTENDANCE', 'RESULTS_AVAILABLE', 'PAYMENT_REMINDER', 'GENERAL')
     ),
-    phone_e164 VARCHAR(20) NOT NULL CHECK (phone_e164 ~ '^\\+[1-9][0-9]{7,14}$'),
+    phone_e164 VARCHAR(20) NOT NULL CHECK (phone_e164 ~ E'^\\+[1-9][0-9]{7,14}$'),
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (
         status IN ('PENDING', 'OPTED_IN', 'OPTED_OUT')
     ),
