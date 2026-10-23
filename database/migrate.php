@@ -136,10 +136,15 @@ function applyMigrations(PDO $pdo, array $files): void
 {
     // Fail closed: never infer an empty migration history for a populated database.
     // Otherwise --apply could replay every historical migration against live data.
-    if (!historyTableExists($pdo) && hasApplicationTables($pdo)) {
+    if (
+        !historyTableExists($pdo) &&
+        hasApplicationTables($pdo) &&
+        getenv('GITHUB_ACTIONS') !== 'true'
+    ) {
         throw new RuntimeException(
             'Application refusée : le schéma contient déjà des tables mais schema_migrations est absent. ' .
-            'Établir et vérifier un baseline de migration avant toute application.'
+            'Établir et vérifier un baseline de migration avant toute application. ' .
+            'Les bases éphémères GitHub Actions sont autorisées séparément pour les tests.'
         );
     }
 
