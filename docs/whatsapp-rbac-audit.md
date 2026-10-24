@@ -1,7 +1,7 @@
 # Audit statique RBAC — préparation WhatsApp
 
-Date : 2026-10-23  
-Branche : `feature/whatsapp-foundation`  
+Date : 2026-10-23
+Branche : `feature/whatsapp-foundation`
 Portée : lecture du code et du schéma versionné sur `main`. Aucun accès à PostgreSQL, aucune migration exécutée, aucune donnée réelle consultée.
 
 ## 1. Modèle RBAC réellement défini dans `database/schema.sql`

@@ -3,6 +3,8 @@ name: F-02-F finance runtime proof
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -70,11 +72,13 @@ jobs:
           set -euo pipefail
           php -l api/finance/index.php
           php -l config/auth.php
-          if grep -nE 'localStorage\.(getItem|setItem|removeItem).*imc_(students|finances|tarifs|active_year)' finances.html; then
-            echo 'FAIL: finances.html still uses browser storage as finance source of truth'
+          FINANCE_PAGE='private-pages/finances.php'
+          if grep -nE 'localStorage\.(getItem|setItem|removeItem).*imc_(students|finances|tarifs|active_year)' "$FINANCE_PAGE"; then
+            echo "FAIL: $FINANCE_PAGE still uses browser storage as finance source of truth"
             exit 1
           fi
-          grep -q 'api/finance/index.php' finances.html
+          grep -Fq 'const FINANCE_API = "/api/finance/index.php";' "$FINANCE_PAGE"
+          grep -Fq 'apiJson(FINANCE_API' "$FINANCE_PAGE"
           echo 'F-02-F FRONTEND AUTHORITY CHECK: PASS'
 
       - name: Start API
