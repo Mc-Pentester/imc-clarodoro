@@ -1,0 +1,194 @@
+name: WhatsApp PostgreSQL runtime proof
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  whatsapp-migrations:
+    name: WhatsApp migrations, constraints and audit trigger
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: imc_whatsapp_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d imc_whatsapp_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGDATABASE: imc_whatsapp_test
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_whatsapp_test
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      WHATSAPP_SEND_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Initialize isolated schema
+        run: psql -X -v ON_ERROR_STOP=1 -f database/schema.sql
+
+      - name: Apply WhatsApp migrations twice (idempotency proof)
+        run: |
+          set -euo pipefail
+          for migration in \
+            database/migrations/20261023100000_whatsapp_consent_foundation.sql \
+            database/migrations/20261023103000_whatsapp_consent_audit.sql \
+            database/migrations/20261023110000_whatsapp_message_log.sql
+          do
+            psql -X -v ON_ERROR_STOP=1 -f "$migration"
+            psql -X -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Verify consent constraints, append-only audit and idempotency
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (name, description) VALUES ('WhatsApp CI', 'Isolated runtime test');
+          INSERT INTO users (username, password_hash, role_id)
+          SELECT 'whatsapp-ci-user', 'not-a-real-login', id FROM roles WHERE name = 'WhatsApp CI';
+          INSERT INTO parents (last_name, first_name) VALUES ('Runtime', 'Fixture');
+
+          INSERT INTO whatsapp_consents
+            (parent_id, purpose, phone_e164, status, consent_source, consented_at, created_by, updated_by)
+          SELECT p.id, 'GENERAL', '+50937000000', 'OPTED_IN', 'CI fixture', NOW(), u.id, u.id
+          FROM parents p CROSS JOIN users u
+          WHERE p.first_name = 'Fixture' AND u.username = 'whatsapp-ci-user';
+
+          INSERT INTO whatsapp_consent_audit
+            (consent_id, parent_id, purpose, previous_status, new_status, actor_user_id)
+          SELECT c.id, c.parent_id, c.purpose, NULL, c.status, u.id
+          FROM whatsapp_consents c CROSS JOIN users u
+          WHERE u.username = 'whatsapp-ci-user';
+
+          INSERT INTO whatsapp_message_log
+            (consent_id, idempotency_key, purpose, status, template_name, payload_sha256, initiated_by)
+          SELECT c.id, 'whatsapp-ci-key-000001', 'GENERAL', 'SIMULATED',
+                 'ci_template', repeat('a', 64), u.id
+          FROM whatsapp_consents c CROSS JOIN users u
+          WHERE u.username = 'whatsapp-ci-user';
+
+          DO $$
+          BEGIN
+            BEGIN
+              UPDATE whatsapp_consent_audit SET new_status = 'OPTED_OUT';
+              RAISE EXCEPTION 'Audit UPDATE unexpectedly succeeded';
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM = 'Audit UPDATE unexpectedly succeeded' THEN RAISE; END IF;
+            END;
+
+            BEGIN
+              DELETE FROM whatsapp_consent_audit;
+              RAISE EXCEPTION 'Audit DELETE unexpectedly succeeded';
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM = 'Audit DELETE unexpectedly succeeded' THEN RAISE; END IF;
+            END;
+
+            BEGIN
+              TRUNCATE whatsapp_consent_audit;
+              RAISE EXCEPTION 'Audit TRUNCATE unexpectedly succeeded';
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM = 'Audit TRUNCATE unexpectedly succeeded' THEN RAISE; END IF;
+            END;
+
+            BEGIN
+              INSERT INTO whatsapp_message_log
+                (consent_id, idempotency_key, purpose, status, template_name, payload_sha256, initiated_by)
+              SELECT c.id, 'whatsapp-ci-key-000001', 'GENERAL', 'SIMULATED',
+                     'ci_template', repeat('b', 64), u.id
+              FROM whatsapp_consents c CROSS JOIN users u
+              WHERE u.username = 'whatsapp-ci-user';
+              RAISE EXCEPTION 'Duplicate idempotency key unexpectedly succeeded';
+            EXCEPTION WHEN unique_violation THEN
+              NULL;
+            END;
+
+            IF (SELECT count(*) FROM whatsapp_consent_audit) <> 1 THEN
+              RAISE EXCEPTION 'Consent audit row count mismatch';
+            END IF;
+            IF (SELECT count(*) FROM whatsapp_message_log) <> 1 THEN
+              RAISE EXCEPTION 'Message log row count mismatch';
+            END IF;
+          END $$;
+          SQL
+
+      - name: Verify WhatsApp endpoint PHP syntax
+        run: |
+          php -l api/whatsapp/consents.php
+          php -l api/whatsapp/send.php
+
+      - name: Verify unauthenticated HTTP requests are rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -S 127.0.0.1:8099 -t . > /tmp/whatsapp-php-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:8099/api/whatsapp/send.php; then
+              break
+            fi
+            sleep 1
+          done
+
+          check_unauthenticated() {
+            local name="$1"
+            local method="$2"
+            local path="$3"
+            local data="$4"
+            local expected="$5"
+            local status
+            status="$(curl --silent --show-error --output "/tmp/whatsapp-${name}.json" \
+              --write-out '%{http_code}' -X "$method" \
+              -H 'Content-Type: application/json' \
+              --data "$data" "http://127.0.0.1:8099$path")"
+            if [ "$status" != "$expected" ]; then
+              echo "FAIL $name: expected HTTP $expected, got $status"
+              cat "/tmp/whatsapp-${name}.json"
+              cat /tmp/whatsapp-php-server.log
+              exit 1
+            fi
+            php -r '$d=json_decode(file_get_contents($argv[1]), true); if (!is_array($d) || ($d["success"] ?? true) !== false) { fwrite(STDERR, "Invalid JSON error response\n"); exit(1); }' "/tmp/whatsapp-${name}.json"
+            echo "PASS $name (HTTP $status)"
+          }
+
+          check_unauthenticated consent_read GET '/api/whatsapp/consents.php?parent_id=00000000-0000-4000-8000-000000000001' '' 401
+          check_unauthenticated consent_write POST '/api/whatsapp/consents.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
+          check_unauthenticated message_send POST '/api/whatsapp/send.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
+
+      - name: Verify authenticated WhatsApp HTTP lifecycle
+        shell: bash
+        run: bash tests/whatsapp-authenticated-lifecycle-http.sh
+
+      - name: Verify consent row lock serializes concurrent send and revocation
+        shell: bash
+        run: bash tests/whatsapp-consent-lock-concurrency.sh
