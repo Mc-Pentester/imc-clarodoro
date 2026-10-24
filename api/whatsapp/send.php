@@ -51,15 +51,20 @@ foreach ($parameters as $parameter) {
     $bodyParameters[] = ['type' => 'text', 'text' => $parameter];
 }
 
+// Keep the consent row locked until the provider has accepted/rejected the request.
+ // The consent-update endpoint takes the same row lock, so revocation and send start
+ // are serialized. This transaction intentionally spans the bounded provider call.
+$pdo->beginTransaction();
 $stmt = $pdo->prepare(
     "SELECT id, phone_e164, status
      FROM whatsapp_consents
      WHERE parent_id = :parent_id AND purpose = :purpose
-     LIMIT 1"
+     FOR UPDATE"
 );
 $stmt->execute([':parent_id' => $parentId, ':purpose' => $purpose]);
 $consent = $stmt->fetch();
 if (!$consent || $consent['status'] !== 'OPTED_IN') {
+    $pdo->rollBack();
     apiError(403, 'Aucun consentement WhatsApp actif pour ce parent et cette finalité');
 }
 
@@ -121,6 +126,9 @@ try {
         apiError(409, 'Cette clé idempotente a déjà été utilisée; aucun nouvel envoi lancé');
     }
 } catch (PDOException $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     apiError(503, 'Journal WhatsApp indisponible; aucun envoi lancé');
 }
 
@@ -129,6 +137,7 @@ if (!$enabled) {
         "UPDATE whatsapp_message_log SET status = 'SIMULATED', updated_at = NOW() WHERE id = :id"
     );
     $update->execute([':id' => $logId]);
+    $pdo->commit();
     echo json_encode([
         'success' => true,
         'mode' => 'simulation',
@@ -141,6 +150,7 @@ if (!$enabled) {
 if (!function_exists('curl_init')) {
     $pdo->prepare("UPDATE whatsapp_message_log SET status = 'FAILED', provider_error_code = 'CURL_UNAVAILABLE', updated_at = NOW() WHERE id = :id")
         ->execute([':id' => $logId]);
+    $pdo->commit();
     apiError(503, 'Extension cURL indisponible');
 }
 
@@ -167,6 +177,7 @@ $providerMessageId = is_array($response) ? ($response['messages'][0]['id'] ?? nu
 if ($curlError === 0 && $httpCode >= 200 && $httpCode < 300 && is_string($providerMessageId)) {
     $pdo->prepare("UPDATE whatsapp_message_log SET status = 'SENT', provider_message_id = :message_id, updated_at = NOW() WHERE id = :id")
         ->execute([':message_id' => $providerMessageId, ':id' => $logId]);
+    $pdo->commit();
     echo json_encode([
         'success' => true,
         'mode' => 'live',
@@ -180,6 +191,7 @@ if ($curlError === 0 && $httpCode >= 200 && $httpCode < 300 && is_string($provid
 $errorCode = is_array($response) ? (string) ($response['error']['code'] ?? 'PROVIDER_ERROR') : 'PROVIDER_ERROR';
 $pdo->prepare("UPDATE whatsapp_message_log SET status = 'FAILED', provider_error_code = :error_code, updated_at = NOW() WHERE id = :id")
     ->execute([':error_code' => substr($errorCode, 0, 80), ':id' => $logId]);
+$pdo->commit();
 http_response_code(502);
 echo json_encode([
     'success' => false,
