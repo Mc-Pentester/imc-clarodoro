@@ -110,6 +110,24 @@ jobs:
           npx playwright install --with-deps chromium
           node scripts/browser-html-smoke.mjs
 
+      - name: Authenticated visual audit (desktop and mobile)
+        env:
+          IMC_VISUAL_USERNAME: reconcile-runtime
+          IMC_VISUAL_PASSWORD: Reconcile-Test-2026!
+        run: |
+          set -euo pipefail
+          node --check scripts/visual-page-audit.mjs
+          node scripts/visual-page-audit.mjs
+
+      - name: Upload visual audit screenshots and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imc-clarodoro-visual-audit
+          path: artifacts/visual-audit/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Prove server-side protection of sensitive HTML pages
         run: |
           set -Eeuo pipefail
