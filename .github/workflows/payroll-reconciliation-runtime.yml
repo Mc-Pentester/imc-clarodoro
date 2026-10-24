@@ -111,6 +111,9 @@ jobs:
           node scripts/browser-html-smoke.mjs
 
       - name: Authenticated visual audit (desktop and mobile)
+        env:
+          IMC_VISUAL_USERNAME: reconcile-runtime
+          IMC_VISUAL_PASSWORD: Reconcile-Test-2026!
         run: |
           set -euo pipefail
           node --check scripts/visual-page-audit.mjs
