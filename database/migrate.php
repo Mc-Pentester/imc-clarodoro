@@ -178,6 +178,12 @@ function applyMigrations(PDO $pdo, array $files): void
 
         fwrite(STDOUT, "APPLY    " . $filename . PHP_EOL);
 
+        // Keep historical migration files immutable: some contain their own outer
+        // BEGIN/COMMIT. Strip only standalone outer markers so this runner can
+        // execute the SQL inside its atomic transaction without changing checksums.
+        $sql = preg_replace('/^\\s*BEGIN\\s*;\\s*$/im', '', $sql, 1) ?? $sql;
+        $sql = preg_replace('/^\\s*COMMIT\\s*;\\s*$/im', '', $sql, 1) ?? $sql;
+
         try {
             $pdo->beginTransaction();
             $pdo->exec($sql);
