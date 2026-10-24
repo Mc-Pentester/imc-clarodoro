@@ -30,4 +30,3 @@ ALTER TABLE roles
         'Surveillant',
         'Autre'
     ));
-
