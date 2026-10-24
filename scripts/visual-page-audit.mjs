@@ -4,7 +4,8 @@ import { chromium } from "playwright";
 
 const baseUrl = process.env.IMC_BASE_URL || "http://127.0.0.1:8090";
 const username = process.env.IMC_VISUAL_USERNAME || "reconcile-runtime";
-const password = process.env.IMC_VISUAL_PASSWORD || "Reconcile-Test-2026!";
+const password = process.env.IMC_VISUAL_PASSWORD;
+if (!password) throw new Error("IMC_VISUAL_PASSWORD must be provided by the CI environment.");
 const outputDir = process.env.IMC_VISUAL_OUTPUT || "artifacts/visual-audit";
 const routes = ["index.html", "PDG.html", "finances.html", "personnel.html", "badge.html", "payroll-recovery.html", "resultats.html"];
 const visibleCodePatterns = [
