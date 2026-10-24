@@ -5,7 +5,9 @@ import { chromium } from "playwright";
 const baseUrl = process.env.IMC_BASE_URL || "http://127.0.0.1:8090";
 const username = process.env.IMC_VISUAL_USERNAME || "reconcile-runtime";
 const password = process.env.IMC_VISUAL_PASSWORD;
+const vaultPassword = process.env.IMC_VISUAL_VAULT_PASSWORD;
 if (!password) throw new Error("IMC_VISUAL_PASSWORD must be provided by the CI environment.");
+if (!vaultPassword || vaultPassword.length < 12) throw new Error("IMC_VISUAL_VAULT_PASSWORD (12+ characters) must be provided by the CI environment.");
 const outputDir = process.env.IMC_VISUAL_OUTPUT || "artifacts/visual-audit";
 const routes = ["index.html", "PDG.html", "finances.html", "personnel.html", "badge.html", "payroll-recovery.html", "resultats.html"];
 const visibleCodePatterns = [
@@ -37,6 +39,11 @@ try {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const pageErrors = [];
       const consoleErrors = [];
+      // CI uses a fresh browser context: initialize/unlock only its isolated test vault.
+      page.on("dialog", async dialog => {
+        if (dialog.type() === "prompt") await dialog.accept(vaultPassword);
+        else await dialog.dismiss();
+      });
       page.on("pageerror", error => pageErrors.push(error.message));
       page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
       const screenshotName = path.basename(route, ".html") + "-" + viewport.name + ".png";
