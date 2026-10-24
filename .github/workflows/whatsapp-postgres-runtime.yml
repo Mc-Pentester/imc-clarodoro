@@ -113,6 +113,13 @@ jobs:
             END;
 
             BEGIN
+              TRUNCATE whatsapp_consent_audit;
+              RAISE EXCEPTION 'Audit TRUNCATE unexpectedly succeeded';
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM = 'Audit TRUNCATE unexpectedly succeeded' THEN RAISE; END IF;
+            END;
+
+            BEGIN
               INSERT INTO whatsapp_message_log
                 (consent_id, idempotency_key, purpose, status, template_name, payload_sha256, initiated_by)
               SELECT c.id, 'whatsapp-ci-key-000001', 'GENERAL', 'SIMULATED',
