@@ -95,6 +95,14 @@ $stmt = $pdo->prepare(
 );
 $pdo->beginTransaction();
 try {
+    // FOR UPDATE cannot lock a row that does not exist yet. Serialize writes for
+    // the same parent/purpose before reading the previous state, so concurrent
+    // first-time opt-ins cannot produce misleading audit history.
+    $lock = $pdo->prepare(
+        "SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"
+    );
+    $lock->execute([':lock_key' => $parentId . ':' . $purpose]);
+
     $previousStmt = $pdo->prepare(
         'SELECT id, status FROM whatsapp_consents WHERE parent_id = :parent_id AND purpose = :purpose FOR UPDATE'
     );
