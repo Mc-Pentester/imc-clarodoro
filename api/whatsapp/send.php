@@ -123,6 +123,7 @@ try {
     ]);
     $logId = $insert->fetchColumn();
     if (!$logId) {
+        $pdo->rollBack();
         apiError(409, 'Cette clé idempotente a déjà été utilisée; aucun nouvel envoi lancé');
     }
 } catch (PDOException $e) {
