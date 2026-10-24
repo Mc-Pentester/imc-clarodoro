@@ -181,3 +181,7 @@ jobs:
       - name: Verify authenticated WhatsApp HTTP lifecycle
         shell: bash
         run: bash tests/whatsapp-authenticated-lifecycle-http.sh
+
+      - name: Verify consent row lock serializes concurrent send and revocation
+        shell: bash
+        run: bash tests/whatsapp-consent-lock-concurrency.sh
