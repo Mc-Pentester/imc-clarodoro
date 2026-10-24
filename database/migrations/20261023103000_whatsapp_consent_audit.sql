@@ -34,3 +34,10 @@ DROP TRIGGER IF EXISTS whatsapp_consent_audit_no_mutation
 CREATE TRIGGER whatsapp_consent_audit_no_mutation
     BEFORE UPDATE OR DELETE ON whatsapp_consent_audit
     FOR EACH ROW EXECUTE FUNCTION prevent_whatsapp_consent_audit_mutation();
+
+-- TRUNCATE is a statement-level event in PostgreSQL; block it as well.
+DROP TRIGGER IF EXISTS whatsapp_consent_audit_no_truncate
+    ON whatsapp_consent_audit;
+CREATE TRIGGER whatsapp_consent_audit_no_truncate
+    BEFORE TRUNCATE ON whatsapp_consent_audit
+    FOR EACH STATEMENT EXECUTE FUNCTION prevent_whatsapp_consent_audit_mutation();
