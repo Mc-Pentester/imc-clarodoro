@@ -82,6 +82,11 @@ if ($enabled) {
         !is_string($phoneNumberId) || !preg_match('/^[0-9]+$/', $phoneNumberId) ||
         !is_string($apiVersion) || !preg_match('/^v[0-9]+\.[0-9]+$/', $apiVersion) ||
         !in_array($templateName, $allowedTemplates, true)) {
+        // Configuration is checked after acquiring the consent row lock; release it
+        // explicitly before terminating the request.
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         apiError(503, 'Envoi réel non configuré ou modèle non autorisé');
     }
 }
