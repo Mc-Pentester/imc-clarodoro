@@ -2,6 +2,8 @@
 -- Valeurs canoniques : PDG, Directeur, Enseignant, Secrétaire, Surveillant, Autre
 -- Migration idempotente et non destructive : les FK role_permissions restent intactes.
 
+BEGIN;
+
 UPDATE roles
 SET name = 'Enseignant',
     updated_at = NOW()
@@ -30,3 +32,5 @@ ALTER TABLE roles
         'Surveillant',
         'Autre'
     ));
+
+COMMIT;
