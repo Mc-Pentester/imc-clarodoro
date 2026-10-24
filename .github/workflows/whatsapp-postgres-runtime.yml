@@ -36,6 +36,12 @@ jobs:
       PGDATABASE: imc_whatsapp_test
       PGUSER: postgres
       PGPASSWORD: postgres
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_whatsapp_test
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      WHATSAPP_SEND_ENABLED: "false"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -131,3 +137,43 @@ jobs:
         run: |
           php -l api/whatsapp/consents.php
           php -l api/whatsapp/send.php
+
+      - name: Verify unauthenticated HTTP requests are rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -S 127.0.0.1:8099 -t . > /tmp/whatsapp-php-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:8099/api/whatsapp/send.php; then
+              break
+            fi
+            sleep 1
+          done
+
+          check_unauthenticated() {
+            local name="$1"
+            local method="$2"
+            local path="$3"
+            local data="$4"
+            local expected="$5"
+            local status
+            status="$(curl --silent --show-error --output "/tmp/whatsapp-${name}.json" \
+              --write-out '%{http_code}' -X "$method" \
+              -H 'Content-Type: application/json' \
+              --data "$data" "http://127.0.0.1:8099$path")"
+            if [ "$status" != "$expected" ]; then
+              echo "FAIL $name: expected HTTP $expected, got $status"
+              cat "/tmp/whatsapp-${name}.json"
+              cat /tmp/whatsapp-php-server.log
+              exit 1
+            fi
+            php -r '$d=json_decode(file_get_contents($argv[1]), true); if (!is_array($d) || ($d["success"] ?? true) !== false) { fwrite(STDERR, "Invalid JSON error response\n"); exit(1); }' "/tmp/whatsapp-${name}.json"
+            echo "PASS $name (HTTP $status)"
+          }
+
+          check_unauthenticated consent_read GET '/api/whatsapp/consents.php?parent_id=00000000-0000-4000-8000-000000000001' '' 401
+          check_unauthenticated consent_write POST '/api/whatsapp/consents.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
+          check_unauthenticated message_send POST '/api/whatsapp/send.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
