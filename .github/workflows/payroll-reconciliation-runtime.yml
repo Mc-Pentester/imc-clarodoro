@@ -114,6 +114,7 @@ jobs:
         env:
           IMC_VISUAL_USERNAME: reconcile-runtime
           IMC_VISUAL_PASSWORD: Reconcile-Test-2026!
+          IMC_VISUAL_VAULT_PASSWORD: Visual-Audit-Vault-2026!
         run: |
           set -euo pipefail
           node --check scripts/visual-page-audit.mjs
