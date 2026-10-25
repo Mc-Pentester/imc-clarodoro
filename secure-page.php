@@ -60,4 +60,21 @@ if (!is_file($privateFile)) {
     http_response_code(500);
     exit('Page protégée indisponible.');
 }
+
+ob_start();
 require $privateFile;
+$html = ob_get_clean();
+
+// Ajoute l'accès WhatsApp après le rendu de toute page protégée sans modifier
+// les pages métier. Le script décide lui-même de l'afficher uniquement si
+// l'utilisateur possède la permission RBAC dédiée.
+if (is_string($html) && stripos($html, '</body>') !== false) {
+    $html = preg_replace(
+        '/<\/body>/i',
+        '<script src="/js/whatsapp-menu.js" defer></script></body>',
+        $html,
+        1
+    );
+}
+
+echo $html;
