@@ -114,7 +114,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           BASE='http://127.0.0.1:8090'
-          pages=( 'index.html|<title>IMC-Clarodoro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodoro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' )
+          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' )
           for item in "${pages[@]}"; do
             page="${item%%|*}"
             marker="${item#*|}"
