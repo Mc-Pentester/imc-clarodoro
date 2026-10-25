@@ -13,7 +13,9 @@ permissions:
 jobs:
   f04-runtime:
     name: F-04 browser DOM/XSS runtime
-    runs-on: ubuntu-latest
+    # Pin the supported runner: ubuntu-latest can move to a newer image
+    # before the pinned Playwright/Chromium version supports it.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
