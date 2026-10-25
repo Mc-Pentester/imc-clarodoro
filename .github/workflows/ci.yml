@@ -50,12 +50,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           routes = {
-              "index.html": ("private-pages/index.php", "eleves.read", "<title>IMC-Clarodoro</title>"),
+              "index.html": ("private-pages/index.php", "eleves.read", "<title>IMC-Clarodaro</title>"),
               "PDG.html": ("private-pages/PDG.php", "paies.read", "<title>PDG - IMC Clarodaro</title>"),
               "finances.html": ("private-pages/finances.php", "finances.read", "<title>Finances - IMC Clarodaro</title>"),
               "personnel.html": ("private-pages/personnel.php", "personnel.read", "<title>Gestion du Personnel - IMC Clarodaro</title>"),
               "badge.html": ("private-pages/badge.php", "badge.read", "<title>Badge élève - IMC Clarodaro</title>"),
-              "payroll-recovery.html": ("private-pages/payroll-recovery.php", "paies.reconcile", "<title>Reprise des paies historiques — IMC-Clarodoro</title>"),
+              "payroll-recovery.html": ("private-pages/payroll-recovery.php", "paies.reconcile", "<title>Reprise des paies historiques — IMC-Clarodaro</title>"),
               "resultats.html": ("private-pages/resultats.php", "resultats.read", "<title>Résultats - IMC Clarodaro</title>"),
           }
           for public, (private, permission, marker) in routes.items():
