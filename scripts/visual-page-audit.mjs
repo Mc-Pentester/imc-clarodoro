@@ -89,6 +89,11 @@ try {
         const visibleFailure = /coffre est verrouill[eé]|permission insuffisante|acc[eè]s refus[eé]|\bHTTP\s*403\b|service temporairement indisponible/i.test(view.text);
         if (visibleFailure) failures.push(prefix + ": visible access/security/service error displayed to user");
         if (view.horizontalOverflow === true) failures.push(prefix + ": horizontal overflow at " + viewport.width + "px");
+        if (deniedResponses.length) {
+          const uniqueDenied = [...new Map(deniedResponses.map(item => [item.status + " " + item.method + " " + item.url, item])).values()];
+          for (const item of uniqueDenied) console.error("VISUAL AUDIT DENIED RESPONSE: " + prefix + " -> HTTP " + item.status + " " + item.method + " " + item.url + " [" + item.resourceType + "]");
+          failures.push(prefix + ": HTTP 401/403 responses: " + uniqueDenied.map(item => item.status + " " + item.method + " " + item.url).join(" | "));
+        }
         const relevantConsoleErrors = consoleErrors.filter(message => /\b403\b|\b401\b|permission|coffre|vault|failed to load resource|net::err_/i.test(message));
         if (relevantConsoleErrors.length) failures.push(prefix + ": relevant console errors: " + relevantConsoleErrors.join(" | "));
         results.push({ route, viewport: viewport.name, width: viewport.width, height: viewport.height, httpStatus: responseStatus, title: view.title, finalUrl: view.url, visibleTextLength: view.text.length, visibleContent: view.visibleContent, horizontalOverflow: view.horizontalOverflow, pageErrors, consoleErrors, deniedResponses, screenshot: screenshotName });
