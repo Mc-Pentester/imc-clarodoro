@@ -28,6 +28,11 @@ if (isset($protected[$path]) || isset($protected[strtolower($path)])) {
     exit;
 }
 
+if ($path === '/whatsapp-send.html') {
+    require __DIR__ . '/private-pages/whatsapp-send.php';
+    exit;
+}
+
 if (str_starts_with($path, '/private-pages/')) {
     http_response_code(404);
     exit('Not found');
