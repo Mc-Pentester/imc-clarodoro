@@ -11,7 +11,7 @@ imcRequirePageAccess('vacances.read', null, $pdo);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Vacances - IMC Clarodoro</title>
+<title>Vacances - IMC Clarodaro</title>
 
 <style>
 * {
@@ -597,8 +597,8 @@ tr:nth-child(even) {
 <header class="entete-ecole">
 
     <div class="informations-ecole">
-        <h1>Institution Mixte Clarodoro</h1>
-        <p>Clarodoro, la clarté du savoir !</p>
+        <h1>Institution Mixte Clarodaro</h1>
+        <p>Clarodaro, la clarté du savoir !</p>
     </div>
 
 </header>
