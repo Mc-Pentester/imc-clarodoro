@@ -8,7 +8,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>IMC-Clarodoro</title>
+    <title>IMC-Clarodaro</title>
 
     <style>
         * {
@@ -2067,7 +2067,7 @@ th {
 <body>
 
 <h1>
-IMC-Clarodoro
+IMC-Clarodaro
 </h1>
 
 <h2>
