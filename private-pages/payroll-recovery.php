@@ -7,7 +7,7 @@ imcRequirePageAccess('paies.reconcile', null, $pdo ?? null);
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reprise des paies historiques — IMC-Clarodoro</title>
+<title>Reprise des paies historiques — IMC-Clarodaro</title>
 <style>
 :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#172033;background:#f1f5f9}
 *{box-sizing:border-box}body{margin:0}header{background:#12355b;color:#fff;padding:1.25rem clamp(1rem,4vw,3rem)}
@@ -24,7 +24,7 @@ label{display:block;font-weight:600;margin-bottom:.35rem}select{width:100%;backg
 </style>
 </head>
 <body>
-<header><h1>Reprise contrôlée des paies historiques</h1><p>IMC-Clarodoro · Accès réservé au PDG</p></header>
+<header><h1>Reprise contrôlée des paies historiques</h1><p>IMC-Clarodaro · Accès réservé au PDG</p></header>
 <main>
 <section class="card">
 <h2>Avant tout rapprochement</h2>
