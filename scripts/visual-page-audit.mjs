@@ -39,12 +39,21 @@ try {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const pageErrors = [];
       const consoleErrors = [];
+      const deniedResponses = [];
       // CI uses a fresh browser context: initialize/unlock only its isolated test vault.
       page.on("dialog", async dialog => {
         if (dialog.type() === "prompt") await dialog.accept(vaultPassword);
         else await dialog.dismiss();
       });
       page.on("pageerror", error => pageErrors.push(error.message));
+      page.on("response", response => {
+        if (response.status() === 401 || response.status() === 403) {
+          const request = response.request();
+          let safeUrl = response.url();
+          try { const parsed = new URL(safeUrl); safeUrl = parsed.origin + parsed.pathname; } catch {}
+          deniedResponses.push({ status: response.status(), url: safeUrl, method: request.method(), resourceType: request.resourceType() });
+        }
+      });
       page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
       const screenshotName = path.basename(route, ".html") + "-" + viewport.name + ".png";
       const screenshotPath = path.join(outputDir, screenshotName);
@@ -82,11 +91,11 @@ try {
         if (view.horizontalOverflow === true) failures.push(prefix + ": horizontal overflow at " + viewport.width + "px");
         const relevantConsoleErrors = consoleErrors.filter(message => /\b403\b|\b401\b|permission|coffre|vault|failed to load resource|net::err_/i.test(message));
         if (relevantConsoleErrors.length) failures.push(prefix + ": relevant console errors: " + relevantConsoleErrors.join(" | "));
-        results.push({ route, viewport: viewport.name, width: viewport.width, height: viewport.height, httpStatus: responseStatus, title: view.title, finalUrl: view.url, visibleTextLength: view.text.length, visibleContent: view.visibleContent, horizontalOverflow: view.horizontalOverflow, pageErrors, consoleErrors, screenshot: screenshotName });
+        results.push({ route, viewport: viewport.name, width: viewport.width, height: viewport.height, httpStatus: responseStatus, title: view.title, finalUrl: view.url, visibleTextLength: view.text.length, visibleContent: view.visibleContent, horizontalOverflow: view.horizontalOverflow, pageErrors, consoleErrors, deniedResponses, screenshot: screenshotName });
         console.log("VISUAL AUDIT: " + (failures.some(f => f.startsWith(prefix + ":")) ? "FAIL " : "PASS ") + prefix + " -> " + view.url);
       } catch (error) {
         failures.push(route + " [" + viewport.name + "]: " + error.message);
-        results.push({ route, viewport: viewport.name, error: error.message, pageErrors, consoleErrors, screenshot: screenshotName });
+        results.push({ route, viewport: viewport.name, error: error.message, pageErrors, consoleErrors, deniedResponses, screenshot: screenshotName });
         try { await page.screenshot({ path: screenshotPath, fullPage: true }); } catch {}
       } finally { await page.close(); }
     }
