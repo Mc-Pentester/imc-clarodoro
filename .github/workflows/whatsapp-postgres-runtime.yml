@@ -80,7 +80,7 @@ jobs:
       - name: Verify PDG permissions are least-privilege
         run: |
           psql -X -v ON_ERROR_STOP=1 <<'SQL'
-          DO $
+          DO $pdg$
           DECLARE pdg_role_id UUID;
           BEGIN
             SELECT id INTO pdg_role_id FROM roles WHERE name = 'PDG';
@@ -97,7 +97,7 @@ jobs:
               SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
               WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.consent.manage'
             ) THEN RAISE EXCEPTION 'PDG unexpectedly has whatsapp.consent.manage'; END IF;
-          END $;
+          END $pdg$;
           SQL
 
       - name: Verify consent constraints, append-only audit and idempotency
