@@ -28,7 +28,7 @@ if (!is_string($parentId) || !preg_match($uuidPattern, $parentId)) {
 if (!is_string($purpose) || !in_array($purpose, ['ATTENDANCE', 'RESULTS_AVAILABLE', 'PAYMENT_REMINDER', 'GENERAL'], true)) {
     apiError(422, 'Finalité WhatsApp invalide');
 }
-if (!is_string($message) || trim($message) === '' || mb_strlen($message) > 4000) {
+if (!is_string($message) || trim($message) === '' || strlen($message) > 16000) {
     apiError(422, 'Le message doit contenir de 1 à 4000 caractères');
 }
 
