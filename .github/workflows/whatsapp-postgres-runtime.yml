@@ -56,17 +56,49 @@ jobs:
       - name: Initialize isolated schema
         run: psql -X -v ON_ERROR_STOP=1 -f database/schema.sql
 
+      - name: Prepare PDG role fixture for permission migration
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (name, description) VALUES ('PDG', 'WhatsApp CI role fixture')
+          ON CONFLICT (name) DO NOTHING;
+          SQL
+
       - name: Apply WhatsApp migrations twice (idempotency proof)
         run: |
           set -euo pipefail
           for migration in \
             database/migrations/20261023100000_whatsapp_consent_foundation.sql \
+            database/migrations/20261025100000_assign_whatsapp_manual_permissions.sql \
             database/migrations/20261023103000_whatsapp_consent_audit.sql \
-            database/migrations/20261023110000_whatsapp_message_log.sql
+            database/migrations/20261023110000_whatsapp_message_log.sql \
+            database/migrations/20261025120000_whatsapp_manual_preparations.sql
           do
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
           done
+
+      - name: Verify PDG permissions are least-privilege
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          DECLARE pdg_role_id UUID;
+          BEGIN
+            SELECT id INTO pdg_role_id FROM roles WHERE name = 'PDG';
+            IF pdg_role_id IS NULL THEN RAISE EXCEPTION 'PDG role missing'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+              WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.message.send'
+            ) THEN RAISE EXCEPTION 'PDG lacks whatsapp.message.send'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+              WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.consent.read'
+            ) THEN RAISE EXCEPTION 'PDG lacks whatsapp.consent.read'; END IF;
+            IF EXISTS (
+              SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+              WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.consent.manage'
+            ) THEN RAISE EXCEPTION 'PDG unexpectedly has whatsapp.consent.manage'; END IF;
+          END $;
+          SQL
 
       - name: Verify consent constraints, append-only audit and idempotency
         run: |
@@ -144,6 +176,8 @@ jobs:
         run: |
           php -l api/whatsapp/consents.php
           php -l api/whatsapp/send.php
+          php -l api/whatsapp/manual-preparations.php
+          php -l private-pages/whatsapp-send.php
 
       - name: Verify unauthenticated HTTP requests are rejected
         shell: bash
