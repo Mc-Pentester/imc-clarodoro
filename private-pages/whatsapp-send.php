@@ -19,7 +19,7 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <body>
 <header><h1>WhatsApp — message manuel</h1><p>IMC-Clarodoro · vous vérifiez et envoyez vous-même le message dans WhatsApp</p></header>
 <main>
-<div class="notice"><strong>Mode manuel :</strong> aucun message n’est envoyé automatiquement par IMC-Clarodoro. Après vérification du consentement, le bouton ouvre WhatsApp avec le numéro et le texte préremplis. Vous devez vérifier le contenu puis appuyer sur <strong>Envoyer</strong> dans WhatsApp. Aucune configuration Meta Cloud API n’est nécessaire.</div>
+<div class="notice"><strong>Mode manuel :</strong> aucun message n’est envoyé automatiquement par IMC-Clarodoro. Après vérification du consentement, le bouton ouvre WhatsApp avec le numéro et le texte préremplis. Vous devez vérifier le contenu puis appuyer sur <strong>Envoyer</strong> dans WhatsApp. Aucune configuration Meta Cloud API n’est nécessaire. <strong>Confidentialité :</strong> n’incluez pas de résultats détaillés, de données médicales, disciplinaires ou financières dans le texte. Le message prérempli est placé dans l’URL WhatsApp et peut apparaître dans l’historique du navigateur.</div>
 <section class="card">
 <h2>1. Vérifier le consentement du parent</h2>
 <div class="grid">
