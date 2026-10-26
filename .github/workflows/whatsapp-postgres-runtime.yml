@@ -218,6 +218,10 @@ jobs:
           check_unauthenticated consent_read GET '/api/whatsapp/consents.php?parent_id=00000000-0000-4000-8000-000000000001' '' 401
           check_unauthenticated consent_write POST '/api/whatsapp/consents.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
           check_unauthenticated message_send POST '/api/whatsapp/send.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
+          check_unauthenticated manual_preparation POST '/api/whatsapp/manual-preparations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001","purpose":"GENERAL","message":"test"}' 401
+
+      - name: Smoke-test manual WhatsApp page
+        run: node tests/whatsapp-manual-page-smoke.mjs
 
       - name: Verify authenticated WhatsApp HTTP lifecycle
         shell: bash
