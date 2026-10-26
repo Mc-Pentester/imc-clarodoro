@@ -19,7 +19,7 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <body>
 <header><h1>WhatsApp — message manuel</h1><p>IMC-Clarodoro · vous vérifiez et envoyez vous-même le message dans WhatsApp</p></header>
 <main>
-<div class="notice"><strong>Mode manuel :</strong> aucun message n’est envoyé automatiquement par IMC-Clarodoro. Après vérification du consentement, le bouton ouvre WhatsApp avec le numéro et le texte préremplis. Vous devez vérifier le contenu puis appuyer sur <strong>Envoyer</strong> dans WhatsApp. Aucune configuration Meta Cloud API n’est nécessaire.</div>
+<div class="notice"><strong>Mode manuel :</strong> aucun message n’est envoyé automatiquement par IMC-Clarodoro. Après vérification du consentement, le bouton ouvre WhatsApp avec le numéro et le texte préremplis. Vous devez vérifier le contenu puis appuyer sur <strong>Envoyer</strong> dans WhatsApp. Aucune configuration Meta Cloud API n’est nécessaire. <strong>Confidentialité :</strong> n’incluez pas de résultats détaillés, de données médicales, disciplinaires ou financières dans le texte. Le message prérempli est placé dans l’URL WhatsApp et peut apparaître dans l’historique du navigateur.</div>
 <section class="card">
 <h2>1. Vérifier le consentement du parent</h2>
 <div class="grid">
@@ -64,15 +64,35 @@ $('checkConsent').addEventListener('click',async()=>{
     $('openWhatsApp').disabled=false;
   }catch(error){show(out,error.message||'Erreur lors de la vérification.',true)}
 });
-$('openWhatsApp').addEventListener('click',()=>{
+$('openWhatsApp').addEventListener('click',async()=>{
   const out=$('sendResult');out.hidden=true;
   if(!verifiedConsent||verifiedConsent.parentId!==$('parent_id').value.trim()||verifiedConsent.purpose!==$('purpose').value){show(out,'Vérifiez à nouveau le consentement avant de continuer.',true);invalidateConsent();return}
   const message=$('message').value.trim();
   if(!message){show(out,'Rédigez le message avant d’ouvrir WhatsApp.',true);return}
-  const digits=verifiedConsent.phone.replace(/\D/g,'');
-  const url='https://wa.me/'+digits+'?text='+encodeURIComponent(message);
-  window.open(url,'_blank','noopener,noreferrer');
-  show(out,'WhatsApp a été ouvert (ou le navigateur a demandé une autorisation). Vérifiez le destinataire et le texte, puis appuyez vous-même sur Envoyer. Cette page ne peut pas confirmer l’envoi.');
+  // Open synchronously to avoid popup blockers, then navigate only after server revalidation.
+  const popup=window.open('about:blank','_blank');
+  if(!popup){show(out,'Le navigateur a bloqué la fenêtre. Autorisez les fenêtres contextuelles puis réessayez.',true);return}
+  popup.opener=null;
+  $('openWhatsApp').disabled=true;
+  try{
+    const response=await fetch('/api/whatsapp/manual-preparations.php',{
+      method:'POST',credentials:'same-origin',cache:'no-store',
+      headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-Token':csrf},
+      body:JSON.stringify({parent_id:verifiedConsent.parentId,purpose:verifiedConsent.purpose,message})
+    });
+    const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+    if(!response.ok||data.success!==true||!/^\\+[1-9][0-9]{7,14}$/.test(data.phone_e164||''))throw Error(data.error||'La vérification finale a échoué.');
+    const digits=data.phone_e164.replace(/\\D/g,'');
+    popup.location.href='https://wa.me/'+digits+'?text='+encodeURIComponent(message);
+    $('message').value='';
+    invalidateConsent();
+    show(out,'Préparation journalisée (référence '+data.preparation_id+'). Consentement revérifié. Vérifiez le destinataire et le texte dans WhatsApp puis appuyez vous-même sur Envoyer. L’application ne peut pas confirmer l’envoi.');
+  }catch(error){
+    popup.close();
+    show(out,error.message||'Impossible de vérifier le consentement et journaliser la préparation.',true);
+  }finally{
+    $('openWhatsApp').disabled=!verifiedConsent;
+  }
 });
 $('clearMessage').addEventListener('click',()=>{$('message').value='';$('sendResult').hidden=true});
 </script>
