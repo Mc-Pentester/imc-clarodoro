@@ -69,13 +69,21 @@ $html = ob_get_clean();
 // Ajoute l'accès WhatsApp après le rendu de toute page protégée sans modifier
 // les pages métier. Le script décide lui-même de l'afficher uniquement si
 // l'utilisateur possède la permission RBAC dédiée.
-if (is_string($html) && stripos($html, '</body>') !== false) {
-    $html = preg_replace(
-        '/<\/body>/i',
-        '<script src="/js/whatsapp-menu.js" defer></script></body>',
+if (is_string($html)) {
+    // Ancrer l'insertion sur la fermeture finale du document. Une page peut
+    // contenir "</body>" dans une chaîne JavaScript (export Word, par ex.).
+    $updated = preg_replace(
+        '/<\/body>(\s*<\/html>\s*)$/i',
+        '<script src="/js/whatsapp-menu.js" defer></script></body>$1',
         $html,
-        1
+        1,
+        $count
     );
+    if (is_string($updated) && $count === 1) {
+        $html = $updated;
+    } else {
+        error_log('WhatsApp menu injection skipped: final body/html closing tags not found.');
+    }
 }
 
 echo $html;
