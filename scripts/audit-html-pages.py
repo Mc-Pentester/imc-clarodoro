@@ -3,6 +3,7 @@
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
+import re
 from urllib.parse import unquote, urlsplit
 import subprocess
 import tempfile
@@ -10,6 +11,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = {
     "index.html": "private-pages/index.php",
+    "eleves.html": "private-pages/index.php",
     "matieres.html": None,
     "resultats.html": "private-pages/resultats.php",
     "finances.html": "private-pages/finances.php",
@@ -36,6 +38,7 @@ class PageParser(HTMLParser):
         self.body_close = 0
         self.html_close = 0
         self.after_html_text = []
+        self.visible_script_like_text = []
         self.html_closed = False
         self.in_script = False
         self.current_script = None
@@ -65,8 +68,11 @@ class PageParser(HTMLParser):
     def handle_data(self, data):
         if self.in_script and self.current_script is not None:
             self.current_script["chunks"].append(data)
-        elif self.html_closed and data.strip():
-            self.after_html_text.append(data.strip()[:100])
+        elif data.strip():
+            if self.html_closed:
+                self.after_html_text.append(data.strip()[:100])
+            if re.search(r"\bconst\s+blob\s*=\s*new\s+Blob\b|\bfunction\s+echapper\s*\(", data):
+                self.visible_script_like_text.append(data.strip()[:160])
 
     def handle_endtag(self, tag):
         tag = tag.lower()
@@ -127,6 +133,8 @@ def main():
             errors.append(f"{source}: duplicate script src(s): {', '.join(duplicate_scripts)}")
         if parser.after_html_text:
             errors.append(f"{source}: visible text after </html>: {' | '.join(parser.after_html_text)}")
+        if parser.visible_script_like_text:
+            errors.append(f"{source}: JavaScript appears outside a script element as visible text: {' | '.join(parser.visible_script_like_text)}")
 
         for raw in parser.assets:
             asset = local_asset_path(raw)
