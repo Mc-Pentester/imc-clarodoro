@@ -7,6 +7,7 @@ declare(strict_types=1);
 $path = rawurldecode((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH));
 $protected = [
     '/index.html' => 'index.html',
+    '/eleves.html' => 'index.html',
     '/pdg.html' => 'PDG.html',
     '/finances.html' => 'finances.html',
     '/personnel.html' => 'personnel.html',

@@ -12,6 +12,7 @@ header('Permissions-Policy: camera=(self), microphone=(), geolocation=()');
 
 $pages = [
     'index.html' => ['public' => 'index.html', 'file' => 'index.php', 'permission' => 'eleves.read', 'role' => null],
+    'eleves.html' => ['public' => 'eleves.html', 'file' => 'index.php', 'permission' => 'eleves.read', 'role' => null],
     'pdg.html' => ['public' => 'PDG.html', 'file' => 'PDG.php', 'permission' => 'paies.read', 'role' => 'PDG'],
     'finances.html' => ['public' => 'finances.html', 'file' => 'finances.php', 'permission' => 'finances.read', 'role' => null],
     'personnel.html' => ['public' => 'personnel.html', 'file' => 'personnel.php', 'permission' => 'personnel.read', 'role' => null],
