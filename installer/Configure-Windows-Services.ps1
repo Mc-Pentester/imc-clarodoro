@@ -86,6 +86,9 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
         throw "Le port PostgreSQL $PostgreSqlPort est déjà utilisé. Aucun service tiers ne sera modifié."
     }
 
+    if ($service -and -not (Test-Path -LiteralPath $adminSecretFile -PathType Leaf)) {
+        throw 'Un service PostgreSQL Clarodaro existe mais le secret administrateur de son cluster est absent. Initialisation refusée.'
+    }
     if (-not (Test-Path -LiteralPath $adminSecretFile -PathType Leaf)) {
         Write-Step 'Première installation : initialisation d’un nouveau cluster PostgreSQL dédié.'
         $pgAdminBytes = New-Object byte[] 48
