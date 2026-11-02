@@ -82,6 +82,9 @@ if (Test-Path -LiteralPath $provisioningMarker) {
 $legacyEnvironmentFile = Join-Path $AppRoot '.env'
 $hasProtectedConfig = Test-Path -LiteralPath $environmentFile -PathType Leaf
 $hasLegacyConfig = Test-Path -LiteralPath $legacyEnvironmentFile -PathType Leaf
+if ($hasLegacyConfig) {
+    Set-PrivateAcl $legacyEnvironmentFile
+}
 $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
 
 if ($service) {
