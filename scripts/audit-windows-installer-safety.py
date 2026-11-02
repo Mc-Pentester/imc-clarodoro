@@ -16,6 +16,8 @@ pdg_setup = read("installer/Initialize-PDG-Account.ps1")
 workflow = read(".github/workflows/windows-installer.yml")
 
 require("IMC-Clarodaro-PostgreSQL" in configure, "dedicated PostgreSQL service name missing")
+require("NETWORK SERVICE" in configure and "LOCAL SERVICE" in configure and "S-1-5-20" in configure and "S-1-5-19" in configure,
+        "restricted, separate Windows service identities missing")
 require("IMC-Clarodaro-PHP-Server" in configure, "PHP startup task name missing")
 require("55432" in configure and "8080" in configure, "dedicated ports/default HTTP port missing")
 require("Test-PortAvailable" in configure, "port conflict protection missing")
@@ -37,7 +39,7 @@ require("Set-PrivateAcl $legacyEnvironmentFile" in configure and "icacls.exe $Ap
 require("0.0.0.0:$HttpPort" in launcher, "PHP startup launcher is not configurable")
 require("IMC_CLARODARO_ENV_FILE" in launcher and "router.php" in launcher,
         "PHP server does not load protected environment or router")
-require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup,
+require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup and "NETWORK SERVICE" in cleanup and "LOCAL SERVICE" in cleanup,
         "owned task/service cleanup missing")
 require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
         "uninstall must preserve ProgramData database and config")
