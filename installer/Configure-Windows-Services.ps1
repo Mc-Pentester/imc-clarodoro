@@ -166,7 +166,6 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
         $tempDirectory = if ($env:TEMP) { $env:TEMP } else { [System.IO.Path]::GetTempPath() }
             $passwordFile = Join-Path $tempDirectory ('clarodaro-postgres-init-' + [guid]::NewGuid().ToString('N') + '.tmp')
         [System.IO.File]::WriteAllText($passwordFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
-        Set-PrivateAcl $passwordFile
 
         try {
             if (-not (Test-Path -LiteralPath $dataDirectory)) {
