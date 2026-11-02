@@ -33,7 +33,7 @@ if ($task) {
         Start-Sleep -Seconds 1
     }
     if (Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1) {
-        throw 'Le serveur PHP n’a pas libéré le port 8080. Désinstallation interrompue pour éviter un processus orphelin.'
+        throw 'Le serveur PHP na pas libéré le port 8080. Désinstallation interrompue pour éviter un processus orphelin.'
     }
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
