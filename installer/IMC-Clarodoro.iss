@@ -39,6 +39,7 @@ Source: "..\*"; DestDir: "{app}"; Excludes: ".git\*,.github\*,.env,.env.*,backup
 Source: "payload\php\*"; DestDir: "{app}\runtime\php"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "payload\postgresql\*"; DestDir: "{app}\runtime\postgresql"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "payload\runtime-manifest.json"; DestDir: "{app}\runtime"; Flags: ignoreversion
+Source: "payload\vc_redist.x64.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -47,6 +48,7 @@ Name: "{autoprograms}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c
 Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
 
 [Run]
+Filename: "{app}\runtime\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installation du runtime Microsoft Visual C++..."; Flags: waituntilterminated runhidden
 Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; Description: "Ouvrir IMC-Clarodaro"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
