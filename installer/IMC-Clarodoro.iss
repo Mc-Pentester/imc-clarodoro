@@ -30,7 +30,7 @@ Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDesc
 Name: "createpdg"; Description: "Créer le compte PDG initial si aucun compte PDG n existe"; GroupDescription: "Configuration initiale :"
 
 [Dirs]
-Name: "{app}"; Permissions: users-modify
+Name: "{app}"
 Name: "{app}\logs"; Flags: uninsneveruninstall
 Name: "{app}\backups"; Flags: uninsneveruninstall
 Name: "{app}\installer"
