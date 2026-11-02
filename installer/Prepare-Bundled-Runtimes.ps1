@@ -100,12 +100,16 @@ foreach ($extension in @('php_pdo_pgsql.dll', 'php_pgsql.dll')) {
     }
 }
 
-$phpVersion = (& (Join-Path $phpPayload 'php.exe') -v 2>&1 | Select-Object -First 1)
-if ($LASTEXITCODE -ne 0) {
+$phpExePath = Join-Path $phpPayload 'php.exe'
+$phpVersionOutput = & $phpExePath -v 2>&1
+$phpVersionExitCode = $LASTEXITCODE
+$phpVersion = $phpVersionOutput | Select-Object -First 1
+if ($phpVersionExitCode -ne 0) {
     throw "Le runtime PHP ne démarre pas : $phpVersion"
 }
-$phpModules = & (Join-Path $phpPayload 'php.exe') -m 2>&1
-if ($LASTEXITCODE -ne 0 -or $phpModules -notcontains 'PDO' -or $phpModules -notcontains 'pdo_pgsql' -or $phpModules -notcontains 'pgsql') {
+$phpModules = & $phpExePath -m 2>&1
+$phpModulesExitCode = $LASTEXITCODE
+if ($phpModulesExitCode -ne 0 -or $phpModules -notcontains 'PDO' -or $phpModules -notcontains 'pdo_pgsql' -or $phpModules -notcontains 'pgsql') {
     throw 'PHP ne charge pas correctement PDO, pdo_pgsql et pgsql.'
 }
 
