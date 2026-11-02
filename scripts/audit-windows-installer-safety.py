@@ -1,0 +1,50 @@
+from pathlib import Path
+
+def read(path):
+    return Path(path).read_text(encoding="utf-8")
+
+def require(condition, message):
+    if not condition:
+        raise SystemExit(f"WINDOWS INSTALLER SAFETY: FAIL: {message}")
+
+configure = read("installer/Configure-Windows-Services.ps1")
+launcher = read("installer/Start-Clarodaro-Server.ps1")
+cleanup = read("installer/Remove-Windows-Services.ps1")
+iss = read("installer/IMC-Clarodoro.iss")
+env_loader = read("config/env.php")
+workflow = read(".github/workflows/windows-installer.yml")
+
+require("IMC-Clarodoro-PostgreSQL" in configure, "dedicated PostgreSQL service name missing")
+require("IMC-Clarodoro-PHP-Server" in configure, "PHP startup task name missing")
+require("55432" in configure and "8080" in configure, "dedicated ports/default HTTP port missing")
+require("Test-PortAvailable" in configure, "port conflict protection missing")
+require("PathName" in configure and "Aucun service tiers" in configure,
+        "service ownership checks missing")
+require("initial-provisioning-incomplete.marker" in configure,
+        "incomplete first-install marker missing")
+require("database\\migrate.php" in configure and "'--status'" in configure and "'--apply'" in configure,
+        "new-database migration flow missing")
+require("bootstrap-auth.php" not in configure and "schema.sql" not in configure,
+        "installer must not run bootstrap-auth or schema.sql")
+require("hasProtectedConfig" in configure and "hasLegacyConfig" in configure,
+        "existing configuration preservation guards missing")
+require("0.0.0.0:$HttpPort" in launcher, "PHP startup launcher is not configurable")
+require("IMC_CLARODARO_ENV_FILE" in launcher and "router.php" in launcher,
+        "PHP server does not load protected environment or router")
+require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup,
+        "owned task/service cleanup missing")
+require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
+        "uninstall must preserve ProgramData database and config")
+require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
+        "uninstall cleanup hook missing")
+require("Configure-Windows-Services.ps1" in iss and "CurStepChanged" in iss,
+        "install service provisioning hook missing")
+require("Remove-Windows-Services.ps1" in iss and "Start-Clarodaro-Server.ps1" in iss,
+        "installer does not package service scripts")
+require("IMC_CLARODARO_ENV_FILE" in env_loader,
+        "protected ProgramData environment path is not supported")
+require("Prepare-Bundled-Runtimes.ps1" in workflow,
+        "runtime payload preparation missing")
+require("1.1.0" in workflow, "installer artifact version mismatch")
+
+print("WINDOWS INSTALLER DATA AND SERVICE SAFETY: PASS")
