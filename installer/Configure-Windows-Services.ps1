@@ -80,8 +80,14 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
 
     if (-not (Test-Path -LiteralPath $adminSecretFile -PathType Leaf)) {
         Write-Step 'Première installation : initialisation d’un nouveau cluster PostgreSQL dédié.'
-        $pgAdminPassword = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
-        $appPassword = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+        $pgAdminBytes = New-Object byte[] 48
+        $appPasswordBytes = New-Object byte[] 48
+        $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+        $rng.GetBytes($pgAdminBytes)
+        $rng.GetBytes($appPasswordBytes)
+        $pgAdminPassword = [Convert]::ToBase64String($pgAdminBytes)
+        $appPassword = [Convert]::ToBase64String($appPasswordBytes)
+        $rng.Dispose()
         $passwordFile = Join-Path $configRoot 'postgres-init-password.tmp'
         [System.IO.File]::WriteAllText($passwordFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
         Set-PrivateAcl $passwordFile
