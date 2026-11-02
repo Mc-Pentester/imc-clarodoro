@@ -57,7 +57,7 @@ foreach ($blockedDirectories as $directory) {
 }
 
 if (in_array($lowerPath, ['/router.php', '/secure-page.php', '/bootstrap-auth.php'], true)
-    || preg_match('/\\.(sql|ps1|ini|exe|dll|bat|cmd|log|bak)$/i', $path) === 1) {
+    || preg_match('/\\.(sql|ps1|ini|exe|dll|bat|cmd|log|bak|zip)$/i', $path) === 1) {
     http_response_code(404);
     exit('Not found');
 }
