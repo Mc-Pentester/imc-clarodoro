@@ -21,7 +21,10 @@ if (-not (Test-Path -LiteralPath $router -PathType Leaf)) {
 }
 
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
-if ($EnvironmentFile -and (Test-Path -LiteralPath $EnvironmentFile -PathType Leaf)) {
+if ($EnvironmentFile) {
+    if (-not (Test-Path -LiteralPath $EnvironmentFile -PathType Leaf)) {
+        throw "Configuration ProgramData introuvable : $EnvironmentFile"
+    }
     $env:IMC_CLARODARO_ENV_FILE = [System.IO.Path]::GetFullPath($EnvironmentFile)
 }
 Set-Location -LiteralPath $AppRoot
