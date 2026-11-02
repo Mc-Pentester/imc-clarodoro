@@ -211,9 +211,9 @@ jobs:
           Get-Service -Name 'IMC-Clarodaro-PostgreSQL' -ErrorAction SilentlyContinue | Format-List *
           Get-CimInstance Win32_Service -Filter "Name='IMC-Clarodaro-PostgreSQL'" -ErrorAction SilentlyContinue | Format-List *
           foreach ($path in @(
-            (Join-Path $root 'logs\\installer-services.log'),
-            (Join-Path $root 'logs\\php-server.log'),
-            (Join-Path $root 'PostgreSQL\\data\\log')
+            (Join-Path $root 'logs\installer-services.log'),
+            (Join-Path $root 'logs\php-server.log'),
+            (Join-Path $root 'PostgreSQL\data\log')
           )) {
             if (Test-Path -LiteralPath $path -PathType Leaf) {
               Write-Host "=== $path ==="
@@ -233,8 +233,8 @@ jobs:
         with:
           name: windows-installer-diagnostics
           path: |
-            C:\\ProgramData\\IMC-Clarodaro\\logs\\*.log
-            C:\\ProgramData\\IMC-Clarodaro\\PostgreSQL\\data\\log\\*
+            C:\ProgramData\IMC-Clarodaro\logs\*.log
+            C:\ProgramData\IMC-Clarodaro\PostgreSQL\data\log\*
           if-no-files-found: ignore
           retention-days: 7
 
