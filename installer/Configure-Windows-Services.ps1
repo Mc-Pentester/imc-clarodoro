@@ -36,6 +36,7 @@ $dataDirectory = Join-Path $dataRoot 'data'
 $logRoot = Join-Path $programDataRoot 'logs'
 $environmentFile = Join-Path $configRoot '.env'
 $adminSecretFile = Join-Path $configRoot 'postgres-admin.secret'
+$provisioningMarker = Join-Path $configRoot 'initial-provisioning-incomplete.marker'
 $serviceName = 'IMC-Clarodaro-PostgreSQL'
 $taskName = 'IMC-Clarodaro-PHP-Server'
 $pgBin = Join-Path $AppRoot 'runtime\postgresql\bin'
@@ -61,6 +62,9 @@ New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out
 Start-Transcript -Path (Join-Path $logRoot 'installer-services.log') -Append | Out-Null
 $script:TranscriptStarted = $true
 Set-PrivateAcl $configRoot
+if (Test-Path -LiteralPath $provisioningMarker) {
+    throw 'Une initialisation précédente est incomplète. Le serveur ne sera pas démarré automatiquement ; consulter le journal et réparer la base manuellement.'
+}
 
 $legacyEnvironmentFile = Join-Path $AppRoot '.env'
 $hasProtectedConfig = Test-Path -LiteralPath $environmentFile -PathType Leaf
@@ -160,6 +164,8 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
         }
 
         Write-Step 'Base vierge créée. Vérification et application des migrations officielles sur cette nouvelle base uniquement.'
+        [System.IO.File]::WriteAllText($provisioningMarker, 'Initial migration not yet confirmed.', [System.Text.UTF8Encoding]::new($false))
+        Set-PrivateAcl $provisioningMarker
         $env:IMC_CLARODARO_ENV_FILE = $environmentFile
         Push-Location $AppRoot
         try {
