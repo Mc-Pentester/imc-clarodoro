@@ -57,14 +57,14 @@ Expand-Archive -LiteralPath $postgresZip -DestinationPath $postgresExtract -Forc
 $phpExe = Get-ChildItem -LiteralPath $phpExtract -Filter 'php.exe' -File -Recurse |
     Select-Object -First 1
 if (-not $phpExe) {
-    throw 'php.exe absent de l’archive PHP officielle.'
+    throw 'php.exe absent de l archive PHP officielle.'
 }
 Get-ChildItem -LiteralPath $phpExe.Directory.FullName -Force | Copy-Item -Destination (Join-Path $payloadRoot 'php') -Recurse -Force
 
 $postgresExe = Get-ChildItem -LiteralPath $postgresExtract -Filter 'postgres.exe' -File -Recurse |
     Select-Object -First 1
 if (-not $postgresExe) {
-    throw 'postgres.exe absent de l’archive EDB.'
+    throw 'postgres.exe absent de l archive EDB.'
 }
 $postgresBin = $postgresExe.Directory.FullName
 $postgresRoot = Split-Path -Parent $postgresBin
