@@ -159,7 +159,7 @@ jobs:
             }
 
             $elevesResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/eleves.html' -SkipHttpErrorCheck -TimeoutSec 10
-            if ($elevesResponse.StatusCode -eq 200 -and $elevesResponse.Content.TrimStart() -notmatch '^(?i)<!doctype html|<html') {
+            if ($elevesResponse.Content.TrimStart() -match '^(const|let|var)\\s' -or ($elevesResponse.StatusCode -eq 200 -and $elevesResponse.Content.TrimStart() -notmatch '^(?i)<!doctype html|<html')) {
               throw 'La route eleves.html renvoie du JavaScript brut au lieu d une page HTML protégée.'
             }
 
