@@ -31,6 +31,7 @@ Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDesc
 Name: "{app}"; Permissions: users-modify
 Name: "{app}\logs"; Flags: uninsneveruninstall
 Name: "{app}\backups"; Flags: uninsneveruninstall
+Name: "{app}\installer"
 
 [Files]
 ; Deploy application sources but never overwrite environment files, backups, logs or local runtime data.
@@ -40,6 +41,8 @@ Source: "payload\php\*"; DestDir: "{app}\runtime\php"; Flags: ignoreversion recu
 Source: "payload\postgresql\*"; DestDir: "{app}\runtime\postgresql"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "payload\runtime-manifest.json"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "payload\vc_redist.x64.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
+Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -49,6 +52,7 @@ Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c 
 
 [Run]
 Filename: "{app}\runtime\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installation du runtime Microsoft Visual C++..."; Flags: waituntilterminated runhidden
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Configure-Windows-Services.ps1"" -AppRoot ""{app}"""; StatusMsg: "Configuration sécurisée des services PostgreSQL et PHP..."; Flags: runhidden waituntilterminated
 Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; Description: "Ouvrir IMC-Clarodaro"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
