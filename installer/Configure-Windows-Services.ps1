@@ -105,6 +105,19 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
         $pgAdminPassword = [Convert]::ToBase64String($pgAdminBytes)
         $appPassword = [Convert]::ToBase64String($appPasswordBytes)
         $rng.Dispose()
+            [System.IO.File]::WriteAllText($provisioningMarker, 'Initial schema and migration setup not yet confirmed.', [System.Text.UTF8Encoding]::new($false))
+            Set-PrivateAcl $provisioningMarker
+            [System.IO.File]::WriteAllText($adminSecretFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
+            Set-PrivateAcl $adminSecretFile
+            $envContents = @(
+                'DB_HOST=127.0.0.1',
+                "DB_PORT=$PostgreSqlPort",
+                'DB_NAME=imc_clarodoro',
+                'DB_USER=imc_clarodaro_app',
+                "DB_PASSWORD=$appPassword"
+            ) -join "`r`n"
+            [System.IO.File]::WriteAllText($environmentFile, $envContents + "`r`n", [System.Text.UTF8Encoding]::new($false))
+            Set-PrivateAcl $environmentFile
         $passwordFile = Join-Path $configRoot 'postgres-init-password.tmp'
         [System.IO.File]::WriteAllText($passwordFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
         Set-PrivateAcl $passwordFile
@@ -155,8 +168,6 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
                 Remove-Item -LiteralPath $databaseSetupFile -Force -ErrorAction SilentlyContinue
             }
 
-            [System.IO.File]::WriteAllText($provisioningMarker, 'Initial schema and migration setup not yet confirmed.', [System.Text.UTF8Encoding]::new($false))
-            Set-PrivateAcl $provisioningMarker
             $schemaFile = Join-Path $AppRoot 'database\schema.sql'
             if (-not (Test-Path -LiteralPath $schemaFile -PathType Leaf)) { throw 'Le schéma de base database/schema.sql est absent.' }
             $env:PGPASSWORD = $appPassword
@@ -166,17 +177,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             if ($LASTEXITCODE -ne 0) { throw 'Création de l historique de migrations initial échouée.' }
             Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 
-            [System.IO.File]::WriteAllText($adminSecretFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
-            Set-PrivateAcl $adminSecretFile
-            $envContents = @(
-                'DB_HOST=127.0.0.1',
-                "DB_PORT=$PostgreSqlPort",
-                'DB_NAME=imc_clarodoro',
-                'DB_USER=imc_clarodoro_app',
-                "DB_PASSWORD=$appPassword"
-            ) -join "`r`n"
-            [System.IO.File]::WriteAllText($environmentFile, $envContents + "`r`n", [System.Text.UTF8Encoding]::new($false))
-            Set-PrivateAcl $environmentFile
+            
         }
         finally {
             Remove-Item -LiteralPath $passwordFile -Force -ErrorAction SilentlyContinue
@@ -191,6 +192,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             if ($LASTEXITCODE -ne 0) { throw 'La vérification des migrations a échoué. Aucune migration ne sera forcée.' }
             & $php 'database\migrate.php' '--apply'
             if ($LASTEXITCODE -ne 0) { throw 'Les migrations initiales ont échoué. Les données et le cluster sont conservés pour diagnostic.' }
+            Remove-Item -LiteralPath $provisioningMarker -Force
         }
         finally {
             Pop-Location
