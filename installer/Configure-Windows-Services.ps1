@@ -73,6 +73,8 @@ elseif (-not (Test-PortAvailable $HttpPort)) {
 }
 
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
+& icacls.exe $programDataRoot /grant '*S-1-5-19:(X)' '*S-1-5-20:(X)' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de configurer les droits de traversée ProgramData.' }
 Set-PrivateAcl $logRoot
 & icacls.exe $logRoot /grant '*S-1-5-19:(OI)(CI)M' /T /C | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner accès aux journaux au compte PHP restreint.' }
