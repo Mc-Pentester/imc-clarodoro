@@ -197,7 +197,7 @@ else {
 # when that protected configuration was created by this installer.
 $taskEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } else { '' }
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-$launcher = Join-Path $AppRoot 'installer\\Start-Clarodaro-Server.ps1'
+$launcher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 if ($task) {
     $existingAction = ($task.Actions | ForEach-Object { $_.Execute + ' ' + $_.Arguments }) -join ' '
     if ($existingAction -notlike "*$launcher*") {
@@ -214,7 +214,7 @@ if ($task) {
 if (-not (Test-PortAvailable $HttpPort) -and -not $task) {
     throw "Le port HTTP $HttpPort est déjà utilisé. La tâche PHP n'a pas été créée."
 }
-$launcher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
+
 $powershell = Join-Path $PSHOME 'powershell.exe'
 $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $launcher + '" -AppRoot "' + $AppRoot + '"'
 if ($taskEnvironmentFile) { $arguments += ' -EnvironmentFile "' + $taskEnvironmentFile + '"' }
