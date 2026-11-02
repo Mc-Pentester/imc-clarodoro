@@ -49,8 +49,8 @@ require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
 require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
         "uninstall cleanup hook missing")
-require("Configure-Windows-Services.ps1" in iss and "CurStepChanged" in iss,
-        "install service provisioning hook missing")
+require("Configure-Windows-Services.ps1" in iss and "AfterInstall: ConfigureAfterFiles" in iss and "procedure ConfigureAfterFiles" in iss,
+        "post-file-copy service provisioning hook missing")
 require("Remove-Windows-Services.ps1" in iss and "Start-Clarodaro-Server.ps1" in iss,
         "installer does not package service scripts")
 require("IMC_CLARODARO_ENV_FILE" in env_loader,
