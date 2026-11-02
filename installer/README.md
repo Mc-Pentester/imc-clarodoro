@@ -6,6 +6,7 @@ La version 1.1.0 du paquet inclut les binaires Windows x64 suivants, télécharg
 
 - PHP 8.4.27 NTS x64, avec PDO PostgreSQL (pdo_pgsql) et l'extension pgsql.
 - PostgreSQL 18.6 x64 (binaires EDB : bin, lib, share).
+- Redistribuable Microsoft Visual C++ x64, dont la signature Authenticode Microsoft est vérifiée puis installé silencieusement.
 - Le manifeste runtime-manifest.json consigne les versions, sources et empreintes vérifiées.
 
 Les archives binaires ne sont pas stockées dans Git : le workflow Windows les télécharge, contrôle leurs empreintes, vérifie que PHP charge les extensions PostgreSQL et que les exécutables PostgreSQL démarrent, puis les incorpore à l'EXE Inno Setup.
