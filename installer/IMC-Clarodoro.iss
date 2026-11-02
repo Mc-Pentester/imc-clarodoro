@@ -47,7 +47,7 @@ Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignorev
 Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Remove-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Prepare-Upgrade.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
-Source: "Initialize-PDG-Account.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "Initialize-PDG-Account.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; AfterInstall: ConfigureAfterFiles
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -56,6 +56,47 @@ Name: "{autoprograms}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c
 Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
 
 [Code]
+
+procedure ConfigureAfterFiles;
+var
+  ResultCode: Integer;
+  Parameters: String;
+  PowerShellPath: String;
+begin
+  if not Exec(
+    ExpandConstant('{app}\runtime\vc_redist.x64.exe'),
+    '/install /quiet /norestart',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+    RaiseException('Impossible de lancer le redistribuable Microsoft Visual C++.');
+
+  if (ResultCode <> 0) and (ResultCode <> 1638) and (ResultCode <> 3010) then
+    RaiseException('Installation du runtime Microsoft Visual C++ échouée. Code : ' + IntToStr(ResultCode));
+
+  PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\installer\Configure-Windows-Services.ps1') +
+    '" -AppRoot "' + ExpandConstant('{app}') + '"';
+
+  if not Exec(
+    PowerShellPath,
+    Parameters,
+    ExpandConstant('{app}'),
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+    RaiseException('Impossible de lancer la configuration des services Windows.');
+
+  if ResultCode <> 0 then
+    RaiseException(
+      'La configuration des services Clarodaro a échoué. Consultez le journal : ' +
+      ExpandConstant('{commonappdata}\IMC-Clarodaro\logs\installer-services.log')
+    );
+end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
@@ -84,42 +125,7 @@ begin
     end;
   end;
 
-  if CurStep = ssPostInstall then
-  begin
-    if not Exec(
-      ExpandConstant('{app}\runtime\vc_redist.x64.exe'),
-      '/install /quiet /norestart',
-      '',
-      SW_HIDE,
-      ewWaitUntilTerminated,
-      ResultCode
-    ) then
-      RaiseException('Impossible de lancer le redistribuable Microsoft Visual C++.');
 
-    if (ResultCode <> 0) and (ResultCode <> 1638) and (ResultCode <> 3010) then
-      RaiseException('Installation du runtime Microsoft Visual C++ échouée. Code : ' + IntToStr(ResultCode));
-
-    PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-    Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
-      ExpandConstant('{app}\installer\Configure-Windows-Services.ps1') +
-      '" -AppRoot "' + ExpandConstant('{app}') + '"';
-
-    if not Exec(
-      PowerShellPath,
-      Parameters,
-      ExpandConstant('{app}'),
-      SW_HIDE,
-      ewWaitUntilTerminated,
-      ResultCode
-    ) then
-      RaiseException('Impossible de lancer la configuration des services Windows.');
-
-    if ResultCode <> 0 then
-      RaiseException(
-        'La configuration des services Clarodaro a échoué. Consultez le journal : ' +
-        ExpandConstant('{commonappdata}\IMC-Clarodaro\logs\installer-services.log')
-      );
-  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
