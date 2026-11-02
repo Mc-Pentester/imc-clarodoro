@@ -110,7 +110,7 @@ jobs:
               throw 'Le service PostgreSQL Clarodaro ne fonctionne pas.'
             }
             $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
-            if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE') { throw 'PostgreSQL ne fonctionne pas sous un compte de service restreint.' }
+            if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'PostgreSQL ne fonctionne pas sous un compte de service restreint.' }
 
             if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION'))) {
               throw 'Le cluster PostgreSQL initial na pas été créé.'
@@ -142,7 +142,7 @@ jobs:
 
             $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
             if (-not $task) { throw 'La tâche de démarrage PHP est absente.' }
-            if ([string]$task.Principal.UserId -notmatch 'LOCAL SERVICE') { throw 'PHP ne fonctionne pas sous un compte de service restreint.' }
+            if ([string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') { throw 'PHP ne fonctionne pas sous un compte de service restreint.' }
 
             # Create a database sentinel, then reinstall over the same directory.
             $dbValues = @{}
@@ -166,7 +166,7 @@ jobs:
             $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             if (-not $service -or $service.Status -ne 'Running') { throw 'PostgreSQL ne redémarre pas après réinstallation.' }
             $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
-            if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE') { throw 'Le compte de service PostgreSQL a changé pendant la réinstallation.' }
+            if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'Le compte de service PostgreSQL a changé pendant la réinstallation.' }
             $env:PGPASSWORD = $dbValues['DB_PASSWORD']
             $sentinel = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c 'SELECT marker FROM public.installer_upgrade_sentinel WHERE id = 1;'
             if ($LASTEXITCODE -ne 0 -or ($sentinel -join '').Trim() -ne 'preserve-me') {
