@@ -95,7 +95,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
         throw 'Un service PostgreSQL Clarodaro existe mais le secret administrateur de son cluster est absent. Initialisation refusée.'
     }
     if (-not (Test-Path -LiteralPath $adminSecretFile -PathType Leaf)) {
-        Write-Step 'Première installation : initialisation d’un nouveau cluster PostgreSQL dédié.'
+        Write-Step 'Première installation : initialisation dun nouveau cluster PostgreSQL dédié.'
         $pgAdminBytes = New-Object byte[] 48
         $appPasswordBytes = New-Object byte[] 48
         $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
@@ -244,6 +244,6 @@ catch {
 
 Write-Step "Serveur PHP planifié au démarrage sur le port $HttpPort."
 Write-Step "Données persistantes : $programDataRoot"
-Write-Step 'Aucun compte PDG n’a été créé ou réinitialisé. Effectuer le bootstrap PDG séparément avec le script CLI prévu à cet effet.'
+Write-Step 'Aucun compte PDG na été créé ou réinitialisé. Effectuer le bootstrap PDG séparément avec le script CLI prévu à cet effet.'
 Stop-Transcript | Out-Null
 $script:TranscriptStarted = $false
