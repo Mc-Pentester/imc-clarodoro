@@ -158,6 +158,11 @@ jobs:
               }
             }
 
+            $elevesResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/eleves.html' -SkipHttpErrorCheck -TimeoutSec 10
+            if ($elevesResponse.StatusCode -eq 200 -and $elevesResponse.Content.TrimStart() -notmatch '^(?i)<!doctype html|<html') {
+              throw 'La route eleves.html renvoie du JavaScript brut au lieu d une page HTML protégée.'
+            }
+
             $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
             if (-not $task) { throw 'La tâche de démarrage PHP est absente.' }
             if ([string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') { throw 'PHP ne fonctionne pas sous un compte de service restreint.' }
