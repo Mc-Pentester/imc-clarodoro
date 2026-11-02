@@ -71,5 +71,8 @@ require("Smoke test clean install" in workflow and "Réinstallation sans désins
         "Windows clean-install and in-place-reinstall smoke test missing")
 require("installer_upgrade_sentinel" in workflow and "PG_VERSION" in workflow and "Reinstall after a full uninstall" in workflow,
         "Windows smoke test does not verify PostgreSQL data preservation")
+require("/eleves.html" in workflow and "JavaScript brut" in workflow,
+        "Windows HTTP smoke test is missing the eleves.html raw-JavaScript regression check")
+        "Windows smoke test does not verify PostgreSQL data preservation")
 
 print("WINDOWS INSTALLER DATA AND SERVICE SAFETY: PASS")
