@@ -1,4 +1,4 @@
-# Installateur Windows — IMC-Clarodoro
+# Installateur Windows — IMC-Clarodaro
 
 ## Runtimes embarqués
 
@@ -14,13 +14,13 @@ Les binaires ne sont pas stockés dans Git. Le workflow Windows les télécharge
 
 Après copie des fichiers, l'installateur exécute `Configure-Windows-Services.ps1` :
 
-- Sur une première installation réellement vierge (aucun .env applicatif), crée une instance PostgreSQL dédiée dans `%ProgramData%\IMC-Clarodoro\PostgreSQL\data`.
-- Enregistre uniquement le service `IMC-Clarodoro-PostgreSQL`, avec les données sous ProgramData et le port local 55432 par défaut.
-- Crée un rôle applicatif et une base dédiés avec des secrets aléatoires ; la configuration protégée est conservée dans `%ProgramData%\IMC-Clarodoro\config\.env`.
+- Sur une première installation réellement vierge (aucun .env applicatif), crée une instance PostgreSQL dédiée dans `%ProgramData%\IMC-Clarodaro\PostgreSQL\data`.
+- Enregistre uniquement le service `IMC-Clarodaro-PostgreSQL`, avec les données sous ProgramData et le port local 55432 par défaut.
+- Crée un rôle applicatif et une base dédiés avec des secrets aléatoires ; la configuration protégée est conservée dans `%ProgramData%\IMC-Clarodaro\config\.env`.
 - Exécute d'abord `database/migrate.php --status`, puis `--apply` uniquement sur cette nouvelle base vierge.
-- Démarre PHP au démarrage de Windows via une tâche planifiée système `IMC-Clarodoro-PHP-Server`, avec le routeur PHP et le port 8080.
+- Démarre PHP au démarrage de Windows via une tâche planifiée système `IMC-Clarodaro-PHP-Server`, avec le routeur PHP et le port 8080.
 - Ajoute une règle pare-feu TCP 8080 limitée au profil réseau privé.
-- Journalise la configuration dans `%ProgramData%\IMC-Clarodoro\logs\installer-services.log`.
+- Journalise la configuration dans `%ProgramData%\IMC-Clarodaro\logs\installer-services.log`.
 
 La tâche PHP est une tâche planifiée au démarrage, pas un service Windows natif. Le serveur PHP intégré est une première solution de démarrage local/LAN ; il doit encore être validé en charge et en fonctionnement réel avant toute distribution de production.
 
@@ -28,7 +28,8 @@ La tâche PHP est une tâche planifiée au démarrage, pas un service Windows na
 
 - Un fichier `.env` existant à la racine est conservé et traité comme configuration historique : aucune nouvelle base n'est créée et aucune migration n'est appliquée automatiquement.
 - Une configuration ProgramData déjà présente est conservée sans réécriture.
-- Un service PostgreSQL homonyme qui ne correspond pas au binaire et au répertoire de données Clarodaro attendus provoque un arrêt sûr ; aucun service tiers n'est remplacé.
+- Avant une mise à jour, seuls la tâche PHP et le service PostgreSQL appartenant à cette installation sont arrêtés proprement ; les données restent intactes.
+- À la désinstallation, seuls la tâche, le service et la règle pare-feu Clarodaro vérifiés sont retirés. Le dossier ProgramData (base, configuration, secrets, sauvegardes et journaux) est conservé.
 - Un répertoire de données existant sans configuration cohérente n'est jamais réinitialisé.
 - Une initialisation interrompue laisse un marqueur qui bloque le démarrage automatique jusqu'à réparation.
 - Aucun `database/schema.sql`, restauration ou bootstrap PDG n'est exécuté par défaut.
@@ -52,4 +53,4 @@ Aucun test ne doit utiliser la base de production.
 
 ## Construction
 
-Le workflow GitHub Actions **Windows installer package** télécharge les runtimes, vérifie les empreintes/signatures, prépare le payload, compile `installer/IMC-Clarodoro.iss` et publie l'artefact `IMC-Clarodaro-Windows-Installer`.
+Le workflow GitHub Actions **Windows installer package** télécharge les runtimes, vérifie les empreintes/signatures, prépare le payload, compile `installer/IMC-Clarodaro.iss` et publie l'artefact `IMC-Clarodaro-Windows-Installer`.
