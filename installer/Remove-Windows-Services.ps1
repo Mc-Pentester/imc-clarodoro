@@ -50,6 +50,13 @@ if ($service) {
     }
     & sc.exe delete $serviceName | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Impossible de désenregistrer le service $serviceName." }
+    $deleteDeadline = (Get-Date).AddSeconds(20)
+    while ((Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deleteDeadline) {
+        Start-Sleep -Seconds 1
+    }
+    if (Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue) {
+        throw "Le service $serviceName reste en attente de suppression. Les fichiers ne doivent pas être retirés."
+    }
 }
 
 $firewallRule = Get-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -ErrorAction SilentlyContinue
