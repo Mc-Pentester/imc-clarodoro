@@ -142,10 +142,17 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             if (-not $ready) { throw 'PostgreSQL ne répond pas après 60 secondes.' }
 
             $env:PGPASSWORD = $pgAdminPassword
-            & $psql -h 127.0.0.1 -p $PostgreSqlPort -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE imc_clarodaro_app LOGIN PASSWORD '$appPassword';"
-            if ($LASTEXITCODE -ne 0) { throw 'Création du rôle applicatif PostgreSQL échouée.' }
-            & $psql -h 127.0.0.1 -p $PostgreSqlPort -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE imc_clarodoro OWNER imc_clarodaro_app ENCODING ''UTF8'';'
-            if ($LASTEXITCODE -ne 0) { throw 'Création de la base applicative PostgreSQL échouée.' }
+            $databaseSetupFile = Join-Path $configRoot 'create-application-database.sql'
+            $databaseSetupSql = "CREATE ROLE imc_clarodaro_app LOGIN PASSWORD '$appPassword';" + [Environment]::NewLine + "CREATE DATABASE imc_clarodoro OWNER imc_clarodaro_app ENCODING 'UTF8';" + [Environment]::NewLine
+            [System.IO.File]::WriteAllText($databaseSetupFile, $databaseSetupSql, [System.Text.UTF8Encoding]::new($false))
+            Set-PrivateAcl $databaseSetupFile
+            try {
+                & $psql -h 127.0.0.1 -p $PostgreSqlPort -U postgres -d postgres -v ON_ERROR_STOP=1 -f $databaseSetupFile
+                if ($LASTEXITCODE -ne 0) { throw 'Création du rôle ou de la base applicative PostgreSQL échouée.' }
+            }
+            finally {
+                Remove-Item -LiteralPath $databaseSetupFile -Force -ErrorAction SilentlyContinue
+            }
 
             [System.IO.File]::WriteAllText($adminSecretFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
             Set-PrivateAcl $adminSecretFile
