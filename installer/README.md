@@ -1,26 +1,30 @@
-# Installateur Windows — IMC-Clarodaro
+# Installateur Windows — IMC-Clarodoro
 
-## Portée de cette première version
+## Runtimes désormais embarqués
 
-Ce paquet Inno Setup déploie les fichiers applicatifs et crée les raccourcis Windows. Il est volontairement conservateur : il ne touche jamais à PostgreSQL et ne lance aucune opération SQL.
+La version 1.1.0 du paquet inclut les binaires Windows x64 suivants, téléchargés depuis leurs sources officielles et vérifiés par SHA-256 pendant la CI :
 
-### Protections prévues
+- PHP 8.4.27 NTS x64, avec PDO PostgreSQL (pdo_pgsql) et l'extension pgsql.
+- PostgreSQL 18.6 x64 (binaires EDB : bin, lib, share).
+- Le manifeste runtime-manifest.json consigne les versions, sources et empreintes vérifiées.
 
-- Réinstallation/mise à jour dans le même dossier sans désinstallation préalable.
-- Le fichier `.env`, les sauvegardes, journaux et répertoires temporaires sont exclus du remplacement.
+Les archives binaires ne sont pas stockées dans Git : le workflow Windows les télécharge, contrôle leurs empreintes, vérifie que PHP charge les extensions PostgreSQL et que les exécutables PostgreSQL démarrent, puis les incorpore à l'EXE Inno Setup.
+
+## Protections de données
+
+- Le runtime est installé dans le dossier applicatif ; il est distinct des données PostgreSQL.
+- Le paquet ne supprime pas les fichiers .env, les sauvegardes ou les journaux existants.
+- Aucun répertoire de données PostgreSQL existant n'est initialisé, remplacé ou supprimé.
+- Aucun database/schema.sql, migration, restauration ou bootstrap PDG n'est exécuté pendant l'installation ou la mise à jour.
+- Aucun service PostgreSQL tiers n'est arrêté, remplacé ou réenregistré.
 - La désinstallation ne contient aucune suppression de données persistantes.
-- Aucun appel à `bootstrap-auth.php`, aucun changement de mot de passe PDG.
-- Aucun arrêt/redémarrage de service PostgreSQL, Apache ou PHP.
-- Aucun `database/schema.sql`, migration, restauration ou création de base n'est exécuté.
 
-## Limitation importante — paquet initial
+## Limite fonctionnelle à ne pas masquer
 
-Cette version n'est pas encore un installateur autonome prêt pour un poste vierge. Elle suppose que l'environnement PHP/Apache déjà validé est installé et que le site est accessible sur `http://localhost:8080/`. Elle ne configure pas automatiquement Apache, PHP, PostgreSQL ni le service applicatif. Le compte PDG initial reste soumis au processus sécurisé séparé ; l'assistant graphique de première création n'est pas encore inclus.
+Cette étape embarque les deux runtimes dans l'installateur, mais ne constitue pas encore la configuration complète d'un poste vierge : l'enregistrement du service PostgreSQL propre à Clarodaro, l'initialisation strictement conditionnelle d'un nouveau cluster, la configuration persistante de la base et le démarrage du serveur PHP comme service Windows restent à implémenter et tester. L'EXE ne doit donc pas encore être annoncé comme installation autonome prête à l'exploitation.
 
-Ces limites sont explicites afin de ne pas risquer de modifier une base existante ou d'arrêter un service non géré.
+Pour une installation existante, la configuration actuelle et la base déjà utilisée doivent continuer à être conservées ; les nouveaux binaires ne doivent jamais provoquer de migration majeure ni de réinitialisation de données.
 
 ## Construction
 
-Le workflow GitHub Actions **Windows installer package** compile le fichier `installer/IMC-Clarodoro.iss` avec Inno Setup et publie l'exécutable comme artefact de 14 jours.
-
-Le paquet ne doit pas être distribué comme version autonome avant les étapes suivantes : détection et configuration du runtime, gestion contrôlée du serveur web, emplacement persistant documenté, assistant de première initialisation PDG et tests de réinstallation sur Windows.
+Le workflow GitHub Actions Windows installer package prépare les runtimes depuis les distributions officielles, vérifie les SHA-256, compile installer/IMC-Clarodoro.iss et publie l'artefact IMC-Clarodaro-Windows-Installer.
