@@ -26,6 +26,7 @@ Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"; Flags: unchecked
+Name: "createpdg"; Description: "Créer le compte PDG initial si aucun compte PDG n existe"; GroupDescription: "Configuration initiale :"
 
 [Dirs]
 Name: "{app}"; Permissions: users-modify
@@ -45,6 +46,7 @@ Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignorev
 Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Remove-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Prepare-Upgrade.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "Initialize-PDG-Account.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -144,6 +146,7 @@ begin
 end;
 
 [Run]
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Initialize-PDG-Account.ps1"" -AppRoot ""{app}"""; Description: "Initialiser le compte PDG si nécessaire"; Flags: postinstall skipifsilent; Tasks: createpdg
 Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; Description: "Ouvrir IMC-Clarodaro"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
