@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $script:TranscriptStarted = $false
 trap {
-    Write-Error $_
+    Write-Host ('ERREUR : ' + $_.Exception.Message) -ForegroundColor Red
     if ($script:TranscriptStarted) { try { Stop-Transcript | Out-Null } catch {} }
     exit 1
 }
@@ -193,6 +193,12 @@ if ($task) {
     if ($existingAction -notlike "*Start-Clarodaro-Server.ps1*") {
         throw "La tâche planifiée $taskName existe déjà mais n'appartient pas à Clarodaro. Aucun remplacement effectué."
     }
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    $stopDeadline = (Get-Date).AddSeconds(20)
+    while (-not (Test-PortAvailable $HttpPort) -and (Get-Date) -lt $stopDeadline) { Start-Sleep -Seconds 1 }
+    if (-not (Test-PortAvailable $HttpPort)) {
+        throw "L'ancien serveur Clarodaro n'a pas libéré le port $HttpPort. Aucun nouveau serveur n'a été lancé."
+    }
 }
 
 if (-not (Test-PortAvailable $HttpPort) -and -not $task) {
@@ -202,6 +208,7 @@ $launcher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 $powershell = Join-Path $PSHOME 'powershell.exe'
 $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $launcher + '" -AppRoot "' + $AppRoot + '"'
 if ($taskEnvironmentFile) { $arguments += ' -EnvironmentFile "' + $taskEnvironmentFile + '"' }
+$arguments += " -HttpPort $HttpPort"
 
 $action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $AppRoot
 $trigger = New-ScheduledTaskTrigger -AtStartup
