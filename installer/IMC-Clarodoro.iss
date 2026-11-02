@@ -50,6 +50,52 @@ Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ign
 Name: "{autoprograms}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14
 Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
 
+[Code]
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+  Parameters: String;
+  PowerShellPath: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    if not Exec(
+      ExpandConstant('{app}\\runtime\\vc_redist.x64.exe'),
+      '/install /quiet /norestart',
+      '',
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) then
+      RaiseException('Impossible de lancer le redistribuable Microsoft Visual C++.');
+
+    if (ResultCode <> 0) and (ResultCode <> 1638) and (ResultCode <> 3010) then
+      RaiseException('Installation du runtime Microsoft Visual C++ échouée. Code : ' + IntToStr(ResultCode));
+
+    PowerShellPath := ExpandConstant('{sys}\\WindowsPowerShell\\v1.0\\powershell.exe');
+    Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+      ExpandConstant('{app}\\installer\\Configure-Windows-Services.ps1') +
+      '" -AppRoot "' + ExpandConstant('{app}') + '"';
+
+    if not Exec(
+      PowerShellPath,
+      Parameters,
+      ExpandConstant('{app}'),
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) then
+      RaiseException('Impossible de lancer la configuration des services Windows.');
+
+    if ResultCode <> 0 then
+      RaiseException(
+        'La configuration des services Clarodaro a échoué. Consultez le journal : ' +
+        ExpandConstant('{commonappdata}\\IMC-Clarodaro\\logs\\installer-services.log')
+      );
+  end;
+end;
+
 [Run]
 Filename: "{app}\runtime\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installation du runtime Microsoft Visual C++..."; Flags: waituntilterminated runhidden
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Configure-Windows-Services.ps1"" -AppRoot ""{app}"""; StatusMsg: "Configuration sécurisée des services PostgreSQL et PHP..."; Flags: runhidden waituntilterminated
