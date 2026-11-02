@@ -5,9 +5,9 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $AppRoot = [System.IO.Path]::GetFullPath($AppRoot)
-$serviceName = 'IMC-Clarodoro-PostgreSQL'
-$taskName = 'IMC-Clarodoro-PHP-Server'
-$dataDirectory = Join-Path $env:ProgramData 'IMC-Clarodoro\PostgreSQL\data'
+$serviceName = 'IMC-Clarodaro-PostgreSQL'
+$taskName = 'IMC-Clarodaro-PHP-Server'
+$dataDirectory = Join-Path $env:ProgramData 'IMC-Clarodaro\PostgreSQL\data'
 $expectedPgCtl = Join-Path $AppRoot 'runtime\postgresql\bin\pg_ctl.exe'
 $expectedLauncher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 
