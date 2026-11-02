@@ -32,6 +32,8 @@ require("bootstrap-auth.php" not in configure and "schema.sql" in fresh_flow and
         "fresh-only schema initialization guard missing")
 require("CREATE TABLE schema_migrations" in fresh_flow,
         "fresh database migration baseline missing")
+require("managedLocalDatabase" in configure and "PG_VERSION" in existing_flow and "Réenregistrement du service" in existing_flow and "pg_ctl register" in existing_flow,
+        "reinstall must restore the preserved cluster without initdb or schema replay")
 require("hasProtectedConfig" in configure and "hasLegacyConfig" in configure,
         "existing configuration preservation guards missing")
 require("Set-PrivateAcl $legacyEnvironmentFile" in configure and "icacls.exe $AppRoot /reset" in configure and "Permissions: users-modify" not in iss,
@@ -64,7 +66,7 @@ require("Prepare-Bundled-Runtimes.ps1" in workflow,
 require("1.1.0" in workflow, "installer artifact version mismatch")
 require("Smoke test clean install" in workflow and "Réinstallation sans désinstallation" in workflow,
         "Windows clean-install and in-place-reinstall smoke test missing")
-require("installer_upgrade_sentinel" in workflow and "PG_VERSION" in workflow,
+require("installer_upgrade_sentinel" in workflow and "PG_VERSION" in workflow and "Reinstall after a full uninstall" in workflow,
         "Windows smoke test does not verify PostgreSQL data preservation")
 
 print("WINDOWS INSTALLER DATA AND SERVICE SAFETY: PASS")
