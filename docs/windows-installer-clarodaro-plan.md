@@ -49,3 +49,16 @@
 - Un seul raccourci et une seule entrée de démarrage après plusieurs réinstallations.
 
 Ce document est une spécification de travail, pas la déclaration qu'un installateur est déjà disponible.
+
+
+## Résultats de l'inspection approfondie du schéma et de l'authentification
+
+- La table `users` ne contient actuellement aucun champ de nom complet ni de relation de profil utilisateur. Le formulaire PDG demandé nécessite donc une évolution additive du schéma (par exemple `users.full_name`) et une migration dédiée, sans reconstruction de la base.
+- La connexion utilise `users.username`, `users.password_hash`, `users.role_id` et `users.status`. Le nom complet peut être ajouté sans modifier le mécanisme de connexion.
+- **Blocage de sécurité confirmé :** `bootstrap-auth.php` utilise `ON CONFLICT (username) DO UPDATE` pour le compte `pdg`, ce qui remplace son hash, son rôle et son statut si le script est relancé. L'installateur ne devra jamais appeler ce script. La procédure de récupération PDG demeure distincte et inchangée.
+- Le workflow CI actuel vérifie la syntaxe PHP/PowerShell et des règles de séparation des pages. Il n'existe pas encore de job de construction/test d'un installateur Windows.
+- Les anciens scripts `ENV-01` et `ENV-02-R2` contiennent des chemins fixes. Ils ne doivent pas être réutilisés tels quels par l'installateur ; leur rôle opérationnel doit être établi avant toute modification.
+
+### Décision de conception à appliquer
+
+La création initiale doit être un endpoint distinct, transactionnel et à usage unique. Il devra verrouiller la vérification d'absence de PDG, vérifier que le rôle `PDG` existe déjà, insérer un seul utilisateur et ne modifier aucune permission, aucun rôle ni compte existant. La migration du nom complet sera additive et ne changera aucune donnée existante. Le script de récupération PDG ne sera pas modifié.
