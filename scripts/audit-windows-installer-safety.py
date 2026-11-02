@@ -11,6 +11,7 @@ configure = read("installer/Configure-Windows-Services.ps1")
 launcher = read("installer/Start-Clarodaro-Server.ps1")
 cleanup = read("installer/Remove-Windows-Services.ps1")
 iss = read("installer/IMC-Clarodoro.iss")
+router = read("router.php")
 env_loader = read("config/env.php")
 pdg_setup = read("installer/Initialize-PDG-Account.ps1")
 workflow = read(".github/workflows/windows-installer.yml")
@@ -45,6 +46,8 @@ require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup and
         "owned task/service cleanup missing")
 require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
         "uninstall must preserve ProgramData database and config")
+require("runtime" in router and "installer" in router and "database" in router and "router.php" in router and "strncasecmp" in router,
+        "HTTP router must deny direct access to runtimes, secrets and internal directories")
 require("Initialize-PDG-Account.ps1" in iss and "createpdg" in iss and "skipifsilent" in iss,
         "optional first-PDG setup task missing")
 require("LOWER(u.username)" in pdg_setup and "r.name" in pdg_setup and "bootstrap-auth.php" in pdg_setup,
