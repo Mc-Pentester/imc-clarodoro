@@ -34,7 +34,7 @@ Quand aucun `.env` historique ni fichier de configuration ProgramData n'existe :
 
 Le serveur PostgreSQL n'écoute que sur `127.0.0.1`. Le pare-feu n'ouvre le port HTTP 8080 que sur le profil réseau privé.
 
-Le bootstrap du compte PDG reste une opération CLI distincte ; il n'est jamais exécuté automatiquement par une réinstallation ou une mise à jour.
+L'option de configuration initiale vérifie si un utilisateur PDG existe. Si aucun n'existe, elle demande deux fois un mot de passe puis appelle le bootstrap CLI existant. Si un PDG existe, elle ne modifie rien. L'installation silencieuse ignore l'invite ; une mise à jour ne réinitialise jamais le compte.
 
 ## Installations existantes et mises à jour
 
