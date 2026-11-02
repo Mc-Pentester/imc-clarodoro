@@ -32,7 +32,7 @@ if ($task) {
         Start-Sleep -Seconds 1
     }
     if (Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1) {
-        throw 'Le serveur PHP ne s’est pas arrêté. Mise à jour interrompue avant remplacement des fichiers.'
+        throw 'Le serveur PHP ne sest pas arrêté. Mise à jour interrompue avant remplacement des fichiers.'
     }
 }
 
