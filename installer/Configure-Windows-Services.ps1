@@ -18,7 +18,8 @@ function Write-Step([string]$Message) {
 }
 
 function Set-PrivateAcl([string]$Path) {
-    & icacls.exe $Path /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+    $inheritance = if (Test-Path -LiteralPath $Path -PathType Container) { '(OI)(CI)F' } else { 'F' }
+    & icacls.exe $Path /inheritance:r /grant:r "*S-1-5-18:$inheritance" "*S-1-5-32-544:$inheritance" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Impossible de protéger les permissions : $Path" }
 }
 
