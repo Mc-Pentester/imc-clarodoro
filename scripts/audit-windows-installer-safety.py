@@ -25,8 +25,11 @@ require("initial-provisioning-incomplete.marker" in configure,
         "incomplete first-install marker missing")
 require("database\\migrate.php" in configure and "'--status'" in configure and "'--apply'" in configure,
         "new-database migration flow missing")
-require("bootstrap-auth.php" not in configure and "schema.sql" not in configure,
-        "installer must not run bootstrap-auth or schema.sql")
+fresh_flow, existing_flow = configure.split("elseif ($service)", 1)
+require("bootstrap-auth.php" not in configure and "schema.sql" in fresh_flow and "schema.sql" not in existing_flow,
+        "fresh-only schema initialization guard missing")
+require("CREATE TABLE schema_migrations" in fresh_flow,
+        "fresh database migration baseline missing")
 require("hasProtectedConfig" in configure and "hasLegacyConfig" in configure,
         "existing configuration preservation guards missing")
 require("0.0.0.0:$HttpPort" in launcher, "PHP startup launcher is not configurable")
