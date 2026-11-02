@@ -119,7 +119,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $manifest = [ordered]@{
-    product = 'IMC-Clarodoro'
+    product = 'IMC-Clarodaro'
     architecture = 'windows-x64'
     php = [ordered]@{
         version = '8.4.27'
