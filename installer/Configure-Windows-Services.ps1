@@ -40,6 +40,8 @@ $adminSecretFile = Join-Path $configRoot 'postgres-admin.secret'
 $provisioningMarker = Join-Path $configRoot 'initial-provisioning-incomplete.marker'
 $serviceName = 'IMC-Clarodaro-PostgreSQL'
 $taskName = 'IMC-Clarodaro-PHP-Server'
+$postgresServiceAccount = 'NT AUTHORITY\\NETWORK SERVICE'
+$phpTaskAccount = 'NT AUTHORITY\\LOCAL SERVICE'
 $pgBin = Join-Path $AppRoot 'runtime\postgresql\bin'
 $pgCtl = Join-Path $pgBin 'pg_ctl.exe'
 $initdb = Join-Path $pgBin 'initdb.exe'
@@ -72,11 +74,23 @@ elseif (-not (Test-PortAvailable $HttpPort)) {
 
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
 Set-PrivateAcl $logRoot
+& icacls.exe $logRoot /grant '*S-1-5-19:(OI)(CI)M' /T /C | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner accès aux journaux au compte PHP restreint.' }
 Start-Transcript -Path (Join-Path $logRoot 'installer-services.log') -Append | Out-Null
 $script:TranscriptStarted = $true
 & icacls.exe $AppRoot /reset | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Impossible de retirer les droits d écriture hérités du dossier applicatif.' }
+& icacls.exe $AppRoot /grant '*S-1-5-19:(OI)(CI)RX' '*S-1-5-20:(OI)(CI)RX' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture aux comptes de service.' }
+foreach ($relativeDirectory in @('backups', 'logs', 'uploads', 'storage', 'tmp', 'cache', 'exports')) {
+    $writablePath = Join-Path $AppRoot $relativeDirectory
+    New-Item -ItemType Directory -Path $writablePath -Force | Out-Null
+    & icacls.exe $writablePath /grant '*S-1-5-19:(OI)(CI)M' /T /C | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Impossible de donner accès au répertoire applicatif : $relativeDirectory" }
+}
 Set-PrivateAcl $configRoot
+& icacls.exe $configRoot /grant '*S-1-5-19:(X)' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner accès au chemin de configuration au compte PHP.' }
 if (Test-Path -LiteralPath $provisioningMarker) {
     throw 'Une initialisation précédente est incomplète. Le serveur ne sera pas démarré automatiquement ; consulter le journal et réparer la base manuellement.'
 }
@@ -86,6 +100,8 @@ $hasProtectedConfig = Test-Path -LiteralPath $environmentFile -PathType Leaf
 $hasLegacyConfig = Test-Path -LiteralPath $legacyEnvironmentFile -PathType Leaf
 if ($hasLegacyConfig) {
     Set-PrivateAcl $legacyEnvironmentFile
+    & icacls.exe $legacyEnvironmentFile /grant '*S-1-5-19:R' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture à la configuration historique.' }
 }
 $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
 
@@ -134,6 +150,8 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             ) -join "`r`n"
             [System.IO.File]::WriteAllText($environmentFile, $envContents + "`r`n", [System.Text.UTF8Encoding]::new($false))
             Set-PrivateAcl $environmentFile
+            & icacls.exe $environmentFile /grant '*S-1-5-19:R' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture au fichier .env du service PHP.' }
         $passwordFile = Join-Path $configRoot 'postgres-init-password.tmp'
         [System.IO.File]::WriteAllText($passwordFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
         Set-PrivateAcl $passwordFile
@@ -153,10 +171,12 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
                 "password_encryption = 'scram-sha-256'"
             ) -Encoding ascii
 
-            & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
+            & icacls.exe $dataRoot /grant '*S-1-5-20:(X)' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner accès au chemin des données PostgreSQL.' }
+            & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'Impossible de protéger les permissions du cluster PostgreSQL.' }
 
-            & $pgCtl register -N $serviceName -D $dataDirectory -S auto
+            & $pgCtl register -N $serviceName -D $dataDirectory -S auto -U $postgresServiceAccount
             if ($LASTEXITCODE -ne 0) { throw "Enregistrement du service PostgreSQL échoué (code $LASTEXITCODE)." }
             $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
             if ([string]$service.PathName -notlike "*$pgCtl*" -or [string]$service.PathName -notlike "*$dataDirectory*") {
@@ -252,7 +272,7 @@ $arguments += " -HttpPort $HttpPort"
 
 $action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $AppRoot
 $trigger = New-ScheduledTaskTrigger -AtStartup
-$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+$principal = New-ScheduledTaskPrincipal -UserId $phpTaskAccount -LogonType ServiceAccount -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
