@@ -77,7 +77,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Compilation Inno Setup échouée (code $LASTEXITCODE)."
           }
-          $artifact = 'dist\IMC-Clarodaro-Setup-1.0.0.exe'
+          $artifact = 'dist\IMC-Clarodaro-Setup-1.1.0.exe'
           if (-not (Test-Path -LiteralPath $artifact)) {
             throw "Installateur absent : $artifact"
           }
