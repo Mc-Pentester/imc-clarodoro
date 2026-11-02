@@ -17,7 +17,7 @@ Après copie des fichiers, l'installateur exécute `Configure-Windows-Services.p
 - Sur une première installation réellement vierge (aucun .env applicatif), crée une instance PostgreSQL dédiée dans `%ProgramData%\IMC-Clarodaro\PostgreSQL\data`.
 - Enregistre uniquement le service `IMC-Clarodaro-PostgreSQL`, avec les données sous ProgramData et le port local 55432 par défaut.
 - Crée un rôle applicatif et une base dédiés avec des secrets aléatoires ; la configuration protégée est conservée dans `%ProgramData%\IMC-Clarodaro\config\.env`.
-- Exécute d'abord `database/migrate.php --status`, puis `--apply` uniquement sur cette nouvelle base vierge.
+- Exécute `database/schema.sql` uniquement sur cette base neuve et vide, crée l'historique de migrations initial, puis lance `database/migrate.php --status` et `--apply`.
 - Démarre PHP au démarrage de Windows via une tâche planifiée système `IMC-Clarodaro-PHP-Server`, avec le routeur PHP et le port 8080.
 - Ajoute une règle pare-feu TCP 8080 limitée au profil réseau privé.
 - Journalise la configuration dans `%ProgramData%\IMC-Clarodaro\logs\installer-services.log`.
@@ -32,9 +32,10 @@ La tâche PHP est une tâche planifiée au démarrage, pas un service Windows na
 - À la désinstallation, seuls la tâche, le service et la règle pare-feu Clarodaro vérifiés sont retirés. Le dossier ProgramData (base, configuration, secrets, sauvegardes et journaux) est conservé.
 - Un répertoire de données existant sans configuration cohérente n'est jamais réinitialisé.
 - Une initialisation interrompue laisse un marqueur qui bloque le démarrage automatique jusqu'à réparation.
-- Aucun `database/schema.sql`, restauration ou bootstrap PDG n'est exécuté par défaut.
-- Le compte PDG n'est ni créé ni réinitialisé par une mise à jour. Le bootstrap initial reste une opération CLI séparée.
-- Les sauvegardes, journaux et données PostgreSQL sont stockés hors du dossier applicatif ; la désinstallation ne doit pas les supprimer.
+- `database/schema.sql` et les migrations ne sont jamais exécutés sur une base existante ; ils sont réservés à la création d'une base neuve par cet installateur. Aucune restauration n'est lancée.
+- L'option de configuration initiale vérifie d'abord si un utilisateur PDG existe. Si aucun n'existe, elle demande deux fois un mot de passe puis appelle le bootstrap CLI existant. Si un PDG existe, elle ne modifie rien. En installation silencieuse, l'invite est ignorée.
+- Le compte PDG n'est jamais créé ou réinitialisé par une mise à jour. Le script peut être lancé manuellement si l'invite a été ignorée.
+- La base, la configuration et les journaux d'installation/PHP sont stockés dans ProgramData. Le répertoire historique `backups` reste dans l'application. La désinstallation conserve ces données.
 
 ## Limites et validations obligatoires
 
