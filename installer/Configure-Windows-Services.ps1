@@ -58,6 +58,17 @@ foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $php)) {
 if ($PostgreSqlPort -lt 1024 -or $PostgreSqlPort -gt 65535 -or $HttpPort -lt 1024 -or $HttpPort -gt 65535) {
     throw 'Port invalide.'
 }
+$launcher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
+$task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($task) {
+    $existingAction = ($task.Actions | ForEach-Object { $_.Execute + ' ' + $_.Arguments }) -join ' '
+    if ($existingAction -notlike "*$launcher*") {
+        throw "La tâche planifiée $taskName existe déjà mais n'appartient pas à Clarodaro. Aucun changement effectué."
+    }
+}
+elseif (-not (Test-PortAvailable $HttpPort)) {
+    throw "Le port HTTP $HttpPort est déjà utilisé. Aucun cluster PostgreSQL ne sera initialisé."
+}
 
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
 Set-PrivateAcl $logRoot
@@ -216,13 +227,7 @@ else {
 # Do not overwrite a legacy root .env. The PHP launcher selects ProgramData only
 # when that protected configuration was created by this installer.
 $taskEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } else { '' }
-$task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-$launcher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 if ($task) {
-    $existingAction = ($task.Actions | ForEach-Object { $_.Execute + ' ' + $_.Arguments }) -join ' '
-    if ($existingAction -notlike "*$launcher*") {
-        throw "La tâche planifiée $taskName existe déjà mais n'appartient pas à Clarodaro. Aucun remplacement effectué."
-    }
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     $stopDeadline = (Get-Date).AddSeconds(20)
     while (-not (Test-PortAvailable $HttpPort) -and (Get-Date) -lt $stopDeadline) { Start-Sleep -Seconds 1 }
