@@ -64,7 +64,7 @@ $launcher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($task) {
     $existingAction = ($task.Actions | ForEach-Object { $_.Execute + ' ' + $_.Arguments }) -join ' '
-    if ($existingAction -notlike "*$launcher*") {
+    if ($existingAction -notlike "*$launcher*" -or [string]$task.Principal.UserId -notmatch "LOCAL SERVICE") {
         throw "La tâche planifiée $taskName existe déjà mais n'appartient pas à Clarodaro. Aucun changement effectué."
     }
 }
@@ -107,7 +107,7 @@ $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAct
 
 if ($service) {
     $serviceCommand = [string]$service.PathName
-    if ($serviceCommand -notlike "*$pgCtl*" -or $serviceCommand -notlike "*$dataDirectory*") {
+    if ($serviceCommand -notlike "*$pgCtl*" -or $serviceCommand -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE") {
         throw "Le service $serviceName existe mais ne correspond pas à l'instance Clarodaro attendue. Aucun changement effectué."
     }
 }
@@ -179,7 +179,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             & $pgCtl register -N $serviceName -D $dataDirectory -S auto -U $postgresServiceAccount
             if ($LASTEXITCODE -ne 0) { throw "Enregistrement du service PostgreSQL échoué (code $LASTEXITCODE)." }
             $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
-            if ([string]$service.PathName -notlike "*$pgCtl*" -or [string]$service.PathName -notlike "*$dataDirectory*") {
+            if ([string]$service.PathName -notlike "*$pgCtl*" -or [string]$service.PathName -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE") {
                 throw 'Le service PostgreSQL créé ne correspond pas au runtime et au répertoire attendus.'
             }
             Start-Service -Name $serviceName
@@ -251,6 +251,12 @@ else {
 
 # Do not overwrite a legacy root .env. The PHP launcher selects ProgramData only
 # when that protected configuration was created by this installer.
+if ($hasProtectedConfig) {
+    Set-PrivateAcl $environmentFile
+    & icacls.exe $environmentFile /grant '*S-1-5-19:R' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture au fichier .env du service PHP.' }
+}
+
 $taskEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } else { '' }
 if ($task) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
