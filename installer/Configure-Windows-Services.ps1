@@ -74,6 +74,8 @@ New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out
 Set-PrivateAcl $logRoot
 Start-Transcript -Path (Join-Path $logRoot 'installer-services.log') -Append | Out-Null
 $script:TranscriptStarted = $true
+& icacls.exe $AppRoot /reset | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de retirer les droits d écriture hérités du dossier applicatif.' }
 Set-PrivateAcl $configRoot
 if (Test-Path -LiteralPath $provisioningMarker) {
     throw 'Une initialisation précédente est incomplète. Le serveur ne sera pas démarré automatiquement ; consulter le journal et réparer la base manuellement.'
