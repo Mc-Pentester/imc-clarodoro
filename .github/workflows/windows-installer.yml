@@ -82,6 +82,88 @@ jobs:
             throw "Installateur absent : $artifact"
           }
 
+      - name: Smoke test clean install, PHP/PostgreSQL startup and data-preserving uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Resolve-Path 'dist\\IMC-Clarodaro-Setup-1.1.0.exe').Path
+          $installDir = Join-Path $env:ProgramFiles 'IMC-Clarodaro'
+          $dataDir = Join-Path $env:ProgramData 'IMC-Clarodaro\\PostgreSQL\\data'
+          $configFile = Join-Path $env:ProgramData 'IMC-Clarodaro\\config\\.env'
+          $serviceName = 'IMC-Clarodaro-PostgreSQL'
+          $taskName = 'IMC-Clarodaro-PHP-Server'
+
+          $install = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-') -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "Installation silencieuse échouée : code $($install.ExitCode)"
+          }
+
+          try {
+            $serviceDeadline = (Get-Date).AddSeconds(90)
+            do {
+              $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+              if ($service -and $service.Status -eq 'Running') { break }
+              Start-Sleep -Seconds 2
+            } while ((Get-Date) -lt $serviceDeadline)
+            if (-not $service -or $service.Status -ne 'Running') {
+              throw 'Le service PostgreSQL Clarodaro ne fonctionne pas.'
+            }
+
+            if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION'))) {
+              throw 'Le cluster PostgreSQL initial n’a pas été créé.'
+            }
+            if (-not (Test-Path -LiteralPath $configFile)) {
+              throw 'La configuration protégée ProgramData est absente.'
+            }
+
+            $php = Join-Path $installDir 'runtime\\php\\php.exe'
+            $env:IMC_CLARODARO_ENV_FILE = $configFile
+            Push-Location $installDir
+            try {
+              & $php 'database\\migrate.php' '--status'
+              if ($LASTEXITCODE -ne 0) { throw 'Le statut des migrations de la nouvelle base est en erreur.' }
+            }
+            finally {
+              Pop-Location
+              Remove-Item Env:\\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
+            }
+
+            $httpDeadline = (Get-Date).AddSeconds(45)
+            $httpReady = $false
+            do {
+              $listener = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($listener) { $httpReady = $true; break }
+              Start-Sleep -Seconds 1
+            } while ((Get-Date) -lt $httpDeadline)
+            if (-not $httpReady) { throw 'Le serveur PHP ne répond pas sur le port 8080.' }
+
+            $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            if (-not $task) { throw 'La tâche de démarrage PHP est absente.' }
+          }
+          finally {
+            $uninstaller = Join-Path $installDir 'unins000.exe'
+            if (Test-Path -LiteralPath $uninstaller) {
+              $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+              if ($uninstall.ExitCode -ne 0) {
+                throw "Désinstallation silencieuse échouée : code $($uninstall.ExitCode)"
+              }
+            }
+          }
+
+          if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION'))) {
+            throw 'ÉCHEC : les données PostgreSQL ont été supprimées à la désinstallation.'
+          }
+          if (-not (Test-Path -LiteralPath $configFile)) {
+            throw 'ÉCHEC : la configuration ProgramData a été supprimée à la désinstallation.'
+          }
+          if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+            throw 'La tâche PHP Clarodaro est restée enregistrée après désinstallation.'
+          }
+          if (Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue) {
+            throw 'Le service PostgreSQL Clarodaro est resté enregistré après désinstallation.'
+          }
+          Write-Host 'INSTALL / POSTGRESQL / PHP / MIGRATIONS / UNINSTALL DATA PRESERVATION: PASS'
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
