@@ -86,10 +86,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = (Resolve-Path 'dist\\IMC-Clarodaro-Setup-1.1.0.exe').Path
+          $installer = (Resolve-Path 'dist\IMC-Clarodaro-Setup-1.1.0.exe').Path
           $installDir = Join-Path $env:ProgramFiles 'IMC-Clarodaro'
-          $dataDir = Join-Path $env:ProgramData 'IMC-Clarodaro\\PostgreSQL\\data'
-          $configFile = Join-Path $env:ProgramData 'IMC-Clarodaro\\config\\.env'
+          $dataDir = Join-Path $env:ProgramData 'IMC-Clarodaro\PostgreSQL\data'
+          $configFile = Join-Path $env:ProgramData 'IMC-Clarodaro\config\.env'
           $serviceName = 'IMC-Clarodaro-PostgreSQL'
           $taskName = 'IMC-Clarodaro-PHP-Server'
 
@@ -110,22 +110,22 @@ jobs:
             }
 
             if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION'))) {
-              throw 'Le cluster PostgreSQL initial n’a pas été créé.'
+              throw 'Le cluster PostgreSQL initial na pas été créé.'
             }
             if (-not (Test-Path -LiteralPath $configFile)) {
               throw 'La configuration protégée ProgramData est absente.'
             }
 
-            $php = Join-Path $installDir 'runtime\\php\\php.exe'
+            $php = Join-Path $installDir 'runtime\php\php.exe'
             $env:IMC_CLARODARO_ENV_FILE = $configFile
             Push-Location $installDir
             try {
-              & $php 'database\\migrate.php' '--status'
+              & $php 'database\migrate.php' '--status'
               if ($LASTEXITCODE -ne 0) { throw 'Le statut des migrations de la nouvelle base est en erreur.' }
             }
             finally {
               Pop-Location
-              Remove-Item Env:\\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
+              Remove-Item Env:\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
             }
 
             $httpDeadline = (Get-Date).AddSeconds(45)
