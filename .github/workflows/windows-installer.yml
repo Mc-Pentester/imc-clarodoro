@@ -149,6 +149,10 @@ jobs:
             }
             $env:PGPASSWORD = $dbValues['DB_PASSWORD']
             $psql = Join-Path $installDir 'runtime\postgresql\bin\psql.exe'
+            $pdgCount = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT COUNT(*) FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE LOWER(u.username) = 'pdg' OR r.name = 'PDG';"
+            if ($LASTEXITCODE -ne 0 -or ($pdgCount -join '').Trim() -ne '0') {
+              throw 'L installation silencieuse a créé ou modifié un compte PDG sans demande explicite.'
+            }
             & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -v ON_ERROR_STOP=1 -c "CREATE TABLE public.installer_upgrade_sentinel (id integer PRIMARY KEY, marker text NOT NULL); INSERT INTO public.installer_upgrade_sentinel VALUES (1, 'preserve-me');"
             if ($LASTEXITCODE -ne 0) { throw 'Impossible de créer le témoin de conservation en base.' }
             Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
