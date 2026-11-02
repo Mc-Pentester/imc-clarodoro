@@ -33,6 +33,8 @@ Name: "createpdg"; Description: "Créer le compte PDG initial si aucun compte PD
 Name: "{app}"
 Name: "{app}\logs"; Flags: uninsneveruninstall
 Name: "{app}\backups"; Flags: uninsneveruninstall
+Name: "{app}\uploads"; Flags: uninsneveruninstall
+Name: "{app}\storage"; Flags: uninsneveruninstall
 Name: "{app}\installer"
 
 [Files]
