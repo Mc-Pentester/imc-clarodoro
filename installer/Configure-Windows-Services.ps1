@@ -59,6 +59,7 @@ if ($PostgreSqlPort -lt 1024 -or $PostgreSqlPort -gt 65535 -or $HttpPort -lt 102
 }
 
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
+Set-PrivateAcl $logRoot
 Start-Transcript -Path (Join-Path $logRoot 'installer-services.log') -Append | Out-Null
 $script:TranscriptStarted = $true
 Set-PrivateAcl $configRoot
@@ -226,6 +227,11 @@ $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccou
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
+$httpDeadline = (Get-Date).AddSeconds(20)
+while ((Test-PortAvailable $HttpPort) -and (Get-Date) -lt $httpDeadline) { Start-Sleep -Seconds 1 }
+if (Test-PortAvailable $HttpPort) {
+    throw "Le serveur PHP n'a pas démarré sur le port $HttpPort. Consulter le journal PHP dans ProgramData."
+}
 
 try {
     if (-not (Get-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -ErrorAction SilentlyContinue)) {
