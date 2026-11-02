@@ -47,15 +47,20 @@ try {
         $validPassword = $false
         $firstSecure = Read-Host 'Mot de passe initial du compte PDG (12 caractères minimum, caractères ASCII)' -AsSecureString
         $secondSecure = Read-Host 'Confirmez le mot de passe PDG' -AsSecureString
-        $first = ConvertFrom-SecureInput $firstSecure
-        $second = ConvertFrom-SecureInput $secondSecure
+        try {
+            $first = ConvertFrom-SecureInput $firstSecure
+            $second = ConvertFrom-SecureInput $secondSecure
+        }
+        finally {
+            $firstSecure.Dispose()
+            $secondSecure.Dispose()
+        }
+
         if ($first.Length -lt 12 -or $first -notmatch '^[\x20-\x7E]+$') {
             Write-Host 'Mot de passe invalide : 12 caractères ASCII imprimables minimum.' -ForegroundColor Yellow
-            $validPassword = $false
         }
         elseif ($first -cne $second) {
             Write-Host 'Les deux mots de passe ne correspondent pas.' -ForegroundColor Yellow
-            $matches = $false
         }
         else {
             $validPassword = $true
@@ -74,8 +79,6 @@ try {
         Remove-Item Env:\IMC_BOOTSTRAP_PASSWORD -ErrorAction SilentlyContinue
         $first = $null
         $second = $null
-        $firstSecure.Dispose()
-        $secondSecure.Dispose()
     }
 }
 finally {
