@@ -6,6 +6,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$script:TranscriptStarted = $false
+trap {
+    Write-Error $_
+    if ($script:TranscriptStarted) { try { Stop-Transcript | Out-Null } catch {} }
+    exit 1
+}
 
 function Write-Step([string]$Message) {
     Write-Host "[Clarodaro] $Message"
@@ -52,6 +58,8 @@ if ($PostgreSqlPort -lt 1024 -or $PostgreSqlPort -gt 65535 -or $HttpPort -lt 102
 }
 
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
+Start-Transcript -Path (Join-Path $logRoot 'installer-services.log') -Append | Out-Null
+$script:TranscriptStarted = $true
 Set-PrivateAcl $configRoot
 
 $legacyEnvironmentFile = Join-Path $AppRoot '.env'
@@ -214,3 +222,5 @@ catch {
 Write-Step "Serveur PHP planifié au démarrage sur le port $HttpPort."
 Write-Step "Données persistantes : $programDataRoot"
 Write-Step 'Aucun compte PDG n’a été créé ou réinitialisé. Effectuer le bootstrap PDG séparément avec le script CLI prévu à cet effet.'
+Stop-Transcript | Out-Null
+$script:TranscriptStarted = $false
