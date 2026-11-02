@@ -28,9 +28,10 @@ Quand aucun `.env` historique ni fichier de configuration ProgramData n'existe :
 3. enregistrer le service Windows `IMC-Clarodaro-PostgreSQL` ;
 4. générer des secrets aléatoires pour le superutilisateur et le rôle applicatif ;
 5. créer la base `imc_clarodoro` et le rôle `imc_clarodaro_app` ;
-6. écrire le `.env` protégé dans ProgramData ;
-7. exécuter `database/migrate.php --status`, puis `--apply` uniquement sur cette base nouvellement créée ;
-8. démarrer le serveur PHP sur le port 8080 via la tâche planifiée SYSTEM `IMC-Clarodaro-PHP-Server`.
+6. poser un marqueur d'initialisation, puis exécuter `database/schema.sql` uniquement sur cette base neuve et vide ;
+7. créer la table d'historique de migrations initiale et écrire le `.env` protégé dans ProgramData ;
+8. exécuter `database/migrate.php --status`, puis `--apply` uniquement sur cette base nouvellement créée ;
+9. démarrer le serveur PHP sur le port 8080 via la tâche planifiée SYSTEM `IMC-Clarodaro-PHP-Server`.
 
 Le serveur PostgreSQL n'écoute que sur `127.0.0.1`. Le pare-feu n'ouvre le port HTTP 8080 que sur le profil réseau privé.
 
@@ -40,7 +41,7 @@ L'option de configuration initiale vérifie si un utilisateur PDG existe. Si auc
 
 - Un `.env` historique à la racine est conservé et priorisé par le chargeur lorsque le chemin ProgramData n'est pas fourni.
 - Un fichier de configuration ProgramData existant n'est jamais remplacé.
-- Aucune initialisation PostgreSQL, création de base ou migration automatique n'est exécutée sur une configuration existante.
+- Aucune initialisation PostgreSQL, création de base, exécution de `schema.sql` ou migration automatique n'est exécutée sur une configuration existante.
 - Avant une mise à jour, seuls la tâche PHP et le service PostgreSQL dont les chemins correspondent à cette installation sont arrêtés.
 - Un service ou une tâche homonyme qui ne correspond pas à l'installation Clarodaro provoque un arrêt sûr.
 - Un marqueur bloque le démarrage si l'initialisation de la base neuve a été interrompue.
