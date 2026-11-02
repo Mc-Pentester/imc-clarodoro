@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$AppRoot,
-    [string]$EnvironmentFile = ''
+    [string]$EnvironmentFile = '',
+    [int]$HttpPort = 8080
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,5 +27,5 @@ if ($EnvironmentFile -and (Test-Path -LiteralPath $EnvironmentFile -PathType Lea
 Set-Location -LiteralPath $AppRoot
 
 # The scheduled task remains alive for the lifetime of PHP's built-in server.
-& $php -S 0.0.0.0:8080 router.php *>> $logFile
+& $php -S "0.0.0.0:$HttpPort" router.php *>> $logFile
 exit $LASTEXITCODE
