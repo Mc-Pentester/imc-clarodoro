@@ -100,6 +100,15 @@ if (Test-Path -LiteralPath $provisioningMarker) {
 $legacyEnvironmentFile = Join-Path $AppRoot '.env'
 $hasProtectedConfig = Test-Path -LiteralPath $environmentFile -PathType Leaf
 $hasLegacyConfig = Test-Path -LiteralPath $legacyEnvironmentFile -PathType Leaf
+$managedLocalDatabase = $false
+if ($hasProtectedConfig) {
+    $configValues = @{}
+    foreach ($line in Get-Content -LiteralPath $environmentFile) {
+        $separator = $line.IndexOf('=')
+        if ($separator -gt 0) { $configValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
+    }
+    $managedLocalDatabase = ($configValues['DB_HOST'] -eq '127.0.0.1' -and $configValues['DB_PORT'] -eq [string]$PostgreSqlPort)
+}
 if ($hasLegacyConfig) {
     Set-PrivateAcl $legacyEnvironmentFile
     & icacls.exe $legacyEnvironmentFile /grant '*S-1-5-19:R' | Out-Null
