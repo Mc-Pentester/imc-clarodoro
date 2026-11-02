@@ -23,7 +23,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($task) {
     $taskAction = ($task.Actions | ForEach-Object { $_.Execute + ' ' + $_.Arguments }) -join ' '
-    if ($taskAction -notlike "*$expectedLauncher*" -or [string]$task.Principal.UserId -notmatch "LOCAL SERVICE") {
+    if ($taskAction -notlike "*$expectedLauncher*" -or [string]$task.Principal.UserId -notmatch "LOCAL SERVICE|S-1-5-19") {
         throw "La tâche $taskName ne correspond pas à cette installation. Aucun arrêt effectué."
     }
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -39,7 +39,7 @@ if ($task) {
 $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
 if ($service) {
     $serviceCommand = [string]$service.PathName
-    if ($serviceCommand -notlike "*$expectedPgCtl*" -or $serviceCommand -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE") {
+    if ($serviceCommand -notlike "*$expectedPgCtl*" -or $serviceCommand -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
         throw "Le service $serviceName ne correspond pas à cette installation. Aucun arrêt effectué."
     }
     if ((Get-Service -Name $serviceName).Status -ne 'Stopped') {
