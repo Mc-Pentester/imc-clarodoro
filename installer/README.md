@@ -22,7 +22,7 @@ Après copie des fichiers, l'installateur exécute `Configure-Windows-Services.p
 - Ajoute une règle pare-feu TCP 8080 limitée au profil réseau privé.
 - Journalise la configuration dans `%ProgramData%\IMC-Clarodaro\logs\installer-services.log`.
 
-Les comptes PHP (LocalService) et PostgreSQL (NetworkService) sont distincts et limités ; les permissions d écriture sont accordées uniquement aux répertoires nécessaires. La tâche PHP est une tâche planifiée au démarrage, pas un service Windows natif. Le serveur PHP intégré est une première solution de démarrage local/LAN ; il doit encore être validé en charge et en fonctionnement réel avant toute distribution de production.
+Les comptes PHP (LocalService) et PostgreSQL (NetworkService) sont distincts et limités ; les permissions d écriture sont accordées uniquement aux répertoires nécessaires. La tâche PHP est une tâche planifiée au démarrage, pas un service Windows natif. Le serveur PHP intégré est mono-processus sous Windows et l'accès LAN actuel utilise HTTP sans TLS. Il doit être remplacé ou complété par un serveur HTTP de production avec HTTPS avant toute distribution commerciale ; pour les essais, limiter l'accès à un réseau privé de confiance.
 
 ## Protections de données et mises à jour
 
