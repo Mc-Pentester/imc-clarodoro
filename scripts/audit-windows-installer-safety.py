@@ -10,12 +10,12 @@ def require(condition, message):
 configure = read("installer/Configure-Windows-Services.ps1")
 launcher = read("installer/Start-Clarodaro-Server.ps1")
 cleanup = read("installer/Remove-Windows-Services.ps1")
-iss = read("installer/IMC-Clarodoro.iss")
+iss = read("installer/IMC-Clarodaro.iss")
 env_loader = read("config/env.php")
 workflow = read(".github/workflows/windows-installer.yml")
 
-require("IMC-Clarodoro-PostgreSQL" in configure, "dedicated PostgreSQL service name missing")
-require("IMC-Clarodoro-PHP-Server" in configure, "PHP startup task name missing")
+require("IMC-Clarodaro-PostgreSQL" in configure, "dedicated PostgreSQL service name missing")
+require("IMC-Clarodaro-PHP-Server" in configure, "PHP startup task name missing")
 require("55432" in configure and "8080" in configure, "dedicated ports/default HTTP port missing")
 require("Test-PortAvailable" in configure, "port conflict protection missing")
 require("PathName" in configure and "Aucun service tiers" in configure,
@@ -35,6 +35,8 @@ require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup,
         "owned task/service cleanup missing")
 require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
         "uninstall must preserve ProgramData database and config")
+require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
+        "pre-upgrade service shutdown hook missing")
 require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
         "uninstall cleanup hook missing")
 require("Configure-Windows-Services.ps1" in iss and "CurStepChanged" in iss,
