@@ -19,17 +19,52 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Inno Setup
-        run: choco install innosetup --yes --no-progress
+
+      - name: Install or locate Inno Setup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidates = @(
+            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+            (Join-Path $env:ChocolateyInstall 'lib\innosetup\tools\ISCC.exe')
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+          if (-not $candidates) {
+            choco install innosetup --yes --no-progress --force
+            if ($LASTEXITCODE -ne 0) {
+              throw "Installation Inno Setup échouée (code $LASTEXITCODE)."
+            }
+          }
+
+          $searchRoots = @(
+            $env:ProgramFiles,
+            ${env:ProgramFiles(x86)},
+            $env:ChocolateyInstall
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+          $found = foreach ($candidate in $candidates) { $candidate }
+          if (-not $found) {
+            $found = Get-ChildItem -Path $searchRoots -Filter 'ISCC.exe' -File -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty FullName
+          }
+
+          $iscc = $found | Select-Object -First 1
+          if (-not $iscc -or -not (Test-Path -LiteralPath $iscc)) {
+            throw "ISCC.exe introuvable après installation. Répertoires inspectés : $($searchRoots -join ', ')"
+          }
+
+          "INNO_SETUP_COMPILER=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Compilateur Inno Setup : $iscc"
+
       - name: Compile installer
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $iscc = Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'
-          if (-not (Test-Path -LiteralPath $iscc)) {
-            throw "ISCC.exe introuvable : $iscc"
+          if (-not $env:INNO_SETUP_COMPILER -or -not (Test-Path -LiteralPath $env:INNO_SETUP_COMPILER)) {
+            throw "Variable INNO_SETUP_COMPILER absente ou invalide."
           }
-          & $iscc 'installer\IMC-Clarodaro.iss'
+          & $env:INNO_SETUP_COMPILER 'installer\IMC-Clarodoro.iss'
           if ($LASTEXITCODE -ne 0) {
             throw "Compilation Inno Setup échouée (code $LASTEXITCODE)."
           }
@@ -37,6 +72,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $artifact)) {
             throw "Installateur absent : $artifact"
           }
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
