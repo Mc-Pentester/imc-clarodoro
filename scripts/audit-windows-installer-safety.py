@@ -48,5 +48,9 @@ require("IMC_CLARODARO_ENV_FILE" in env_loader,
 require("Prepare-Bundled-Runtimes.ps1" in workflow,
         "runtime payload preparation missing")
 require("1.1.0" in workflow, "installer artifact version mismatch")
+require("Smoke test clean install" in workflow and "Réinstallation sans désinstallation" in workflow,
+        "Windows clean-install and in-place-reinstall smoke test missing")
+require("installer_upgrade_sentinel" in workflow and "PG_VERSION" in workflow,
+        "Windows smoke test does not verify PostgreSQL data preservation")
 
 print("WINDOWS INSTALLER DATA AND SERVICE SAFETY: PASS")
