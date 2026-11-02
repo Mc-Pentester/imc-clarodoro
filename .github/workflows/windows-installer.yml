@@ -203,6 +203,41 @@ jobs:
           }
           Write-Host 'INSTALL / POSTGRESQL / PHP / MIGRATIONS / UNINSTALL DATA PRESERVATION: PASS'
 
+      - name: Show Windows installer diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:ProgramData 'IMC-Clarodaro'
+          Get-Service -Name 'IMC-Clarodaro-PostgreSQL' -ErrorAction SilentlyContinue | Format-List *
+          Get-CimInstance Win32_Service -Filter "Name='IMC-Clarodaro-PostgreSQL'" -ErrorAction SilentlyContinue | Format-List *
+          foreach ($path in @(
+            (Join-Path $root 'logs\\installer-services.log'),
+            (Join-Path $root 'logs\\php-server.log'),
+            (Join-Path $root 'PostgreSQL\\data\\log')
+          )) {
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+              Write-Host "=== $path ==="
+              Get-Content -LiteralPath $path -Tail 250
+            }
+            elseif (Test-Path -LiteralPath $path -PathType Container) {
+              Get-ChildItem -LiteralPath $path -File | ForEach-Object {
+                Write-Host "=== $($_.FullName) ==="
+                Get-Content -LiteralPath $_.FullName -Tail 250
+              }
+            }
+          }
+
+      - name: Upload Windows installer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-diagnostics
+          path: |
+            C:\\ProgramData\\IMC-Clarodaro\\logs\\*.log
+            C:\\ProgramData\\IMC-Clarodaro\\PostgreSQL\\data\\log\\*
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
