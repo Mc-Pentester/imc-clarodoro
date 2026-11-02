@@ -12,6 +12,7 @@ launcher = read("installer/Start-Clarodaro-Server.ps1")
 cleanup = read("installer/Remove-Windows-Services.ps1")
 iss = read("installer/IMC-Clarodoro.iss")
 env_loader = read("config/env.php")
+pdg_setup = read("installer/Initialize-PDG-Account.ps1")
 workflow = read(".github/workflows/windows-installer.yml")
 
 require("IMC-Clarodaro-PostgreSQL" in configure, "dedicated PostgreSQL service name missing")
@@ -35,6 +36,12 @@ require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup,
         "owned task/service cleanup missing")
 require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
         "uninstall must preserve ProgramData database and config")
+require("Initialize-PDG-Account.ps1" in iss and "createpdg" in iss and "skipifsilent" in iss,
+        "optional first-PDG setup task missing")
+require("LOWER(u.username)" in pdg_setup and "r.name" in pdg_setup and "bootstrap-auth.php" in pdg_setup,
+        "first-PDG script must check existing account before bootstrap")
+require("Read-Host" in pdg_setup and "IMC_BOOTSTRAP_PASSWORD" in pdg_setup,
+        "first-PDG script must prompt securely and pass password only to CLI")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
 require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
