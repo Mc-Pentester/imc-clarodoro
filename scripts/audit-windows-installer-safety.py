@@ -32,6 +32,10 @@ require("CREATE TABLE schema_migrations" in fresh_flow,
         "fresh database migration baseline missing")
 require("hasProtectedConfig" in configure and "hasLegacyConfig" in configure,
         "existing configuration preservation guards missing")
+require("Set-PrivateAcl $legacyEnvironmentFile" in configure and "Permissions: users-modify" not in iss,
+        "installed code and legacy database secrets must not be writable by all local users")
+#
+        "existing configuration preservation guards missing")
 require("0.0.0.0:$HttpPort" in launcher, "PHP startup launcher is not configurable")
 require("IMC_CLARODARO_ENV_FILE" in launcher and "router.php" in launcher,
         "PHP server does not load protected environment or router")
