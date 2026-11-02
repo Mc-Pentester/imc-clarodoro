@@ -25,7 +25,7 @@ require("LOWER(u.username) = 'pdg'" in bootstrap and "r.name = 'PDG'" in bootstr
         "guard must detect both the pdg username and existing PDG role")
 require("strlen($password) < 12" in bootstrap, "bootstrap password minimum must be checked")
 require("$userStmt->rowCount() !== 1" in bootstrap, "creation must require exactly one inserted account")
-require(not re.search(r"ON\\s+CONFLICT[\\s\\S]{0,160}?DO\\s+UPDATE", bootstrap, re.I),
+require(not re.search(r"ON\s+CONFLICT[\s\S]{0,160}?DO\s+UPDATE", bootstrap, re.I),
         "bootstrap must not update existing rows on conflict")
 require("ON CONFLICT (username)" not in bootstrap, "user upsert must not return")
 require("UPDATE users" in recovery and "password_hash = :password_hash" in recovery,
