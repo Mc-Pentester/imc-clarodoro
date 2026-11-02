@@ -164,7 +164,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             if ($LASTEXITCODE -ne 0) { throw 'Création du schéma initial sur la base vierge échouée.' }
             & $psql -h 127.0.0.1 -p $PostgreSqlPort -U imc_clarodaro_app -d imc_clarodoro -v ON_ERROR_STOP=1 -c "CREATE TABLE schema_migrations (filename VARCHAR(255) PRIMARY KEY, checksum CHAR(64) NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW());"
             if ($LASTEXITCODE -ne 0) { throw 'Création de l historique de migrations initial échouée.' }
-            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 
             [System.IO.File]::WriteAllText($adminSecretFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
             Set-PrivateAcl $adminSecretFile
