@@ -140,6 +140,24 @@ jobs:
             } while ((Get-Date) -lt $httpDeadline)
             if (-not $httpReady) { throw 'Le serveur PHP ne répond pas sur le port 8080.' }
 
+            $blockedHttpPaths = @(
+              '/.env',
+              '/runtime/php/php.ini',
+              '/runtime/php/php.exe',
+              '/runtime/postgresql/bin/postgres.exe',
+              '/installer/Configure-Windows-Services.ps1',
+              '/database/schema.sql',
+              '/Scripts/RESET-PDG-PASSWORD.php',
+              '/backups/',
+              '/router.php'
+            )
+            foreach ($blockedPath in $blockedHttpPaths) {
+              $response = Invoke-WebRequest -Uri ("http://127.0.0.1:8080" + $blockedPath) -SkipHttpErrorCheck -TimeoutSec 10
+              if ($response.StatusCode -ne 404) {
+                throw "Le routeur expose un fichier ou dossier interne : $blockedPath (HTTP $($response.StatusCode))."
+              }
+            }
+
             $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
             if (-not $task) { throw 'La tâche de démarrage PHP est absente.' }
             if ([string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') { throw 'PHP ne fonctionne pas sous un compte de service restreint.' }
