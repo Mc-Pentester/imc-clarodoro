@@ -75,7 +75,7 @@ begin
         ewWaitUntilTerminated,
         ResultCode
       ) then
-        RaiseException('Impossible de préparer l’arrêt des services avant la mise à jour.');
+        RaiseException('Impossible de préparer l arret des services avant la mise à jour.');
       if ResultCode <> 0 then
         RaiseException('Arrêt sécurisé des services impossible. Mise à jour annulée avant remplacement des fichiers.');
     end;
