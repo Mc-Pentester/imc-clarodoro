@@ -44,6 +44,7 @@ Source: "payload\vc_redist.x64.exe"; DestDir: "{app}\runtime"; Flags: ignorevers
 Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Remove-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "Prepare-Upgrade.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -59,6 +60,27 @@ var
   Parameters: String;
   PowerShellPath: String;
 begin
+  if CurStep = ssInstall then
+  begin
+    if FileExists(ExpandConstant('{app}\installer\Prepare-Upgrade.ps1')) then
+    begin
+      Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+        ExpandConstant('{app}\installer\Prepare-Upgrade.ps1') +
+        '" -AppRoot "' + ExpandConstant('{app}') + '"';
+      if not Exec(
+        ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+        Parameters,
+        ExpandConstant('{app}'),
+        SW_HIDE,
+        ewWaitUntilTerminated,
+        ResultCode
+      ) then
+        RaiseException('Impossible de préparer l’arrêt des services avant la mise à jour.');
+      if ResultCode <> 0 then
+        RaiseException('Arrêt sécurisé des services impossible. Mise à jour annulée avant remplacement des fichiers.');
+    end;
+  end;
+
   if CurStep = ssPostInstall then
   begin
     if not Exec(
