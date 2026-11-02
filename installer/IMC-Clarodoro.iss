@@ -43,6 +43,7 @@ Source: "payload\runtime-manifest.json"; DestDir: "{app}\runtime"; Flags: ignore
 Source: "payload\vc_redist.x64.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "Remove-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -93,6 +94,30 @@ begin
         'La configuration des services Clarodaro a échoué. Consultez le journal : ' +
         ExpandConstant('{commonappdata}\IMC-Clarodaro\logs\installer-services.log')
       );
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  ResultCode: Integer;
+  Parameters: String;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+      ExpandConstant('{app}\installer\Remove-Windows-Services.ps1') +
+      '" -AppRoot "' + ExpandConstant('{app}') + '"';
+    if not Exec(
+      ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      Parameters,
+      ExpandConstant('{app}'),
+      SW_HIDE,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) then
+      RaiseException('Impossible de lancer le nettoyage des services Clarodaro.');
+    if ResultCode <> 0 then
+      RaiseException('Le nettoyage des services Clarodaro a échoué. Les données ProgramData sont conservées.');
   end;
 end;
 
