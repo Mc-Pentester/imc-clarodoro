@@ -10,7 +10,7 @@ def require(condition, message):
 configure = read("installer/Configure-Windows-Services.ps1")
 launcher = read("installer/Start-Clarodaro-Server.ps1")
 cleanup = read("installer/Remove-Windows-Services.ps1")
-iss = read("installer/IMC-Clarodaro.iss")
+iss = read("installer/IMC-Clarodoro.iss")
 env_loader = read("config/env.php")
 workflow = read(".github/workflows/windows-installer.yml")
 
