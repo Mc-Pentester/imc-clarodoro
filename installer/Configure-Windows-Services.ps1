@@ -155,6 +155,17 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
                 Remove-Item -LiteralPath $databaseSetupFile -Force -ErrorAction SilentlyContinue
             }
 
+            [System.IO.File]::WriteAllText($provisioningMarker, 'Initial schema and migration setup not yet confirmed.', [System.Text.UTF8Encoding]::new($false))
+            Set-PrivateAcl $provisioningMarker
+            $schemaFile = Join-Path $AppRoot 'database\schema.sql'
+            if (-not (Test-Path -LiteralPath $schemaFile -PathType Leaf)) { throw 'Le schéma de base database/schema.sql est absent.' }
+            $env:PGPASSWORD = $appPassword
+            & $psql -h 127.0.0.1 -p $PostgreSqlPort -U imc_clarodaro_app -d imc_clarodoro -v ON_ERROR_STOP=1 -f $schemaFile
+            if ($LASTEXITCODE -ne 0) { throw 'Création du schéma initial sur la base vierge échouée.' }
+            & $psql -h 127.0.0.1 -p $PostgreSqlPort -U imc_clarodaro_app -d imc_clarodoro -v ON_ERROR_STOP=1 -c "CREATE TABLE schema_migrations (filename VARCHAR(255) PRIMARY KEY, checksum CHAR(64) NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW());"
+            if ($LASTEXITCODE -ne 0) { throw 'Création de l historique de migrations initial échouée.' }
+            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+
             [System.IO.File]::WriteAllText($adminSecretFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
             Set-PrivateAcl $adminSecretFile
             $envContents = @(
@@ -173,8 +184,6 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
         }
 
         Write-Step 'Base vierge créée. Vérification et application des migrations officielles sur cette nouvelle base uniquement.'
-        [System.IO.File]::WriteAllText($provisioningMarker, 'Initial migration not yet confirmed.', [System.Text.UTF8Encoding]::new($false))
-        Set-PrivateAcl $provisioningMarker
         $env:IMC_CLARODARO_ENV_FILE = $environmentFile
         Push-Location $AppRoot
         try {
