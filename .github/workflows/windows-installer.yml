@@ -82,18 +82,19 @@ jobs:
             throw "Installateur absent : $artifact"
           }
 
-      - name: Smoke test clean install, PHP/PostgreSQL startup and data-preserving uninstall
+      - name: Smoke test clean install, in-place reinstall, PHP/PostgreSQL startup and data-preserving uninstall
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $installer = (Resolve-Path 'dist\IMC-Clarodaro-Setup-1.1.0.exe').Path
-          $installDir = Join-Path $env:ProgramFiles 'IMC-Clarodaro'
+          $installDir = Join-Path $env:ProgramFiles 'IMC-Clarodaro Test é'
           $dataDir = Join-Path $env:ProgramData 'IMC-Clarodaro\PostgreSQL\data'
           $configFile = Join-Path $env:ProgramData 'IMC-Clarodaro\config\.env'
           $serviceName = 'IMC-Clarodaro-PostgreSQL'
           $taskName = 'IMC-Clarodaro-PHP-Server'
 
-          $install = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-') -Wait -PassThru
+          $installArgs = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="' + $installDir + '"'))
+          $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
           if ($install.ExitCode -ne 0) {
             throw "Installation silencieuse échouée : code $($install.ExitCode)"
           }
@@ -139,8 +140,42 @@ jobs:
 
             $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
             if (-not $task) { throw 'La tâche de démarrage PHP est absente.' }
+
+            # Create a database sentinel, then reinstall over the same directory.
+            $dbValues = @{}
+            foreach ($line in Get-Content -LiteralPath $configFile) {
+              $separator = $line.IndexOf('=')
+              if ($separator -gt 0) { $dbValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
+            }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $psql = Join-Path $installDir 'runtime\\postgresql\\bin\\psql.exe'
+            & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -v ON_ERROR_STOP=1 -c "CREATE TABLE public.installer_upgrade_sentinel (id integer PRIMARY KEY, marker text NOT NULL); INSERT INTO public.installer_upgrade_sentinel VALUES (1, 'preserve-me');"
+            if ($LASTEXITCODE -ne 0) { throw 'Impossible de créer le témoin de conservation en base.' }
+            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+
+            $upgrade = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+            if ($upgrade.ExitCode -ne 0) { throw "Réinstallation sans désinstallation échouée : code $($upgrade.ExitCode)" }
+
+            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+            if (-not $service -or $service.Status -ne 'Running') { throw 'PostgreSQL ne redémarre pas après réinstallation.' }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $sentinel = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c 'SELECT marker FROM public.installer_upgrade_sentinel WHERE id = 1;'
+            if ($LASTEXITCODE -ne 0 -or ($sentinel -join '').Trim() -ne 'preserve-me') {
+              throw 'La réinstallation a modifié ou perdu les données PostgreSQL existantes.'
+            }
+            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+
+            $httpDeadline = (Get-Date).AddSeconds(45)
+            $httpReady = $false
+            do {
+              $listener = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($listener) { $httpReady = $true; break }
+              Start-Sleep -Seconds 1
+            } while ((Get-Date) -lt $httpDeadline)
+            if (-not $httpReady) { throw 'Le serveur PHP ne redémarre pas après réinstallation.' }
           }
           finally {
+            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
             $uninstaller = Join-Path $installDir 'unins000.exe'
             if (Test-Path -LiteralPath $uninstaller) {
               $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
