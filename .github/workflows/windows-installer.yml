@@ -219,14 +219,14 @@ jobs:
             if ($LASTEXITCODE -ne 0 -or ($sentinel -join '').Trim() -ne 'preserve-me') {
               throw 'Les données PostgreSQL conservées ne sont pas accessibles après réinstallation.'
             }
-            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
             $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
             if (-not $task -or [string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') {
               throw 'La tâche PHP LocalService n a pas été restaurée.'
             }
           }
           finally {
-            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
             $uninstaller = Join-Path $installDir 'unins000.exe'
             if (Test-Path -LiteralPath $uninstaller) {
               $finalUninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
