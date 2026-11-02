@@ -1,0 +1,51 @@
+# Préparation de l'installateur Windows — IMC-Clarodaro
+
+## État de départ vérifié
+
+- L'application est une application PHP avec PostgreSQL ; le dépôt ne contient pas encore de véritable installateur Windows ni de workflow de packaging dédié.
+- Le chargement de `.env` est déjà relatif à la racine du projet dans `config/env.php`. Les variables du processus restent prioritaires.
+- La connexion PostgreSQL est centralisée dans `config/database.php`.
+- Le schéma de référence utilise les tables `users`, `roles` et `role_permissions`. La table `users` impose un nom d'utilisateur unique, un hash de mot de passe et une référence de rôle.
+- La procédure actuelle de récupération du compte PDG est une réinitialisation locale CLI : `Scripts/RESET-PDG-PASSWORD.php`. L'endpoint HTTP `api/auth/reset-pdg-password.php` renvoie volontairement HTTP 410. La page `reinitialiser-mot-de-passe.html` explique cette procédure. Ces éléments doivent rester inchangés.
+
+## Principes non négociables
+
+1. Installation dans un répertoire choisi/détecté, sans chemin de projet codé en dur.
+2. Toutes les commandes doivent fonctionner avec des chemins contenant espaces et caractères accentués.
+3. Les données persistantes et secrets sont séparés des fichiers applicatifs remplaçables.
+4. Une mise à jour ou réparation remplace uniquement les fichiers applicatifs gérés par l'installateur ; elle conserve `.env`, les sauvegardes, les fichiers de données, les comptes, rôles et permissions.
+5. Aucune suppression, recréation, restauration ou initialisation automatique de la base PostgreSQL existante.
+6. Aucun raccourci ou service dupliqué lors d'une réinstallation.
+7. Le compte PDG initial est créé uniquement si aucun compte PDG n'existe. Une installation déjà initialisée ne doit jamais réinitialiser ce compte.
+8. La récupération PDG existante via CLI est conservée sans changement fonctionnel.
+
+## Architecture proposée
+
+- Installateur Windows Inno Setup (à confirmer selon les dépendances de packaging disponibles).
+- Répertoire applicatif versionné, par défaut sous `%ProgramFiles%\IMC-Clarodaro`, avec possibilité de choisir le dossier.
+- Répertoire de données persistant sous `%ProgramData%\IMC-Clarodaro` pour `.env`, journaux et sauvegardes ; les chemins effectifs seront enregistrés dans une configuration runtime hors du répertoire applicatif.
+- PHP et ses extensions PostgreSQL embarqués ou installés dans un emplacement géré par l'application, jamais supposés présents dans `C:\PHP`.
+- Détection PostgreSQL existant et validation de connexion. L'installateur ne doit pas installer/initialiser une instance ni exécuter `database/schema.sql` sur une base existante.
+- Assistant de première initialisation protégé côté serveur, transactionnel et à usage unique : vérifier l'absence de compte PDG, vérifier le rôle PDG existant, créer uniquement le compte initial. En présence d'un PDG, refuser la création et renvoyer vers la connexion.
+- Arrêt/redémarrage contrôlé du seul processus/service applicatif géré par l'installateur ; ne jamais arrêter ou remplacer PostgreSQL.
+
+## Conditions avant implémentation
+
+- Identifier et figer la méthode de lancement locale (serveur PHP intégré ou serveur web Windows) et son mode de démarrage.
+- Définir où sont conservés les fichiers persistants déjà utilisés par les sauvegardes.
+- Vérifier les scripts de sauvegarde/restauration et leur dépendance au chemin du projet avant de déplacer les données.
+- Ajouter des tests automatisés pour première initialisation, PDG déjà existant, réinstallation, chemin avec espaces/accents, et non-altération des rôles/permissions/données.
+- Construire et tester le paquet sur un runner Windows avant publication.
+
+## Tests de non-régression obligatoires
+
+- Installation neuve : l'assistant de création PDG apparaît si et seulement si aucun PDG n'existe.
+- Deux soumissions simultanées : un seul compte initial peut être créé.
+- Réinstallation avec compte PDG : aucune modification de son identifiant, hash, rôle ou statut.
+- Mise à jour : conservation octet pour octet du `.env` et des sauvegardes.
+- Base existante : aucune instruction destructive ou réinitialisation du schéma.
+- Récupération : le script CLI existant et l'endpoint HTTP désactivé gardent exactement leur comportement.
+- Installation et mise à jour depuis un chemin tel que `C:\Applications\École IMC\Clarodaro`.
+- Un seul raccourci et une seule entrée de démarrage après plusieurs réinstallations.
+
+Ce document est une spécification de travail, pas la déclaration qu'un installateur est déjà disponible.
