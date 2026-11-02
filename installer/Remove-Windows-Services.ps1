@@ -28,6 +28,13 @@ if ($task) {
         throw "La tâche $taskName ne correspond pas à cette installation. Elle est conservée."
     }
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    $taskStopDeadline = (Get-Date).AddSeconds(20)
+    while ((Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1) -and (Get-Date) -lt $taskStopDeadline) {
+        Start-Sleep -Seconds 1
+    }
+    if (Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1) {
+        throw 'Le serveur PHP n’a pas libéré le port 8080. Désinstallation interrompue pour éviter un processus orphelin.'
+    }
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
 }
 
