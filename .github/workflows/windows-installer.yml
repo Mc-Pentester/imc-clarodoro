@@ -86,6 +86,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: IMC-Clarodaro-Windows-Installer
-          path: dist/IMC-Clarodaro-Setup-1.0.0.exe
+          path: dist/IMC-Clarodaro-Setup-1.1.0.exe
           if-no-files-found: error
           retention-days: 14
