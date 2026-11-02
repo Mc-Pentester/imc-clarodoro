@@ -20,6 +20,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download and verify bundled PHP and PostgreSQL runtimes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\\installer\\Prepare-Bundled-Runtimes.ps1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Préparation des runtimes embarqués échouée (code $LASTEXITCODE)."
+          }
+
       - name: Install or locate Inno Setup
         shell: pwsh
         run: |
