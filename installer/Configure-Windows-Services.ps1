@@ -163,7 +163,8 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             Set-PrivateAcl $environmentFile
             & icacls.exe $environmentFile /grant '*S-1-5-19:R' | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture au fichier .env du service PHP.' }
-        $passwordFile = Join-Path $configRoot 'postgres-init-password.tmp'
+        $tempDirectory = if ($env:TEMP) { $env:TEMP } else { [System.IO.Path]::GetTempPath() }
+            $passwordFile = Join-Path $tempDirectory ('clarodaro-postgres-init-' + [guid]::NewGuid().ToString('N') + '.tmp')
         [System.IO.File]::WriteAllText($passwordFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
         Set-PrivateAcl $passwordFile
 
