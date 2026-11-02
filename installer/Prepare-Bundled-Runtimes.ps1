@@ -9,6 +9,7 @@ $payloadRoot = Join-Path $PSScriptRoot 'payload'
 $tempRoot = Join-Path $env:RUNNER_TEMP 'clarodaro-runtime'
 $phpZip = Join-Path $tempRoot 'php-8.4.27-nts-x64.zip'
 $postgresZip = Join-Path $tempRoot 'postgresql-18.6-5-windows-x64-binaries.zip'
+$vcRedist = Join-Path $tempRoot 'vc_redist.x64.exe'
 $phpExtract = Join-Path $tempRoot 'php-extracted'
 $postgresExtract = Join-Path $tempRoot 'postgres-extracted'
 
@@ -16,6 +17,7 @@ $phpUrl = 'https://downloads.php.net/~windows/releases/archives/php-8.4.27-1-nts
 $phpSha256 = 'dbae154a0a89791f36c3d48e68bae797878333e7d6cb5721e74617de59b63ab7'
 $postgresUrl = 'https://get.enterprisedb.com/postgresql/postgresql-18.6-5-windows-x64-binaries.zip'
 $postgresSha256 = 'e2246ba91d22345bc3d017586c09ede52d9df180b1eeb480f050445f1cad84e2'
+$vcRedistUrl = 'https://aka.ms/vs/17/release/vc_redist.x64.exe'
 
 if (Test-Path -LiteralPath $tempRoot) {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force
@@ -40,6 +42,14 @@ $actualPostgresHash = (Get-FileHash -LiteralPath $postgresZip -Algorithm SHA256)
 if ($actualPostgresHash -ne $postgresSha256) {
     throw "SHA-256 PostgreSQL invalide. Attendu=$postgresSha256 Obtenu=$actualPostgresHash"
 }
+
+Write-Host 'Téléchargement du redistribuable Microsoft Visual C++ x64...'
+Invoke-WebRequest -Uri $vcRedistUrl -OutFile $vcRedist
+$vcSignature = Get-AuthenticodeSignature -FilePath $vcRedist
+if ($vcSignature.Status -ne 'Valid' -or $vcSignature.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {
+    throw 'Signature Authenticode du redistribuable Microsoft Visual C++ invalide.'
+}
+Copy-Item -LiteralPath $vcRedist -Destination (Join-Path $payloadRoot 'vc_redist.x64.exe') -Force
 
 Expand-Archive -LiteralPath $phpZip -DestinationPath $phpExtract -Force
 Expand-Archive -LiteralPath $postgresZip -DestinationPath $postgresExtract -Force
@@ -117,6 +127,11 @@ $manifest = [ordered]@{
         source = $phpUrl
         sha256 = $phpSha256
         modules = @('PDO', 'pdo_pgsql', 'pgsql', 'curl', 'fileinfo', 'mbstring', 'openssl', 'zip')
+    }
+    visualCpp = [ordered]@{
+        package = 'vc_redist.x64.exe'
+        source = $vcRedistUrl
+        signature = 'Authenticode valid; Microsoft Corporation'
     }
     postgresql = [ordered]@{
         version = '18.6'
