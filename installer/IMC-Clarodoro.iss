@@ -61,7 +61,7 @@ begin
   if CurStep = ssPostInstall then
   begin
     if not Exec(
-      ExpandConstant('{app}\\runtime\\vc_redist.x64.exe'),
+      ExpandConstant('{app}\runtime\vc_redist.x64.exe'),
       '/install /quiet /norestart',
       '',
       SW_HIDE,
@@ -73,9 +73,9 @@ begin
     if (ResultCode <> 0) and (ResultCode <> 1638) and (ResultCode <> 3010) then
       RaiseException('Installation du runtime Microsoft Visual C++ échouée. Code : ' + IntToStr(ResultCode));
 
-    PowerShellPath := ExpandConstant('{sys}\\WindowsPowerShell\\v1.0\\powershell.exe');
+    PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
     Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
-      ExpandConstant('{app}\\installer\\Configure-Windows-Services.ps1') +
+      ExpandConstant('{app}\installer\Configure-Windows-Services.ps1') +
       '" -AppRoot "' + ExpandConstant('{app}') + '"';
 
     if not Exec(
@@ -91,14 +91,12 @@ begin
     if ResultCode <> 0 then
       RaiseException(
         'La configuration des services Clarodaro a échoué. Consultez le journal : ' +
-        ExpandConstant('{commonappdata}\\IMC-Clarodaro\\logs\\installer-services.log')
+        ExpandConstant('{commonappdata}\IMC-Clarodaro\logs\installer-services.log')
       );
   end;
 end;
 
 [Run]
-Filename: "{app}\runtime\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installation du runtime Microsoft Visual C++..."; Flags: waituntilterminated runhidden
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Configure-Windows-Services.ps1"" -AppRoot ""{app}"""; StatusMsg: "Configuration sécurisée des services PostgreSQL et PHP..."; Flags: runhidden waituntilterminated
 Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; Description: "Ouvrir IMC-Clarodaro"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
