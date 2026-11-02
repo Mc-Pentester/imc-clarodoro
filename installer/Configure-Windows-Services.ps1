@@ -197,9 +197,10 @@ else {
 # when that protected configuration was created by this installer.
 $taskEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } else { '' }
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+$launcher = Join-Path $AppRoot 'installer\\Start-Clarodaro-Server.ps1'
 if ($task) {
     $existingAction = ($task.Actions | ForEach-Object { $_.Execute + ' ' + $_.Arguments }) -join ' '
-    if ($existingAction -notlike "*Start-Clarodaro-Server.ps1*") {
+    if ($existingAction -notlike "*$launcher*") {
         throw "La tâche planifiée $taskName existe déjà mais n'appartient pas à Clarodaro. Aucun remplacement effectué."
     }
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
