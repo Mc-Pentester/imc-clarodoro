@@ -24,7 +24,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & .\\installer\\Prepare-Bundled-Runtimes.ps1
+          & .\installer\Prepare-Bundled-Runtimes.ps1
           if ($LASTEXITCODE -ne 0) {
             throw "Préparation des runtimes embarqués échouée (code $LASTEXITCODE)."
           }
