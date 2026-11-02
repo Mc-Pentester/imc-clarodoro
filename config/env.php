@@ -2,11 +2,11 @@
 declare(strict_types=1);
 
 /**
- * IMC-Clarodoro - Local environment loader
+ * IMC-Clarodoro - Local environment loader.
  *
- * Loads variables from the project-root .env file when present.
- * Existing process environment variables take precedence.
- * The .env file must never be committed to the repository.
+ * IMC_CLARODARO_ENV_FILE may point to the protected ProgramData configuration
+ * used by the Windows installer. Without it, the legacy project-root .env
+ * remains the fallback for existing installations and development.
  */
 
 function loadLocalEnvironment(): void
@@ -18,7 +18,10 @@ function loadLocalEnvironment(): void
     }
 
     $loaded = true;
-    $envFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
+    $configuredPath = getenv('IMC_CLARODARO_ENV_FILE');
+    $envFile = is_string($configuredPath) && trim($configuredPath) !== ''
+        ? trim($configuredPath)
+        : dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
 
     if (!is_file($envFile) || !is_readable($envFile)) {
         return;
@@ -54,8 +57,7 @@ function loadLocalEnvironment(): void
             continue;
         }
 
-        // Process environment variables explicitly supplied by the host
-        // (for example PowerShell/CI) always take precedence over .env.
+        // Explicit process variables take precedence over the file.
         if (getenv($name) !== false) {
             continue;
         }
