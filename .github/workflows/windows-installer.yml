@@ -121,8 +121,8 @@ jobs:
             $env:IMC_CLARODARO_ENV_FILE = $configFile
             Push-Location $installDir
             try {
-              & $php 'database\migrate.php' '--status'
-              if ($LASTEXITCODE -ne 0) { throw 'Le statut des migrations de la nouvelle base est en erreur.' }
+              $migrationStatus = & $php 'database\migrate.php' '--status' 2>&1
+              if ($LASTEXITCODE -ne 0 -or ($migrationStatus -match 'PENDING|DRIFT|MISSING')) { throw 'La base neuve ne possède pas un historique de migrations complet et cohérent.' }
             }
             finally {
               Pop-Location
@@ -148,10 +148,10 @@ jobs:
               if ($separator -gt 0) { $dbValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
             }
             $env:PGPASSWORD = $dbValues['DB_PASSWORD']
-            $psql = Join-Path $installDir 'runtime\\postgresql\\bin\\psql.exe'
+            $psql = Join-Path $installDir 'runtime\postgresql\bin\psql.exe'
             & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -v ON_ERROR_STOP=1 -c "CREATE TABLE public.installer_upgrade_sentinel (id integer PRIMARY KEY, marker text NOT NULL); INSERT INTO public.installer_upgrade_sentinel VALUES (1, 'preserve-me');"
             if ($LASTEXITCODE -ne 0) { throw 'Impossible de créer le témoin de conservation en base.' }
-            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 
             $upgrade = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
             if ($upgrade.ExitCode -ne 0) { throw "Réinstallation sans désinstallation échouée : code $($upgrade.ExitCode)" }
@@ -163,7 +163,7 @@ jobs:
             if ($LASTEXITCODE -ne 0 -or ($sentinel -join '').Trim() -ne 'preserve-me') {
               throw 'La réinstallation a modifié ou perdu les données PostgreSQL existantes.'
             }
-            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 
             $httpDeadline = (Get-Date).AddSeconds(45)
             $httpReady = $false
@@ -175,7 +175,7 @@ jobs:
             if (-not $httpReady) { throw 'Le serveur PHP ne redémarre pas après réinstallation.' }
           }
           finally {
-            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
             $uninstaller = Join-Path $installDir 'unins000.exe'
             if (Test-Path -LiteralPath $uninstaller) {
               $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
