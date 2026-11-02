@@ -75,6 +75,9 @@ jobs:
       - name: Audit PDG bootstrap first-run safety
         run: python3 scripts/audit-bootstrap-auth-safety.py
 
+      - name: Audit Windows installer service and data safety
+        run: python3 scripts/audit-windows-installer-safety.py
+
       - name: Audit HTML pages and JavaScript
         run: |
           set -euo pipefail
