@@ -206,7 +206,43 @@ jobs:
           if (Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue) {
             throw 'Le service PostgreSQL Clarodaro est resté enregistré après désinstallation.'
           }
-          Write-Host 'INSTALL / POSTGRESQL / PHP / MIGRATIONS / UNINSTALL DATA PRESERVATION: PASS'
+          # Reinstall after a full uninstall: restore the owned service around the preserved cluster.
+          $restore = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          if ($restore.ExitCode -ne 0) { throw "Réinstallation après désinstallation échouée : code $($restore.ExitCode)" }
+          try {
+            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+            if (-not $service -or $service.Status -ne 'Running') { throw 'Le service PostgreSQL conservé n a pas été réenregistré.' }
+            $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+            if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'Compte PostgreSQL incorrect après réinstallation.' }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $sentinel = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c 'SELECT marker FROM public.installer_upgrade_sentinel WHERE id = 1;'
+            if ($LASTEXITCODE -ne 0 -or ($sentinel -join '').Trim() -ne 'preserve-me') {
+              throw 'Les données PostgreSQL conservées ne sont pas accessibles après réinstallation.'
+            }
+            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+            $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            if (-not $task -or [string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') {
+              throw 'La tâche PHP LocalService n a pas été restaurée.'
+            }
+          }
+          finally {
+            Remove-Item Env:\\PGPASSWORD -ErrorAction SilentlyContinue
+            $uninstaller = Join-Path $installDir 'unins000.exe'
+            if (Test-Path -LiteralPath $uninstaller) {
+              $finalUninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+              if ($finalUninstall.ExitCode -ne 0) { throw "Désinstallation finale échouée : code $($finalUninstall.ExitCode)" }
+            }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION')) -or -not (Test-Path -LiteralPath $configFile)) {
+            throw 'Les données ProgramData n ont pas survécu à la seconde désinstallation.'
+          }
+          if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+            throw 'La tâche PHP est restée après la seconde désinstallation.'
+          }
+          if (Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue) {
+            throw 'Le service PostgreSQL est resté après la seconde désinstallation.'
+          }
+          Write-Host 'INSTALL / REINSTALL / UNINSTALL / RESTORE EXISTING CLUSTER / DATA PRESERVATION: PASS'
 
       - name: Show Windows installer diagnostics
         if: always()
