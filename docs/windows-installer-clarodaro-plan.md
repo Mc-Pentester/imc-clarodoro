@@ -62,3 +62,20 @@ Ce document est une spécification de travail, pas la déclaration qu'un install
 ### Décision de conception à appliquer
 
 La création initiale doit être un endpoint distinct, transactionnel et à usage unique. Il devra verrouiller la vérification d'absence de PDG, vérifier que le rôle `PDG` existe déjà, insérer un seul utilisateur et ne modifier aucune permission, aucun rôle ni compte existant. La migration du nom complet sera additive et ne changera aucune donnée existante. Le script de récupération PDG ne sera pas modifié.
+
+
+## Réduction du risque de `bootstrap-auth.php` (implémentée sur la branche de travail)
+
+Le bootstrap est désormais explicitement limité à la première initialisation :
+
+- verrou PostgreSQL transactionnel consultatif pour sérialiser deux lancements simultanés ;
+- validation de `IMC_BOOTSTRAP_PASSWORD` avant les écritures ;
+- contrôle préalable : arrêt si le nom `pdg` est déjà utilisé ou si un utilisateur possède déjà le rôle `PDG` ;
+- arrêt effectué avant toute modification des tables RBAC ;
+- suppression des `DO UPDATE` sur les permissions et le compte utilisateur : les conflits ne réécrivent plus les données existantes ;
+- contrôle qu'une seule ligne de compte PDG a effectivement été créée ;
+- toute erreur déclenche le rollback de la transaction.
+
+**Règle pour l'installateur :** ne jamais exécuter `bootstrap-auth.php` lors d'une réinstallation ou d'une mise à jour. Il reste un outil manuel de première initialisation. La création guidée du premier compte sera un mécanisme séparé.
+
+**Limite de validation actuelle :** le changement a été vérifié statiquement sur le code GitHub ; il reste à faire passer le contrôle syntaxique CI et à réaliser un test PostgreSQL contrôlé (première exécution, deuxième exécution refusée, et vérification que le hash du PDG existant reste identique). Aucun test n'a été exécuté contre une base réelle dans le cadre de ce commit.
