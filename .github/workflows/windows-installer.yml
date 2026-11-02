@@ -1,0 +1,46 @@
+name: Windows installer package
+
+on:
+  push:
+    branches:
+      - feature/windows-installer-clarodaro
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-installer:
+    name: Build Inno Setup installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $iscc = Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            throw "ISCC.exe introuvable : $iscc"
+          }
+          & $iscc 'installer\IMC-Clarodaro.iss'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Compilation Inno Setup échouée (code $LASTEXITCODE)."
+          }
+          $artifact = 'dist\IMC-Clarodaro-Setup-1.0.0.exe'
+          if (-not (Test-Path -LiteralPath $artifact)) {
+            throw "Installateur absent : $artifact"
+          }
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMC-Clarodaro-Windows-Installer
+          path: dist/IMC-Clarodaro-Setup-1.0.0.exe
+          if-no-files-found: error
+          retention-days: 14
