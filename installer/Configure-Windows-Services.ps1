@@ -256,6 +256,33 @@ elseif ($service) {
         Start-Service -Name $serviceName
     }
 }
+elseif ($hasProtectedConfig -and $managedLocalDatabase) {
+    if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory 'PG_VERSION') -PathType Leaf)) {
+        throw 'Le cluster PostgreSQL local configuré est absent. Aucune réinitialisation automatique ne sera effectuée.'
+    }
+    if (-not (Test-PortAvailable $PostgreSqlPort)) {
+        throw "Le port PostgreSQL $PostgreSqlPort est déjà utilisé."
+    }
+    Write-Step 'Réenregistrement du service PostgreSQL pour le cluster ProgramData conservé.'
+    & icacls.exe $dataRoot /grant '*S-1-5-20:(X)' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'ACL du chemin PostgreSQL impossible.' }
+    & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'ACL du cluster PostgreSQL impossible.' }
+    & $pgCtl register -N $serviceName -D $dataDirectory -S auto -U $postgresServiceAccount
+    if ($LASTEXITCODE -ne 0) { throw "Réenregistrement PostgreSQL échoué : $LASTEXITCODE" }
+    $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
+    if ([string]$service.PathName -notlike "*$pgCtl*" -or [string]$service.PathName -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
+        throw 'Le service PostgreSQL réenregistré ne correspond pas à cette installation.'
+    }
+    Start-Service -Name $serviceName
+    $deadline = (Get-Date).AddSeconds(60)
+    do {
+        Start-Sleep -Seconds 2
+        & $pgIsReady -h 127.0.0.1 -p $PostgreSqlPort
+        $ready = ($LASTEXITCODE -eq 0)
+    } while (-not $ready -and (Get-Date) -lt $deadline)
+    if (-not $ready) { throw 'Le cluster PostgreSQL conservé ne répond pas.' }
+}
 else {
     Write-Step 'Configuration de base existante détectée. PostgreSQL externe ou historique conservé ; aucune instance ni base ne sera créée.'
 }
