@@ -49,7 +49,7 @@ $phpExe = Get-ChildItem -LiteralPath $phpExtract -Filter 'php.exe' -File -Recurs
 if (-not $phpExe) {
     throw 'php.exe absent de l’archive PHP officielle.'
 }
-Copy-Item -LiteralPath (Join-Path $phpExe.Directory.FullName '*') -Destination (Join-Path $payloadRoot 'php') -Recurse -Force
+Get-ChildItem -LiteralPath $phpExe.Directory.FullName -Force | Copy-Item -Destination (Join-Path $payloadRoot 'php') -Recurse -Force
 
 $postgresExe = Get-ChildItem -LiteralPath $postgresExtract -Filter 'postgres.exe' -File -Recurse |
     Select-Object -First 1
