@@ -64,7 +64,7 @@ $launcher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($task) {
     $existingAction = ($task.Actions | ForEach-Object { $_.Execute + ' ' + $_.Arguments }) -join ' '
-    if ($existingAction -notlike "*$launcher*" -or [string]$task.Principal.UserId -notmatch "LOCAL SERVICE") {
+    if ($existingAction -notlike "*$launcher*" -or [string]$task.Principal.UserId -notmatch "LOCAL SERVICE|S-1-5-19") {
         throw "La tâche planifiée $taskName existe déjà mais n'appartient pas à Clarodaro. Aucun changement effectué."
     }
 }
@@ -109,7 +109,7 @@ $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAct
 
 if ($service) {
     $serviceCommand = [string]$service.PathName
-    if ($serviceCommand -notlike "*$pgCtl*" -or $serviceCommand -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE") {
+    if ($serviceCommand -notlike "*$pgCtl*" -or $serviceCommand -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
         throw "Le service $serviceName existe mais ne correspond pas à l'instance Clarodaro attendue. Aucun changement effectué."
     }
 }
@@ -181,7 +181,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             & $pgCtl register -N $serviceName -D $dataDirectory -S auto -U $postgresServiceAccount
             if ($LASTEXITCODE -ne 0) { throw "Enregistrement du service PostgreSQL échoué (code $LASTEXITCODE)." }
             $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
-            if ([string]$service.PathName -notlike "*$pgCtl*" -or [string]$service.PathName -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE") {
+            if ([string]$service.PathName -notlike "*$pgCtl*" -or [string]$service.PathName -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
                 throw 'Le service PostgreSQL créé ne correspond pas au runtime et au répertoire attendus.'
             }
             Start-Service -Name $serviceName
