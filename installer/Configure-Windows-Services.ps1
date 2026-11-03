@@ -84,8 +84,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Impossible de configurer les droits de travers
 if ($LASTEXITCODE -ne 0) { throw 'Impossible de configurer les droits de traversee sur le repertoire PostgreSQL.' }
 
 Set-PrivateAcl $logRoot
+$runtimeParent = Join-Path $programDataRoot 'runtime'
+foreach ($runtimeDirectory in @($programDataRoot, $runtimeParent, $postgresRuntimeRoot)) {
+    if (-not (Test-Path -LiteralPath $runtimeDirectory -PathType Container)) {
+        throw "Répertoire runtime PostgreSQL absent : $runtimeDirectory"
+    }
+    & icacls.exe $runtimeDirectory /grant '*S-1-5-20:(X)' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Impossible d'accorder le droit de traversée à NetworkService : $runtimeDirectory" }
+}
 & icacls.exe $postgresRuntimeRoot /grant '*S-1-5-20:(OI)(CI)RX' /T /C | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture au runtime PostgreSQL pour NetworkService.' }
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture/exécution au runtime PostgreSQL pour NetworkService.' }
 & icacls.exe $logRoot /grant '*S-1-5-19:(OI)(CI)M' /T /C | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner accès aux journaux au compte PHP restreint.' }
 Start-Transcript -Path (Join-Path $logRoot 'installer-services.log') -Append | Out-Null
@@ -220,14 +228,14 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
                 $acl = Get-Acl -LiteralPath $dir
                 $hasTraverse = $false
                 foreach ($access in $acl.Access) {
-                    if ($access.IdentityReference.Value -eq 'S-1-5-20' -and $access.FileSystemRights -match 'ExecuteFile|Traverse') {
+                    if ($access.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-20' -and $access.FileSystemRights -match 'ExecuteFile|Traverse') {
                         $hasTraverse = $true
                         break
                     }
                 }
                 if (-not $hasTraverse) {
                     Write-Step "WARNING: NetworkService n'a pas les droits de traversee sur $dir, ajout manuel"
-                    & icacls.exe $dir /grant '*S-1-5-20:(OI)(CI)RX' /T /C | Out-Null
+                    & icacls.exe $dir /grant '*S-1-5-20:(X)' | Out-Null
                 }
             }
 
@@ -388,14 +396,14 @@ elseif ($hasProtectedConfig -and $managedLocalDatabase) {
         $acl = Get-Acl -LiteralPath $dir
         $hasTraverse = $false
         foreach ($access in $acl.Access) {
-            if ($access.IdentityReference.Value -eq 'S-1-5-20' -and $access.FileSystemRights -match 'ExecuteFile|Traverse') {
+            if ($access.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-20' -and $access.FileSystemRights -match 'ExecuteFile|Traverse') {
                 $hasTraverse = $true
                 break
             }
         }
         if (-not $hasTraverse) {
             Write-Step "WARNING: NetworkService n'a pas les droits de traversee sur $dir, ajout manuel"
-            & icacls.exe $dir /grant '*S-1-5-20:(OI)(CI)RX' /T /C | Out-Null
+            & icacls.exe $dir /grant '*S-1-5-20:(X)' | Out-Null
         }
     }
 
