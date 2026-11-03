@@ -41,7 +41,9 @@ if ($task) {
 $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
 if ($service) {
     $serviceCommand = [string]$service.PathName
-    if ($serviceCommand -notlike "*$expectedPgCtl*" -or $serviceCommand -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
+    $legacyPgCtl = Join-Path $AppRoot 'runtime\postgresql\bin\pg_ctl.exe'
+    $knownRuntime = ($serviceCommand -like "*$expectedPgCtl*" -or $serviceCommand -like "*$legacyPgCtl*")
+    if (-not $knownRuntime -or $serviceCommand -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
         throw "Le service $serviceName ne correspond pas à cette installation. Il est conservé."
     }
     if ((Get-Service -Name $serviceName).Status -ne 'Stopped') {
