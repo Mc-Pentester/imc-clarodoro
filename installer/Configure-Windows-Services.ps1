@@ -219,11 +219,20 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
                 New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
             }
 
-            & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'Impossible de proteger les permissions du cluster PostgreSQL.' }
+            # initdb s'exécute sous l'identité élevée de l'installateur (souvent
+            # runneradmin en CI), tandis que le cluster final appartient à NetworkService.
+            # Accorder temporairement l'accès au compte courant, sans élargir les droits
+            # des utilisateurs ordinaires, puis retirer cette ACE après initdb.
+            $installerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+            $installerAce = "*$installerSid"
+            $dataRootInstallerAce = '{0}:(X)' -f $installerAce
+            $dataDirectoryInstallerAce = '{0}:(OI)(CI)F' -f $installerAce
 
-            # Les ACL de traversee ont deja ete appliquees et controlees par le code retour icacls ci-dessus.
-            # Eviter le controle secondaire via les objets ACL PowerShell sur les runners Windows.
+            & icacls.exe $dataRoot /grant $dataRootInstallerAce | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner temporairement au programme d installation accès au chemin PostgreSQL.' }
+
+            & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' $dataDirectoryInstallerAce /T /C | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Impossible de protéger les permissions du cluster PostgreSQL.' }
 
             # Keep both the PostgreSQL executable and its working directory on an ASCII-only path.
             # The application install directory may intentionally contain accented characters.
@@ -234,6 +243,11 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             }
             finally {
                 Pop-Location
+                # Le service ne doit pas dépendre du compte interactif/CI qui a installé l'app.
+                & icacls.exe $dataDirectory /remove:g $installerAce /T /C | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw 'Impossible de retirer les droits temporaires du compte installateur sur le cluster.' }
+                & icacls.exe $dataRoot /remove:g $installerAce | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw 'Impossible de retirer les droits temporaires du compte installateur sur le chemin PostgreSQL.' }
             }
 
             Add-Content -LiteralPath (Join-Path $dataDirectory 'postgresql.conf') -Value @(
