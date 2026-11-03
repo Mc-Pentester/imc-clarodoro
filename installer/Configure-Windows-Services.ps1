@@ -507,6 +507,12 @@ if (Test-PortAvailable $HttpPort) {
     if (Test-Path -LiteralPath $phpLog -PathType Leaf) {
         Get-Content -LiteralPath $phpLog -Tail 100 | ForEach-Object { Write-Step "PHP: $_" }
     }
+    foreach ($phpOutputLog in @((Join-Path $logRoot 'php-server.stdout.log'), (Join-Path $logRoot 'php-server.stderr.log'))) {
+        if (Test-Path -LiteralPath $phpOutputLog -PathType Leaf) {
+            Write-Step "=== $phpOutputLog ==="
+            Get-Content -LiteralPath $phpOutputLog -Tail 100 | ForEach-Object { Write-Step "PHP process: $_" }
+        }
+    }
     throw "Le serveur PHP n'a pas démarré sur le port $HttpPort (LastTaskResult=$($taskInfo.LastTaskResult))."
 }
 
