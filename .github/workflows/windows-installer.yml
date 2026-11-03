@@ -73,7 +73,11 @@ jobs:
           if (-not $env:INNO_SETUP_COMPILER -or -not (Test-Path -LiteralPath $env:INNO_SETUP_COMPILER)) {
             throw "Variable INNO_SETUP_COMPILER absente ou invalide."
           }
-          & $env:INNO_SETUP_COMPILER 'installer\IMC-Clarodaro.iss'
+           $installerScript = 'installer\IMC-Clarodoro.iss'
+          if (-not (Test-Path -LiteralPath $installerScript -PathType Leaf)) {
+            throw "Script Inno Setup introuvable : $installerScript"
+          }
+          & $env:INNO_SETUP_COMPILER $installerScript
           if ($LASTEXITCODE -ne 0) {
             throw "Compilation Inno Setup échouée (code $LASTEXITCODE)."
           }
