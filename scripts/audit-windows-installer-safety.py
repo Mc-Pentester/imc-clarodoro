@@ -22,6 +22,11 @@ require("NETWORK SERVICE" in configure and "LOCAL SERVICE" in configure and "S-1
 require("IMC-Clarodaro-PHP-Server" in configure, "PHP startup task name missing")
 require("55432" in configure and "8080" in configure, "dedicated ports/default HTTP port missing")
 require("Test-PortAvailable" in configure, "port conflict protection missing")
+require("WindowsIdentity]::GetCurrent().User.Value" in configure and "$dataRoot /grant $dataRootInstallerAce" in configure
+        and "$dataDirectory /inheritance:r /grant:r" in configure and "$dataDirectory /remove:g $installerAce" in configure,
+        "initdb must receive temporary access as the installer identity, then remove it before service startup")
+require("listen_addresses = '127.0.0.1'" in configure,
+        "PostgreSQL must remain local-only; LAN clients connect through the PHP application")
 require("PathName" in configure and "Aucun service tiers" in configure,
         "service ownership checks missing")
 require("initial-provisioning-incomplete.marker" in configure,
