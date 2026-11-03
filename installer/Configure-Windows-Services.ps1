@@ -487,10 +487,27 @@ $principal = New-ScheduledTaskPrincipal -UserId $phpTaskAccount -LogonType Servi
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
-$httpDeadline = (Get-Date).AddSeconds(20)
+$httpDeadline = (Get-Date).AddSeconds(35)
 while ((Test-PortAvailable $HttpPort) -and (Get-Date) -lt $httpDeadline) { Start-Sleep -Seconds 1 }
 if (Test-PortAvailable $HttpPort) {
-    throw "Le serveur PHP n'a pas démarré sur le port $HttpPort. Consulter le journal PHP dans ProgramData."
+    $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+    $taskState = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    Write-Step "Échec démarrage PHP : état tâche=$($taskState.State), LastTaskResult=$($taskInfo.LastTaskResult), LastRunTime=$($taskInfo.LastRunTime)"
+    if ($taskState) {
+        foreach ($taskAction in $taskState.Actions) {
+            Write-Step "Action PHP : Execute=$($taskAction.Execute) ; Arguments=$($taskAction.Arguments) ; WorkingDirectory=$($taskAction.WorkingDirectory)"
+        }
+    }
+    $taskEvents = Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational' -MaxEvents 100 -ErrorAction SilentlyContinue |
+        Where-Object { $_.Message -like "*$taskName*" } | Select-Object -First 25
+    foreach ($event in $taskEvents) {
+        Write-Step "TaskScheduler ID=$($event.Id) $($event.TimeCreated): $($event.Message)"
+    }
+    $phpLog = Join-Path $logRoot 'php-server.log'
+    if (Test-Path -LiteralPath $phpLog -PathType Leaf) {
+        Get-Content -LiteralPath $phpLog -Tail 100 | ForEach-Object { Write-Step "PHP: $_" }
+    }
+    throw "Le serveur PHP n'a pas démarré sur le port $HttpPort (LastTaskResult=$($taskInfo.LastTaskResult))."
 }
 
 try {
