@@ -42,8 +42,13 @@ try {
             throw "La tâche $taskName ne correspond pas à cette installation. Elle est conservée."
         }
 
-        Write-RemovalLog 'Arrêt de la tâche PHP Clarodaro.'
-        Stop-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        if ([string]$task.State -eq 'Running') {
+            Write-RemovalLog 'Arrêt de la tâche PHP Clarodaro.'
+            Stop-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        }
+        else {
+            Write-RemovalLog ("La tâche PHP est déjà à l'état " + [string]$task.State + ' ; aucun arrêt forcé nécessaire.')
+        }
         $taskStopDeadline = (Get-Date).AddSeconds(45)
         do {
             $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
