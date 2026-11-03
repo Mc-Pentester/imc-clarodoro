@@ -9,7 +9,7 @@ $programDataRoot = Join-Path $env:ProgramData 'IMC-Clarodaro'
 $dataDirectory = Join-Path $programDataRoot 'PostgreSQL\data'
 $serviceName = 'IMC-Clarodaro-PostgreSQL'
 $taskName = 'IMC-Clarodaro-PHP-Server'
-$expectedPgCtl = Join-Path $AppRoot 'runtime\postgresql\bin\pg_ctl.exe'
+$expectedPgCtl = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\pg_ctl.exe'
 $expectedLauncher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 
 trap {
