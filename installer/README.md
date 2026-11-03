@@ -30,6 +30,7 @@ Les comptes PHP (LocalService) et PostgreSQL (NetworkService) sont distincts et 
 - Un fichier `.env` existant à la racine est conservé et traité comme configuration historique : aucune nouvelle base n'est créée et aucune migration n'est appliquée automatiquement.
 - Une configuration ProgramData déjà présente est conservée sans réécriture.
 - Avant une mise à jour, seuls la tâche PHP et le service PostgreSQL appartenant à cette installation sont arrêtés proprement ; les données restent intactes.
+- Lors du passage depuis le précédent emplacement du runtime PostgreSQL sous `{app}`, le script vérifie strictement le service Clarodaro (exécutable historique, cluster ProgramData et compte NetworkService), le retire puis le réenregistre depuis le runtime ASCII ProgramData. Il ne lance jamais `initdb` ni ne recrée la base pendant cette transition.
 - À la désinstallation, seuls la tâche, le service et la règle pare-feu Clarodaro vérifiés sont retirés. Le dossier ProgramData (base, configuration, secrets et journaux) est conservé, ainsi que les répertoires applicatifs backups, uploads et storage.
 - Lors d'une réinstallation après désinstallation, si le `.env` ProgramData indique la base locale et que `PG_VERSION` existe, le service PostgreSQL est réenregistré sur le cluster conservé. Aucun `initdb`, `schema.sql` ou migration n'est rejoué.
 - Un répertoire de données existant sans configuration cohérente n'est jamais réinitialisé.
