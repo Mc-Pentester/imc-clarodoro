@@ -121,8 +121,32 @@ $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAct
 
 if ($service) {
     $serviceCommand = [string]$service.PathName
-    if ($serviceCommand -notlike "*$pgCtl*" -or $serviceCommand -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
+    $serviceAccountMatches = [string]$service.StartName -match "NETWORK SERVICE|S-1-5-20"
+    $dataPathMatches = $serviceCommand -like "*$dataDirectory*"
+    if (-not $serviceAccountMatches -or -not $dataPathMatches) {
         throw "Le service $serviceName existe mais ne correspond pas à l'instance Clarodaro attendue. Aucun changement effectué."
+    }
+
+    if ($serviceCommand -notlike "*$pgCtl*") {
+        # Migrate only the previous Clarodaro-owned service executable path.
+        # The ProgramData cluster and its credentials are never reinitialized.
+        $legacyPgCtl = Join-Path $AppRoot 'runtime\postgresql\bin\pg_ctl.exe'
+        if ($serviceCommand -notlike "*$legacyPgCtl*") {
+            throw "Le service $serviceName utilise un exécutable PostgreSQL tiers ou inattendu. Aucun changement effectué."
+        }
+        if ((Get-Service -Name $serviceName).Status -ne 'Stopped') {
+            Stop-Service -Name $serviceName -Force
+            (Get-Service -Name $serviceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(60))
+        }
+        & sc.exe delete $serviceName | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Impossible de remplacer l'ancien enregistrement du service $serviceName." }
+        $deleteDeadline = (Get-Date).AddSeconds(20)
+        do {
+            Start-Sleep -Milliseconds 500
+            $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
+        } while ($service -and (Get-Date) -lt $deleteDeadline)
+        if ($service) { throw "L'ancien service $serviceName est toujours en cours de suppression." }
+        $service = $null
     }
 }
 
