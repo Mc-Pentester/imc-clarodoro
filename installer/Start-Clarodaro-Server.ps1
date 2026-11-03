@@ -61,7 +61,7 @@ try {
     }
 
     Write-LauncherLog 'Lancement du serveur PHP intégré sur toutes les interfaces LAN.'
-    & $php -S ("0.0.0.0:{0}" -f $HttpPort) -t $AppRoot $router 2>&1 |
+    & $php -S "0.0.0.0:$HttpPort" -t $AppRoot $router 2>&1 |
         ForEach-Object { Write-LauncherLog ([string]$_) }
     $phpExitCode = $LASTEXITCODE
     Write-LauncherLog ("Le processus PHP s'est terminé avec le code " + $phpExitCode + '.')
