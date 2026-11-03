@@ -111,6 +111,8 @@ jobs:
             }
             $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
             if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'PostgreSQL ne fonctionne pas sous un compte de service restreint.' }
+            $postgresRuntime = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\pg_ctl.exe'
+            if ($serviceInfo.PathName -notlike "*$postgresRuntime*") { throw 'Le service PostgreSQL doit utiliser le runtime ASCII indépendant du dossier applicatif.' }
 
             if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION'))) {
               throw 'Le cluster PostgreSQL initial na pas été créé.'
