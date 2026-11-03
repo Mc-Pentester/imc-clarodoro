@@ -42,7 +42,8 @@ $serviceName = 'IMC-Clarodaro-PostgreSQL'
 $taskName = 'IMC-Clarodaro-PHP-Server'
 $postgresServiceAccount = 'NT AUTHORITY\NETWORK SERVICE'
 $phpTaskAccount = 'NT AUTHORITY\LOCAL SERVICE'
-$pgBin = Join-Path $AppRoot 'runtime\postgresql\bin'
+$postgresRuntimeRoot = Join-Path $programDataRoot 'runtime\postgresql'
+$pgBin = Join-Path $postgresRuntimeRoot 'bin'
 $pgCtl = Join-Path $pgBin 'pg_ctl.exe'
 $initdb = Join-Path $pgBin 'initdb.exe'
 $psql = Join-Path $pgBin 'psql.exe'
@@ -76,6 +77,8 @@ New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out
 & icacls.exe $programDataRoot /grant '*S-1-5-19:(X)' '*S-1-5-20:(X)' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Impossible de configurer les droits de traversée ProgramData.' }
 Set-PrivateAcl $logRoot
+& icacls.exe $postgresRuntimeRoot /grant '*S-1-5-20:(OI)(CI)RX' /T /C | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture au runtime PostgreSQL pour NetworkService.' }
 & icacls.exe $logRoot /grant '*S-1-5-19:(OI)(CI)M' /T /C | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner accès aux journaux au compte PHP restreint.' }
 Start-Transcript -Path (Join-Path $logRoot 'installer-services.log') -Append | Out-Null
