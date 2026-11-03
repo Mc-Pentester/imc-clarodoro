@@ -99,7 +99,7 @@ try {
 
         $serviceStatus = Get-Service -Name $serviceName -ErrorAction Stop
         if ($serviceStatus.Status -ne 'Stopped') {
-            throw 'Le service PostgreSQL n’est pas arrêté ; aucune suppression demandée.'
+            throw "Le service PostgreSQL n'est pas arrêté ; aucune suppression demandée."
         }
 
         Write-RemovalLog 'Demande de suppression du service PostgreSQL Clarodaro.'
