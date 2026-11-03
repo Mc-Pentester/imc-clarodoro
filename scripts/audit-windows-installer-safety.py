@@ -33,7 +33,7 @@ require("bootstrap-auth.php" not in configure and "schema.sql" in fresh_flow and
         "fresh-only schema initialization guard missing")
 require("CREATE TABLE schema_migrations" in fresh_flow,
         "fresh database migration baseline missing")
-require("managedLocalDatabase" in configure and "PG_VERSION" in existing_flow and "Réenregistrement du service" in existing_flow and "pg_ctl register" in existing_flow,
+require("managedLocalDatabase" in configure and "PG_VERSION" in existing_flow and "Réenregistrement du service" in existing_flow and "$pgCtl register" in existing_flow,
         "reinstall must restore the preserved cluster without initdb or schema replay")
 require("hasProtectedConfig" in configure and "hasLegacyConfig" in configure,
         "existing configuration preservation guards missing")
