@@ -198,8 +198,16 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             if (-not (Test-Path -LiteralPath $dataDirectory)) {
                 New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
             }
-            & $initdb -D $dataDirectory -U postgres --locale=C --encoding=UTF8 --auth-local=trust --auth-host=scram-sha-256 --pwfile=$passwordFile
-            if ($LASTEXITCODE -ne 0) { throw "initdb a échoué (code $LASTEXITCODE)." }
+            # Keep both the PostgreSQL executable and its working directory on an ASCII-only path.
+            # The application install directory may intentionally contain accented characters.
+            Push-Location $programDataRoot
+            try {
+                & $initdb -D $dataDirectory -U postgres --locale=C --encoding=UTF8 --auth-local=trust --auth-host=scram-sha-256 --pwfile=$passwordFile
+                if ($LASTEXITCODE -ne 0) { throw "initdb a échoué (code $LASTEXITCODE)." }
+            }
+            finally {
+                Pop-Location
+            }
 
             Add-Content -LiteralPath (Join-Path $dataDirectory 'postgresql.conf') -Value @(
                 '',
