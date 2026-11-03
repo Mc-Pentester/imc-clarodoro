@@ -121,6 +121,21 @@ jobs:
               throw 'La configuration protégée ProgramData est absente.'
             }
 
+            # Test de connexion PostgreSQL avec psql
+            $psql = Join-Path $env:ProgramData 'IMC-Clarodoro\runtime\postgresql\bin\psql.exe'
+            $dbValues = @{}
+            foreach ($line in Get-Content -LiteralPath $configFile) {
+              $separator = $line.IndexOf('=')
+              if ($separator -gt 0) { $dbValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
+            }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $psqlTest = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c 'SELECT 1;' 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              throw "Test de connexion PostgreSQL échoué: $psqlTest"
+            }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+            Write-Host 'Test de connexion PostgreSQL réussi.'
+
             $php = Join-Path $installDir 'runtime\php\php.exe'
             $env:IMC_CLARODARO_ENV_FILE = $configFile
             Push-Location $installDir
@@ -273,9 +288,38 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $root = Join-Path $env:ProgramData 'IMC-Clarodaro'
-          Get-Service -Name 'IMC-Clarodaro-PostgreSQL' -ErrorAction SilentlyContinue | Format-List *
-          Get-CimInstance Win32_Service -Filter "Name='IMC-Clarodaro-PostgreSQL'" -ErrorAction SilentlyContinue | Format-List *
+          $root = Join-Path $env:ProgramData 'IMC-Clarodoro'
+          $serviceName = 'IMC-Clarodoro-PostgreSQL'
+
+          Write-Host "=== Service PostgreSQL ==="
+          Get-Service -Name $serviceName -ErrorAction SilentlyContinue | Format-List *
+          Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue | Format-List *
+
+          Write-Host "=== Evenements Service Control Manager recents ==="
+          $eventLog = Get-WinEvent -LogName System -FilterXPath "*[System[(EventID=7045 or EventID=7036) and TimeCreated[timediff(@SystemTime) <= 3600000]]]" -MaxEvents 50 -ErrorAction SilentlyContinue
+          if ($eventLog) {
+            $eventLog | Where-Object { $_.Message -like "*$serviceName*" -or $_.Message -like "*PostgreSQL*" } | ForEach-Object {
+              Write-Host "ID: $($_.Id), Time: $($_.TimeCreated), Message: $($_.Message)"
+            }
+          }
+
+          Write-Host "=== ACL sur le repertoire de donnees PostgreSQL ==="
+          $dataDir = Join-Path $root 'PostgreSQL\data'
+          if (Test-Path -LiteralPath $dataDir) {
+            & icacls.exe $dataDir | Out-Host
+          }
+
+          Write-Host "=== ACL sur le runtime PostgreSQL ==="
+          $pgRuntime = Join-Path $root 'runtime\postgresql'
+          if (Test-Path -LiteralPath $pgRuntime) {
+            & icacls.exe $pgRuntime | Out-Host
+          }
+
+          Write-Host "=== Verification du compte NetworkService ==="
+          $ntAccount = New-Object System.Security.Principal.NTAccount('NETWORK SERVICE')
+          $ntSid = $ntAccount.Translate([System.Security.Principal.SecurityIdentifier])
+          Write-Host "NetworkService SID: $ntSid"
+
           foreach ($path in @(
             (Join-Path $root 'logs\installer-services.log'),
             (Join-Path $root 'logs\php-server.log'),

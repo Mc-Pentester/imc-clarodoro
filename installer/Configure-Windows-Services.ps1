@@ -228,7 +228,57 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             if ([string]$service.PathName -notlike "*$pgCtl*" -or [string]$service.PathName -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
                 throw 'Le service PostgreSQL créé ne correspond pas au runtime et au répertoire attendus.'
             }
-            Start-Service -Name $serviceName
+
+            Write-Step "Tentative de démarrage du service PostgreSQL..."
+            $startError = $null
+            try {
+                Start-Service -Name $serviceName -ErrorAction Stop
+            } catch {
+                $startError = $_.Exception.Message
+                Write-Step "Erreur Start-Service: $startError"
+            }
+
+            $serviceCheck = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+            if ($serviceCheck.Status -ne 'Running') {
+                $serviceDetails = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
+                Write-Step "État du service après Start-Service: $($serviceCheck.Status)"
+                Write-Step "État du service CIM: $($serviceDetails.State)"
+                Write-Step "ExitCode du service: $($serviceDetails.ExitCode)"
+
+                # Récupérer les événements Windows du Service Control Manager
+                $eventLog = Get-WinEvent -LogName System -FilterXPath "*[System[(EventID=7045 or EventID=7036) and TimeCreated[timediff(@SystemTime) <= 3600000]]]" -MaxEvents 20 -ErrorAction SilentlyContinue
+                if ($eventLog) {
+                    Write-Step "=== Événements Service Control Manager récents ==="
+                    $eventLog | Where-Object { $_.Message -like "*$serviceName*" } | ForEach-Object {
+                        Write-Step "ID: $($_.Id), Time: $($_.TimeCreated), Message: $($_.Message)"
+                    }
+                }
+
+                # Vérifier les journaux PostgreSQL
+                $pgLogDir = Join-Path $dataDirectory 'log'
+                if (Test-Path -LiteralPath $pgLogDir -PathType Container) {
+                    Write-Step "=== Journaux PostgreSQL ==="
+                    Get-ChildItem -LiteralPath $pgLogDir -File -ErrorAction SilentlyContinue | ForEach-Object {
+                        Write-Step "Fichier: $($_.FullName)"
+                        Get-Content -LiteralPath $_.FullName -Tail 50 -ErrorAction SilentlyContinue | ForEach-Object { Write-Step $_ }
+                    }
+                }
+
+                # Vérifier les ACL sur le répertoire de données
+                Write-Step "=== ACL sur le répertoire de données ==="
+                & icacls.exe $dataDirectory | Out-Host
+
+                # Vérifier que pg_ctl.exe existe et est exécutable
+                Write-Step "=== Vérification de pg_ctl.exe ==="
+                Write-Step "Chemin: $pgCtl"
+                Write-Step "Existe: $(Test-Path -LiteralPath $pgCtl -PathType Leaf)"
+                if (Test-Path -LiteralPath $pgCtl -PathType Leaf) {
+                    & $pgCtl --version
+                }
+
+                throw "Le service PostgreSQL n'a pas pu démarrer. Statut: $($serviceCheck.Status), Erreur: $startError"
+            }
+
             $deadline = (Get-Date).AddSeconds(60)
             do {
                 Start-Sleep -Seconds 2
@@ -309,7 +359,49 @@ elseif ($hasProtectedConfig -and $managedLocalDatabase) {
     if ([string]$service.PathName -notlike "*$pgCtl*" -or [string]$service.PathName -notlike "*$dataDirectory*" -or [string]$service.StartName -notmatch "NETWORK SERVICE|S-1-5-20") {
         throw 'Le service PostgreSQL réenregistré ne correspond pas à cette installation.'
     }
-    Start-Service -Name $serviceName
+
+    Write-Step "Tentative de démarrage du service PostgreSQL réenregistré..."
+    $startError = $null
+    try {
+        Start-Service -Name $serviceName -ErrorAction Stop
+    } catch {
+        $startError = $_.Exception.Message
+        Write-Step "Erreur Start-Service: $startError"
+    }
+
+    $serviceCheck = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($serviceCheck.Status -ne 'Running') {
+        $serviceDetails = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
+        Write-Step "État du service après Start-Service: $($serviceCheck.Status)"
+        Write-Step "État du service CIM: $($serviceDetails.State)"
+        Write-Step "ExitCode du service: $($serviceDetails.ExitCode)"
+
+        # Récupérer les événements Windows du Service Control Manager
+        $eventLog = Get-WinEvent -LogName System -FilterXPath "*[System[(EventID=7045 or EventID=7036) and TimeCreated[timediff(@SystemTime) <= 3600000]]]" -MaxEvents 20 -ErrorAction SilentlyContinue
+        if ($eventLog) {
+            Write-Step "=== Événements Service Control Manager récents ==="
+            $eventLog | Where-Object { $_.Message -like "*$serviceName*" } | ForEach-Object {
+                Write-Step "ID: $($_.Id), Time: $($_.TimeCreated), Message: $($_.Message)"
+            }
+        }
+
+        # Vérifier les journaux PostgreSQL
+        $pgLogDir = Join-Path $dataDirectory 'log'
+        if (Test-Path -LiteralPath $pgLogDir -PathType Container) {
+            Write-Step "=== Journaux PostgreSQL ==="
+            Get-ChildItem -LiteralPath $pgLogDir -File -ErrorAction SilentlyContinue | ForEach-Object {
+                Write-Step "Fichier: $($_.FullName)"
+                Get-Content -LiteralPath $_.FullName -Tail 50 -ErrorAction SilentlyContinue | ForEach-Object { Write-Step $_ }
+            }
+        }
+
+        # Vérifier les ACL sur le répertoire de données
+        Write-Step "=== ACL sur le répertoire de données ==="
+        & icacls.exe $dataDirectory | Out-Host
+
+        throw "Le service PostgreSQL réenregistré n'a pas pu démarrer. Statut: $($serviceCheck.Status), Erreur: $startError"
+    }
+
     $deadline = (Get-Date).AddSeconds(60)
     do {
         Start-Sleep -Seconds 2
