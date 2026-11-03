@@ -357,6 +357,23 @@ jobs:
         shell: pwsh
         run: |
           $root = Join-Path $env:ProgramData 'IMC-Clarodaro'
+          $savedDiagnostics = Join-Path $env:RUNNER_TEMP 'clarodaro-diagnostics'
+          $programDataLogs = Join-Path $savedDiagnostics 'programdata-logs'
+          $postgresLogs = Join-Path $savedDiagnostics 'postgresql-logs'
+          New-Item -ItemType Directory -Path $programDataLogs,$postgresLogs -Force | Out-Null
+
+          # Stage logs under RUNNER_TEMP so the artifact action receives one root.
+          $installerLogRoot = Join-Path $root 'logs'
+          if (Test-Path -LiteralPath $installerLogRoot -PathType Container) {
+            Get-ChildItem -LiteralPath $installerLogRoot -Filter '*.log' -File -ErrorAction SilentlyContinue |
+              Copy-Item -Destination $programDataLogs -Force
+          }
+          $postgresLogRoot = Join-Path $root 'PostgreSQL\data\log'
+          if (Test-Path -LiteralPath $postgresLogRoot -PathType Container) {
+            Get-ChildItem -LiteralPath $postgresLogRoot -File -ErrorAction SilentlyContinue |
+              Copy-Item -Destination $postgresLogs -Force
+          }
+
           $serviceName = 'IMC-Clarodaro-PostgreSQL'
           Write-Host "=== Diagnostics captured before cleanup ==="
           $savedDiagnostics = Join-Path $env:RUNNER_TEMP 'clarodaro-diagnostics'
@@ -418,10 +435,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer-diagnostics
-          path: |
-            C:\ProgramData\IMC-Clarodaro\logs\*.log
-            C:\ProgramData\IMC-Clarodaro\PostgreSQL\data\log\*
-            ${{ runner.temp }}/clarodaro-diagnostics/**
+          path: ${{ runner.temp }}/clarodaro-diagnostics/**
           if-no-files-found: ignore
           retention-days: 7
 
