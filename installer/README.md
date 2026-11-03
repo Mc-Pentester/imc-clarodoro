@@ -15,6 +15,7 @@ Les binaires ne sont pas stockés dans Git. Le workflow Windows les télécharge
 Après copie des fichiers, l'installateur exécute `Configure-Windows-Services.ps1` :
 
 - Sur une première installation réellement vierge (aucun .env applicatif), crée une instance PostgreSQL dédiée dans `%ProgramData%\IMC-Clarodaro\PostgreSQL\data`.
+- Le runtime PostgreSQL (bin, lib, share) est installé sous `%ProgramData%\IMC-Clarodaro\runtime\postgresql`, un chemin système ASCII indépendant du dossier d'installation ; cela évite les conversions de chemins accentués dans `initdb` et les processus PostgreSQL. Il est conservé à la désinstallation pour permettre une réinstallation sûre.
 - Enregistre uniquement le service `IMC-Clarodaro-PostgreSQL` sous le compte restreint NetworkService, avec les données sous ProgramData et le port local 55432 par défaut.
 - Crée un rôle applicatif et une base dédiés avec des secrets aléatoires ; la configuration protégée est conservée dans `%ProgramData%\IMC-Clarodaro\config\.env`.
 - Exécute `database/schema.sql` uniquement sur cette base neuve et vide, crée l'historique de migrations initial, puis lance `database/migrate.php --status` et `--apply`.
