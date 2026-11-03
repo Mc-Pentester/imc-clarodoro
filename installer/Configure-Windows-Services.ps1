@@ -74,8 +74,15 @@ elseif (-not (Test-PortAvailable $HttpPort)) {
 }
 
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
+
+# Configurer les ACL sur les repertoires parents AVANT de creer le cluster
+# NetworkService (S-1-5-20) a besoin de droits de traversee sur tous les repertoires parents
 & icacls.exe $programDataRoot /grant '*S-1-5-19:(X)' '*S-1-5-20:(X)' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Impossible de configurer les droits de traversée ProgramData.' }
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de configurer les droits de traversee ProgramData.' }
+
+& icacls.exe $dataRoot /grant '*S-1-5-20:(X)' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Impossible de configurer les droits de traversee sur le repertoire PostgreSQL.' }
+
 Set-PrivateAcl $logRoot
 & icacls.exe $postgresRuntimeRoot /grant '*S-1-5-20:(OI)(CI)RX' /T /C | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture au runtime PostgreSQL pour NetworkService.' }
@@ -195,9 +202,35 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
         [System.IO.File]::WriteAllText($passwordFile, $pgAdminPassword, [System.Text.UTF8Encoding]::new($false))
 
         try {
+            # Configurer les ACL sur le repertoire de donnees AVANT initdb
+            # initdb heritera des ACL correctes au lieu de creer avec des ACL heritees incorrectes
+            & icacls.exe $dataRoot /grant '*S-1-5-20:(X)' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner acces au chemin des donnees PostgreSQL.' }
+
             if (-not (Test-Path -LiteralPath $dataDirectory)) {
                 New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
             }
+
+            & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'Impossible de proteger les permissions du cluster PostgreSQL.' }
+
+            # Verifier que NetworkService a les droits de traversee sur tous les repertoires parents
+            $parentDirs = @($programDataRoot, $dataRoot)
+            foreach ($dir in $parentDirs) {
+                $acl = Get-Acl -LiteralPath $dir
+                $hasTraverse = $false
+                foreach ($access in $acl.Access) {
+                    if ($access.IdentityReference.Value -eq 'S-1-5-20' -and $access.FileSystemRights -match 'ExecuteFile|Traverse') {
+                        $hasTraverse = $true
+                        break
+                    }
+                }
+                if (-not $hasTraverse) {
+                    Write-Step "WARNING: NetworkService n'a pas les droits de traversee sur $dir, ajout manuel"
+                    & icacls.exe $dir /grant '*S-1-5-20:(OI)(CI)RX' /T /C | Out-Null
+                }
+            }
+
             # Keep both the PostgreSQL executable and its working directory on an ASCII-only path.
             # The application install directory may intentionally contain accented characters.
             Push-Location $programDataRoot
@@ -216,11 +249,6 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
                 "port = $PostgreSqlPort",
                 "password_encryption = 'scram-sha-256'"
             ) -Encoding ascii
-
-            & icacls.exe $dataRoot /grant '*S-1-5-20:(X)' | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner accès au chemin des données PostgreSQL.' }
-            & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'Impossible de protéger les permissions du cluster PostgreSQL.' }
 
             & $pgCtl register -N $serviceName -D $dataDirectory -S auto -U $postgresServiceAccount
             if ($LASTEXITCODE -ne 0) { throw "Enregistrement du service PostgreSQL échoué (code $LASTEXITCODE)." }
@@ -353,6 +381,24 @@ elseif ($hasProtectedConfig -and $managedLocalDatabase) {
     if ($LASTEXITCODE -ne 0) { throw 'ACL du chemin PostgreSQL impossible.' }
     & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'ACL du cluster PostgreSQL impossible.' }
+
+    # Verifier que NetworkService a les droits de traversee sur tous les repertoires parents
+    $parentDirs = @($programDataRoot, $dataRoot)
+    foreach ($dir in $parentDirs) {
+        $acl = Get-Acl -LiteralPath $dir
+        $hasTraverse = $false
+        foreach ($access in $acl.Access) {
+            if ($access.IdentityReference.Value -eq 'S-1-5-20' -and $access.FileSystemRights -match 'ExecuteFile|Traverse') {
+                $hasTraverse = $true
+                break
+            }
+        }
+        if (-not $hasTraverse) {
+            Write-Step "WARNING: NetworkService n'a pas les droits de traversee sur $dir, ajout manuel"
+            & icacls.exe $dir /grant '*S-1-5-20:(OI)(CI)RX' /T /C | Out-Null
+        }
+    }
+
     & $pgCtl register -N $serviceName -D $dataDirectory -S auto -U $postgresServiceAccount
     if ($LASTEXITCODE -ne 0) { throw "Réenregistrement PostgreSQL échoué : $LASTEXITCODE" }
     $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
