@@ -134,7 +134,8 @@ jobs:
               }
               Write-Host "=== INSTALLER AND POSTGRESQL LOGS (CONFIG CONTENT EXCLUDED) ==="
               foreach ($path in @((Join-Path $env:ProgramData 'IMC-Clarodaro\logs\installer-services.log'),
-                                  (Join-Path $env:ProgramData 'IMC-Clarodaro\logs\php-server.log'))) {
+                                  (Join-Path $env:ProgramData 'IMC-Clarodaro\logs\php-server.log'),
+                        (Join-Path $env:ProgramData 'IMC-Clarodaro\logs\uninstall-services.log'))) {
                 if (Test-Path -LiteralPath $path -PathType Leaf) {
                   Write-Host "--- $path"; Get-Content -LiteralPath $path -Tail 300
                 }
@@ -295,8 +296,13 @@ jobs:
             Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
             $uninstaller = Join-Path $installDir 'unins000.exe'
             if (Test-Path -LiteralPath $uninstaller) {
-              $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+              $uninstallLog = Join-Path $env:RUNNER_TEMP 'clarodaro-uninstall.log'
+              $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/LOG="' + $uninstallLog + '"')) -Wait -PassThru
               if ($uninstall.ExitCode -ne 0) {
+                if (Test-Path -LiteralPath $uninstallLog) {
+                  Get-Content -LiteralPath $uninstallLog -Tail 200 | ForEach-Object { Write-Host "UNINSTALL: $_" }
+                  Copy-Item -LiteralPath $uninstallLog -Destination (Join-Path $env:RUNNER_TEMP 'clarodaro-diagnostics\uninstall-failure.log') -Force
+                }
                 throw "Désinstallation silencieuse échouée : code $($uninstall.ExitCode)"
               }
             }
@@ -387,6 +393,13 @@ jobs:
           Write-Host "=== Service PostgreSQL ==="
           Get-Service -Name $serviceName -ErrorAction SilentlyContinue | Format-List *
           Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue | Format-List *
+
+          Write-Host "=== Tâche PHP et historique Task Scheduler ==="
+          $taskName = 'IMC-Clarodaro-PHP-Server'
+          $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+          if ($task) { $task | Format-List *; $task.Actions | Format-List *; Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue | Format-List * }
+          Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational' -MaxEvents 100 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -like "*$taskName*" } | Select-Object -First 30 Id,TimeCreated,Message | Format-List
 
           Write-Host "=== Evenements Service Control Manager recents ==="
           $eventLog = Get-WinEvent -LogName System -FilterXPath "*[System[(EventID=7045 or EventID=7036) and TimeCreated[timediff(@SystemTime) <= 3600000]]]" -MaxEvents 50 -ErrorAction SilentlyContinue
