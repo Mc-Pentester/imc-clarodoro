@@ -93,7 +93,8 @@ try {
         if ($serviceStatus.Status -ne 'Stopped') {
             Write-RemovalLog 'Arrêt du service PostgreSQL Clarodaro.'
             Stop-Service -Name $serviceName -Force -ErrorAction Stop
-            (Get-Service -Name $serviceName -ErrorAction Stop).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(60))
+            $serviceStatus = Get-Service -Name $serviceName -ErrorAction Stop
+            $serviceStatus.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(60))
         }
 
         $serviceStatus = Get-Service -Name $serviceName -ErrorAction Stop
