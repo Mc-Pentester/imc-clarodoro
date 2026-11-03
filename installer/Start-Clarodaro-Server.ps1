@@ -61,10 +61,28 @@ try {
     }
 
     Write-LauncherLog 'Lancement du serveur PHP intégré sur toutes les interfaces LAN.'
-    & $php -S "0.0.0.0:$HttpPort" -t $AppRoot $router 2>&1 |
-        ForEach-Object { Write-LauncherLog ([string]$_) }
-    $phpExitCode = $LASTEXITCODE
+    # Windows PowerShell 5.1 converts native stderr into ErrorRecords. PHP writes
+    # its normal "Development Server started" banner to stderr, so do not pipe it
+    # through PowerShell with ErrorActionPreference=Stop.
+    $stdoutLog = Join-Path $logRoot 'php-server.stdout.log'
+    $stderrLog = Join-Path $logRoot 'php-server.stderr.log'
+    $arguments = @(
+        '-S',
+        "0.0.0.0:$HttpPort",
+        '-t',
+        ('"' + $AppRoot + '"'),
+        ('"' + $router + '"')
+    )
+    $process = Start-Process -FilePath $php -ArgumentList $arguments -WorkingDirectory $AppRoot -NoNewWindow -Wait -PassThru -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
+    $phpExitCode = $process.ExitCode
     Write-LauncherLog ("Le processus PHP s'est terminé avec le code " + $phpExitCode + '.')
+    foreach ($outputFile in @($stdoutLog, $stderrLog)) {
+        if (Test-Path -LiteralPath $outputFile -PathType Leaf) {
+            Get-Content -LiteralPath $outputFile -Tail 100 | ForEach-Object {
+                Write-LauncherLog ("PHP : " + [string]$_)
+            }
+        }
+    }
     exit $phpExitCode
 }
 catch {
