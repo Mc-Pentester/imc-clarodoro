@@ -171,7 +171,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             if (-not (Test-Path -LiteralPath $dataDirectory)) {
                 New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
             }
-            & $initdb -D $dataDirectory -U postgres --encoding=UTF8 --auth-local=trust --auth-host=scram-sha-256 --pwfile=$passwordFile
+            & $initdb -D $dataDirectory -U postgres --locale=C --encoding=UTF8 --auth-local=trust --auth-host=scram-sha-256 --pwfile=$passwordFile
             if ($LASTEXITCODE -ne 0) { throw "initdb a échoué (code $LASTEXITCODE)." }
 
             Add-Content -LiteralPath (Join-Path $dataDirectory 'postgresql.conf') -Value @(
