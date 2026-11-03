@@ -174,7 +174,7 @@ jobs:
               if ($separator -gt 0) { $dbValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
             }
             $env:PGPASSWORD = $dbValues['DB_PASSWORD']
-            $psql = Join-Path $installDir 'runtime\postgresql\bin\psql.exe'
+            $psql = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\psql.exe'
             $pdgCount = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT COUNT(*) FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE LOWER(u.username) = 'pdg' OR r.name = 'PDG';"
             if ($LASTEXITCODE -ne 0 -or ($pdgCount -join '').Trim() -ne '0') {
               throw 'L installation silencieuse a créé ou modifié un compte PDG sans demande explicite.'
