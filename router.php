@@ -25,6 +25,7 @@ $protected = [
     '/payroll-recovery.html' => 'payroll-recovery.html',
     '/resultats.html' => 'resultats.html',
     '/vacations.html' => 'vacations.html',
+    '/vacances.html' => 'vacations.html',
 ];
 
 if ($path === '/') {
