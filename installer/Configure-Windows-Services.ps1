@@ -222,22 +222,8 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'Impossible de proteger les permissions du cluster PostgreSQL.' }
 
-            # Verifier que NetworkService a les droits de traversee sur tous les repertoires parents
-            $parentDirs = @($programDataRoot, $dataRoot)
-            foreach ($dir in $parentDirs) {
-                $acl = Get-Acl -LiteralPath $dir
-                $hasTraverse = $false
-                foreach ($access in $acl.Access) {
-                    if ($access.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-20' -and $access.FileSystemRights -match 'ExecuteFile|Traverse') {
-                        $hasTraverse = $true
-                        break
-                    }
-                }
-                if (-not $hasTraverse) {
-                    Write-Step "WARNING: NetworkService n'a pas les droits de traversee sur $dir, ajout manuel"
-                    & icacls.exe $dir /grant '*S-1-5-20:(X)' | Out-Null
-                }
-            }
+            # Les ACL de traversee ont deja ete appliquees et controlees par le code retour icacls ci-dessus.
+            # Eviter le controle secondaire via les objets ACL PowerShell sur les runners Windows.
 
             # Keep both the PostgreSQL executable and its working directory on an ASCII-only path.
             # The application install directory may intentionally contain accented characters.
@@ -390,22 +376,8 @@ elseif ($hasProtectedConfig -and $managedLocalDatabase) {
     & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'ACL du cluster PostgreSQL impossible.' }
 
-    # Verifier que NetworkService a les droits de traversee sur tous les repertoires parents
-    $parentDirs = @($programDataRoot, $dataRoot)
-    foreach ($dir in $parentDirs) {
-        $acl = Get-Acl -LiteralPath $dir
-        $hasTraverse = $false
-        foreach ($access in $acl.Access) {
-            if ($access.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value -eq 'S-1-5-20' -and $access.FileSystemRights -match 'ExecuteFile|Traverse') {
-                $hasTraverse = $true
-                break
-            }
-        }
-        if (-not $hasTraverse) {
-            Write-Step "WARNING: NetworkService n'a pas les droits de traversee sur $dir, ajout manuel"
-            & icacls.exe $dir /grant '*S-1-5-20:(X)' | Out-Null
-        }
-    }
+    # Les ACL de traversee ont deja ete appliquees et controlees par le code retour icacls ci-dessus.
+    # Eviter le controle secondaire via les objets ACL PowerShell sur les runners Windows.
 
     & $pgCtl register -N $serviceName -D $dataDirectory -S auto -U $postgresServiceAccount
     if ($LASTEXITCODE -ne 0) { throw "Réenregistrement PostgreSQL échoué : $LASTEXITCODE" }
