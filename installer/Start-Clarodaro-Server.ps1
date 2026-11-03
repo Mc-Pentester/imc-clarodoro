@@ -17,7 +17,7 @@ $locationPushed = $false
 function Write-LauncherLog([string]$Message) {
     $line = '{0} {1}{2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'), $Message, [Environment]::NewLine
     try {
-        [System.IO.File]::AppendAllText($logFile, $line, (New-Object System.Text.UTF8Encoding($false)))
+        [System.IO.File]::AppendAllText($logFile, $line, ([System.Text.UTF8Encoding]::new($false)))
     }
     catch {
         [Console]::Error.WriteLine($line)
