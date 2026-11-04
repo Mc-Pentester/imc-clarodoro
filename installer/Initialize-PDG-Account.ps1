@@ -153,11 +153,15 @@ try {
         throw 'Impossible de vérifier de façon fiable si un compte PDG existe. Initialisation annulée.'
     }
 
-    # Aucun mot de passe transmis par variable d'environnement ou automatisation :
-    # le futur administrateur doit saisir et confirmer lui-même son mot de passe pendant l'installation.
-    $first = Show-PdgCredentialDialog
-    if ($null -eq $first) {
-        throw 'Création du compte PDG annulée. L''installation ne peut pas être finalisée sans ce compte.'
+    # En installation interactive, le futur administrateur saisit et confirme lui-même
+    # son mot de passe dans la fenêtre masquée. Le mode silencieux n'a pas d'interface :
+    # il accepte uniquement un secret injecté explicitement par l'orchestrateur (CI/déploiement).
+    $first = [string]$env:IMC_BOOTSTRAP_PASSWORD
+    if ([string]::IsNullOrWhiteSpace($first)) {
+        $first = Show-PdgCredentialDialog
+        if ($null -eq $first) {
+            throw 'Création du compte PDG annulée. L''installation ne peut pas être finalisée sans ce compte.'
+        }
     }
     if ($first.Length -lt 12 -or $first -notmatch '^[\x20-\x7E]+$') {
         throw 'Le mot de passe PDG doit contenir au moins 12 caractères ASCII imprimables.'
@@ -179,4 +183,5 @@ try {
 finally {
     Pop-Location
     Remove-Item Env:\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
+    Remove-Item Env:\IMC_BOOTSTRAP_PASSWORD -ErrorAction SilentlyContinue
 }
