@@ -34,7 +34,8 @@ if ($existing !== false) {
     apiError(409, 'La configuration initiale est déjà terminée.');
 }
 
-$bootstrap = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'bootstrap-auth.php';
+$applicationRoot = dirname(__DIR__, 2);
+$bootstrap = $applicationRoot . DIRECTORY_SEPARATOR . 'bootstrap-auth.php';
 if (!is_file($bootstrap) || !function_exists('proc_open')) {
     error_log('Clarodaro first-run bootstrap unavailable: missing CLI script or proc_open.');
     apiError(503, 'La création initiale du compte est momentanément indisponible.');
@@ -64,10 +65,13 @@ $descriptors = [
 ];
 
 $process = proc_open(
-    [PHP_BINARY, $bootstrap],
+    // Passer un nom relatif évite de transmettre un chemin Windows Unicode
+    // comme argument CLI (notamment dans les dossiers contenant des accents).
+    // Le répertoire de travail fournit le chemin réel au processus enfant.
+    [PHP_BINARY, '-f', 'bootstrap-auth.php'],
     $descriptors,
     $pipes,
-    dirname(__DIR__, 2),
+    $applicationRoot,
     $environment,
     ['bypass_shell' => true]
 );
