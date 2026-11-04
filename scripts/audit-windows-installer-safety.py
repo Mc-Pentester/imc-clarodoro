@@ -13,7 +13,9 @@ cleanup = read("installer/Remove-Windows-Services.ps1")
 iss = read("installer/IMC-Clarodoro.iss")
 router = read("router.php")
 env_loader = read("config/env.php")
-pdg_setup = read("installer/Initialize-PDG-Account.ps1")
+setup_page = read("setup-page.php")
+setup_api = read("api/auth/initial-setup.php")
+secure_page = read("secure-page.php")
 workflow = read(".github/workflows/windows-installer.yml")
 
 require("IMC-Clarodaro-PostgreSQL" in configure, "dedicated PostgreSQL service name missing")
@@ -53,16 +55,20 @@ require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
         "uninstall must preserve ProgramData database and config")
 require("runtime" in router and "installer" in router and "database" in router and "router.php" in router and "strncasecmp" in router,
         "HTTP router must deny direct access to runtimes, secrets and internal directories")
-require("Initialize-PDG-Account.ps1" in iss and "AfterInstall: ConfigureAfterFiles" in iss
-        and "WizardSilent" not in iss and "IMC_BOOTSTRAP_PASSWORD" not in iss
-        and "Tasks: createpdg" not in iss and "Initialiser le compte PDG si nécessaire" not in iss,
-        "mandatory PDG setup must run after database provisioning and cannot be skipped")
-require("LOWER(u.username)" in pdg_setup and "r.name" in pdg_setup and "bootstrap-auth.php" in pdg_setup,
-        "first-PDG script must check existing account before bootstrap")
-require("Show-PdgCredentialDialog" in pdg_setup and "UseSystemPasswordChar" in pdg_setup
-        and "IMC_BOOTSTRAP_PASSWORD" in pdg_setup and "bootstrap-auth.php" in pdg_setup
-        and "$first = Show-PdgCredentialDialog" in pdg_setup,
-        "first-PDG setup must prompt interactively by default, with explicit secret support for silent CI only")
+require("Initialize-PDG-Account.ps1" not in iss and "IMC_BOOTSTRAP_PASSWORD" not in iss
+        and "Initialize-PDG-Account.ps1" not in workflow and "IMC_BOOTSTRAP_PASSWORD" not in workflow,
+        "installer and CI must never create the PDG account automatically")
+require("require __DIR__ . '/setup-page.php'" in secure_page and "existingPdg === false" in secure_page,
+        "all protected pages must be gated until first-run PDG setup is complete")
+require("Create my account" not in setup_page and "Créer mon compte PDG" in setup_page
+        and "generateCsrfToken" in setup_page and "/api/auth/initial-setup.php" in setup_page,
+        "browser first-run setup page or CSRF protection missing")
+require("requireCsrfToken" in setup_api and "proc_open" in setup_api
+        and "IMC_BOOTSTRAP_PASSWORD" in setup_api and "password_hash" not in setup_api,
+        "one-time HTTP setup must validate CSRF and delegate account creation to the guarded CLI bootstrap")
+require("pdgCountBeforeSetup" in workflow and "setupSession" in workflow
+        and "api/auth/initial-setup.php" in workflow,
+        "Windows smoke test must prove no PDG is created during install and create it through post-install HTTP")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
 require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
