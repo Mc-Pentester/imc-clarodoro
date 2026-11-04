@@ -164,13 +164,7 @@ jobs:
           }
 
           $installArgs = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="' + $installDir + '"'))
-          $env:IMC_BOOTSTRAP_PASSWORD = ('CI-' + 'PDG-' + 'Setup-' + 'Only-' + '2026' + '!')
-          try {
-            $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
-          }
-          finally {
-            Remove-Item Env:\IMC_BOOTSTRAP_PASSWORD -ErrorAction SilentlyContinue
-          }
+          $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
           if ($install.ExitCode -ne 0) {
             throw "Installation silencieuse échouée : code $($install.ExitCode)"
           }
@@ -232,6 +226,29 @@ jobs:
               Start-Sleep -Seconds 1
             } while ((Get-Date) -lt $httpDeadline)
             if (-not $httpReady) { throw 'Le serveur PHP ne répond pas sur le port 8080.' }
+
+            # A clean install must leave the database without any PDG account.
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $psql = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\psql.exe'
+            $pdgCountBeforeSetup = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT COUNT(*) FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE LOWER(u.username) = 'pdg' OR r.name = 'PDG';"
+            if ($LASTEXITCODE -ne 0 -or ($pdgCountBeforeSetup -join '').Trim() -ne '0') {
+              throw 'Le programme d installation a créé un compte PDG automatiquement : ce comportement est interdit.'
+            }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+
+            # The first administrator is created by submitting the browser setup form after installation.
+            $setupSession = $null
+            $setupResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/setup' -SessionVariable setupSession -TimeoutSec 10
+            if ($setupResponse.StatusCode -ne 200 -or $setupResponse.Content -notmatch 'Créer mon compte PDG') {
+              throw 'La page de première configuration post-installation est absente.'
+            }
+            $csrfMatch = [regex]::Match($setupResponse.Content, '<meta name="csrf-token" content="([^"]+)"')
+            if (-not $csrfMatch.Success) { throw 'Le jeton CSRF de la première configuration est absent.' }
+            $ciPdgPassword = ([Guid]::NewGuid().ToString('N') + 'Aa9!')
+            $setupBody = @{ password = $ciPdgPassword; confirmation = $ciPdgPassword } | ConvertTo-Json -Compress
+            $setupResult = Invoke-RestMethod -Uri 'http://127.0.0.1:8080/api/auth/initial-setup.php' -Method Post -WebSession $setupSession -Headers @{ 'X-CSRF-Token' = $csrfMatch.Groups[1].Value } -ContentType 'application/json' -Body $setupBody -TimeoutSec 20
+            if (-not $setupResult.success) { throw 'La création du compte PDG via le parcours utilisateur a échoué.' }
+            Write-Host 'Création du premier compte PDG via HTTP après installation : PASS.'
 
             $blockedHttpPaths = @(
               '/.env',
