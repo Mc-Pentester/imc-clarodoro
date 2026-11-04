@@ -40,9 +40,21 @@ if (!is_file($bootstrap) || !function_exists('proc_open')) {
     apiError(503, 'La création initiale du compte est momentanément indisponible.');
 }
 
+// Le processus CLI doit relire exactement la configuration protégée du serveur.
+ // Ne pas lui transmettre les éventuels DB_* hérités du compte de service Windows :
+ // ils peuvent désigner le superutilisateur postgres au lieu du compte applicatif.
 $environment = getenv();
 if (!is_array($environment)) {
     $environment = [];
+}
+$configFile = getenv('IMC_CLARODARO_ENV_FILE');
+if (is_string($configFile) && trim($configFile) !== '') {
+    $environment['IMC_CLARODARO_ENV_FILE'] = $configFile;
+} else {
+    unset($environment['IMC_CLARODARO_ENV_FILE']);
+}
+foreach (['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'] as $databaseVariable) {
+    unset($environment[$databaseVariable]);
 }
 $environment['IMC_BOOTSTRAP_PASSWORD'] = $password;
 $descriptors = [
