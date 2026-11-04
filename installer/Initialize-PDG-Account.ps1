@@ -147,7 +147,7 @@ try {
     $checkExitCode = $LASTEXITCODE
     if ($checkExitCode -eq 0) {
         Write-Host 'Un compte PDG existe déjà. Identifiants, rôle et permissions conservés.'
-        exit 0
+        return
     }
     if ($checkExitCode -ne 2) {
         throw 'Impossible de vérifier de façon fiable si un compte PDG existe. Initialisation annulée.'
