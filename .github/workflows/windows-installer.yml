@@ -164,7 +164,13 @@ jobs:
           }
 
           $installArgs = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="' + $installDir + '"'))
-          $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          $env:IMC_BOOTSTRAP_PASSWORD = ('CI-' + 'PDG-' + 'Setup-' + 'Only-' + '2026' + '!')
+          try {
+            $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          }
+          finally {
+            Remove-Item Env:\IMC_BOOTSTRAP_PASSWORD -ErrorAction SilentlyContinue
+          }
           if ($install.ExitCode -ne 0) {
             throw "Installation silencieuse échouée : code $($install.ExitCode)"
           }
@@ -263,8 +269,12 @@ jobs:
             $env:PGPASSWORD = $dbValues['DB_PASSWORD']
             $psql = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\psql.exe'
             $pdgCount = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT COUNT(*) FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE LOWER(u.username) = 'pdg' OR r.name = 'PDG';"
-            if ($LASTEXITCODE -ne 0 -or ($pdgCount -join '').Trim() -ne '0') {
-              throw 'L installation silencieuse a créé ou modifié un compte PDG sans demande explicite.'
+            if ($LASTEXITCODE -ne 0 -or ($pdgCount -join '').Trim() -ne '1') {
+              throw 'Le compte PDG initial obligatoire n a pas été créé exactement une fois.'
+            }
+            $pdgHashBeforeUpgrade = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT password_hash FROM users WHERE LOWER(username) = 'pdg';"
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($pdgHashBeforeUpgrade -join '').Trim())) {
+              throw 'Le hash du mot de passe PDG est absent après création.'
             }
             & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -v ON_ERROR_STOP=1 -c "CREATE TABLE public.installer_upgrade_sentinel (id integer PRIMARY KEY, marker text NOT NULL); INSERT INTO public.installer_upgrade_sentinel VALUES (1, 'preserve-me');"
             if ($LASTEXITCODE -ne 0) { throw 'Impossible de créer le témoin de conservation en base.' }
@@ -281,6 +291,10 @@ jobs:
             $sentinel = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c 'SELECT marker FROM public.installer_upgrade_sentinel WHERE id = 1;'
             if ($LASTEXITCODE -ne 0 -or ($sentinel -join '').Trim() -ne 'preserve-me') {
               throw 'La réinstallation a modifié ou perdu les données PostgreSQL existantes.'
+            }
+            $pdgHashAfterUpgrade = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT password_hash FROM users WHERE LOWER(username) = 'pdg';"
+            if ($LASTEXITCODE -ne 0 -or ($pdgHashAfterUpgrade -join '').Trim() -ne ($pdgHashBeforeUpgrade -join '').Trim()) {
+              throw 'La réinstallation a modifié le hash du mot de passe PDG existant.'
             }
             Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 
