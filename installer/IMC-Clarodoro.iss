@@ -129,11 +129,13 @@ begin
 
   if CurStep = ssPostInstall then
   begin
+    if WizardSilent and (GetEnv('IMC_BOOTSTRAP_PASSWORD') = '') then
+      RaiseException('Une installation silencieuse exige IMC_BOOTSTRAP_PASSWORD pour créer le compte PDG initial.');
     Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
-      ExpandConstant('{app}\\installer\\Initialize-PDG-Account.ps1') +
+      ExpandConstant('{app}\installer\Initialize-PDG-Account.ps1') +
       '" -AppRoot "' + ExpandConstant('{app}') + '"';
     if not Exec(
-      ExpandConstant('{sys}\\WindowsPowerShell\\v1.0\\powershell.exe'),
+      ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters,
       ExpandConstant('{app}'),
       SW_SHOW,
