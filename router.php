@@ -28,6 +28,11 @@ $protected = [
     '/vacances.html' => 'vacations.html',
 ];
 
+if ($path === '/setup' || $path === '/setup/') {
+    require __DIR__ . '/setup-page.php';
+    exit;
+}
+
 if ($path === '/') {
     $_GET['page'] = 'index.html';
     require __DIR__ . '/secure-page.php';
