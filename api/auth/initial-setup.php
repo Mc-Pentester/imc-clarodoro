@@ -68,7 +68,7 @@ fclose($pipes[1]);
 $stderr = stream_get_contents($pipes[2]);
 fclose($pipes[2]);
 $exitCode = proc_close($process);
-unset($environment['IMC_BOOTSTRAP_PASSWORD'], $password, $confirmation, $data);
+unset($environment['IMC_BOOTSTRAP_PASSWORD'], $data);
 
 if ($exitCode !== 0) {
     // Le serveur PHP tourne sous LocalService : error_log() est redirigé vers
@@ -103,8 +103,11 @@ if ($exitCode !== 0) {
         error_log('Clarodaro first-run bootstrap failed (code ' . $exitCode . '): ' . $diagnostic);
     }
 
+    unset($password, $confirmation);
     apiError(409, 'La création du compte PDG a échoué. Vérifiez que la configuration initiale n’a pas déjà été effectuée.');
 }
+
+unset($password, $confirmation);
 
 $verify = $pdo->query(
     "SELECT COUNT(*) FROM users u INNER JOIN roles r ON r.id = u.role_id
