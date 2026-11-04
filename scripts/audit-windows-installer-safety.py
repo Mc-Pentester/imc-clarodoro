@@ -77,7 +77,8 @@ require("Prepare-Bundled-Runtimes.ps1" in workflow,
 require("1.1.0" in workflow, "installer artifact version mismatch")
 require("Smoke test clean install" in workflow and "Réinstallation sans désinstallation" in workflow,
         "Windows clean-install and in-place-reinstall smoke test missing")
-require("installer_upgrade_sentinel" in workflow and "PG_VERSION" in workflow and "Reinstall after a full uninstall" in workflow\n        and "pdgHashBeforeUpgrade" in workflow and "pdgHashAfterUpgrade" in workflow,
+require("installer_upgrade_sentinel" in workflow and "PG_VERSION" in workflow and "Reinstall after a full uninstall" in workflow
+        and "pdgHashBeforeUpgrade" in workflow and "pdgHashAfterUpgrade" in workflow,
         "Windows smoke test does not verify PostgreSQL data preservation")
 require("/eleves.html" in workflow and "JavaScript brut" in workflow,
         "Windows HTTP smoke test is missing the eleves.html raw-JavaScript regression check")
