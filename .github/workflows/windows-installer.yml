@@ -334,6 +334,7 @@ jobs:
           try {
             $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             if (-not $service -or $service.Status -ne 'Running') { throw 'Le service PostgreSQL conservé n a pas été réenregistré.' }
+            if ($dbValues['DB_USER'] -ne 'imc_clarodaro_app') { throw 'Le test de restauration doit utiliser le compte applicatif du .env, jamais le superutilisateur postgres.' }
             $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
             if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'Compte PostgreSQL incorrect après réinstallation.' }
             $env:PGPASSWORD = $dbValues['DB_PASSWORD']
