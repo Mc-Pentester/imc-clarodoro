@@ -49,7 +49,7 @@ Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignorev
 Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Remove-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Prepare-Upgrade.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
-Source: "Initialize-PDG-Account.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
+Source: "Initialize-PDG-Account.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; AfterInstall: ConfigureAfterFiles
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -102,10 +102,10 @@ begin
     RaiseException('Une installation silencieuse exige IMC_BOOTSTRAP_PASSWORD pour créer le compte PDG initial.');
 
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
-    ExpandConstant('{app}\\installer\\Initialize-PDG-Account.ps1') +
+    ExpandConstant('{app}\installer\Initialize-PDG-Account.ps1') +
     '" -AppRoot "' + ExpandConstant('{app}') + '"';
   if not Exec(
-    ExpandConstant('{sys}\\WindowsPowerShell\\v1.0\\powershell.exe'),
+    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
     Parameters,
     ExpandConstant('{app}'),
     SW_SHOW,
