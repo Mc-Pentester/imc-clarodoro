@@ -27,7 +27,7 @@ Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"; Flags: unchecked
-Name: "createpdg"; Description: "Créer le compte PDG initial si aucun compte PDG n existe"; GroupDescription: "Configuration initiale :"
+; La création du PDG est obligatoire et déclenchée avant la page de fin.
 
 [Dirs]
 Name: "{app}"
@@ -49,7 +49,7 @@ Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignorev
 Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Remove-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Prepare-Upgrade.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
-Source: "Initialize-PDG-Account.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; AfterInstall: ConfigureAfterFiles
+Source: "Initialize-PDG-Account.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -127,7 +127,23 @@ begin
     end;
   end;
 
-
+  if CurStep = ssPostInstall then
+  begin
+    Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+      ExpandConstant('{app}\\installer\\Initialize-PDG-Account.ps1') +
+      '" -AppRoot "' + ExpandConstant('{app}') + '"';
+    if not Exec(
+      ExpandConstant('{sys}\\WindowsPowerShell\\v1.0\\powershell.exe'),
+      Parameters,
+      ExpandConstant('{app}'),
+      SW_SHOW,
+      ewWaitUntilTerminated,
+      ResultCode
+    ) then
+      RaiseException('Impossible d ouvrir la fenêtre de création du compte PDG.');
+    if ResultCode <> 0 then
+      RaiseException('Le compte PDG est obligatoire. L installation ne peut pas être finalisée. Aucun compte existant ni aucune donnée ne seront réinitialisés.');
+  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
