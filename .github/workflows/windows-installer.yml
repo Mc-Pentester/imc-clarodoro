@@ -109,6 +109,12 @@ jobs:
               Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue |
                 Select-Object Name,State,StartName,PathName,ExitCode,ServiceSpecificExitCode,ProcessId,StartMode | Format-List
               Get-Service -Name $serviceName -ErrorAction SilentlyContinue | Format-List *
+              Write-Host "=== POSTGRESQL APPLICATION EVENTS ==="
+              $applicationEvents = Get-WinEvent -LogName Application -MaxEvents 150 -ErrorAction SilentlyContinue
+              $applicationEvents | Where-Object {
+                $_.ProviderName -match 'PostgreSQL|pg_ctl|postgres' -or
+                $_.Message -like "*$dataDir*" -or $_.Message -like "*$serviceName*"
+              } | Select-Object -First 40 Id,TimeCreated,ProviderName,Message | Format-List
               Write-Host "=== SERVICE CONTROL MANAGER EVENTS ==="
               $events = Get-WinEvent -LogName System -FilterXPath "*[System[(EventID=7000 or EventID=7009 or EventID=7011 or EventID=7023 or EventID=7031 or EventID=7034 or EventID=7036 or EventID=7045) and TimeCreated[timediff(@SystemTime) <= 7200000]]]" -MaxEvents 100 -ErrorAction SilentlyContinue
               $events | Where-Object { $_.Message -like "*$serviceName*" -or $_.Message -like '*PostgreSQL*' } |
