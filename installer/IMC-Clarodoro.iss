@@ -27,7 +27,6 @@ Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDescription: "Raccourcis :"; Flags: unchecked
-; La création du PDG est obligatoire et déclenchée avant la page de fin.
 
 [Dirs]
 Name: "{app}"
@@ -49,7 +48,6 @@ Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignorev
 Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Remove-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Prepare-Upgrade.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
-Source: "Initialize-PDG-Account.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; AfterInstall: ConfigureAfterFiles
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -98,23 +96,6 @@ begin
       'La configuration des services Clarodaro a échoué. Consultez le journal : ' +
       ExpandConstant('{commonappdata}\IMC-Clarodaro\logs\installer-services.log')
     );
-  { La création du premier PDG est toujours demandée à l'utilisateur dans la fenêtre dédiée.
-    Aucune variable d'environnement ne peut fournir automatiquement le mot de passe. }
-
-  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
-    ExpandConstant('{app}\installer\Initialize-PDG-Account.ps1') +
-    '" -AppRoot "' + ExpandConstant('{app}') + '"';
-  if not Exec(
-    ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    Parameters,
-    ExpandConstant('{app}'),
-    SW_SHOW,
-    ewWaitUntilTerminated,
-    ResultCode
-  ) then
-    RaiseException('Impossible d ouvrir la fenêtre de création du compte PDG.');
-  if ResultCode <> 0 then
-    RaiseException('Le compte PDG est obligatoire. L installation ne peut pas être finalisée. Les données existantes sont conservées.');
 
 end;
 
