@@ -5,8 +5,12 @@ declare(strict_types=1);
 /**
  * Réinitialisation ciblée du mot de passe du compte PDG.
  *
- * Usage (PowerShell):
- *   $env:IMC_PDG_NEW_PASSWORD = Read-Host "Nouveau mot de passe PDG" -AsSecureString | ...
+ * Sur Windows (installation Clarodaro), lancer depuis n'importe quel dossier :
+ *   powershell -NoProfile -ExecutionPolicy Bypass -File
+ *     "C:\\Program Files\\IMC-Clarodaro\\Scripts\\RESET-PDG-PASSWORD.ps1"
+ *
+ * Le lanceur PowerShell utilise le PHP embarqué dans runtime\\php et charge
+ * la configuration protégée de ProgramData. Aucun PATH PHP n'est nécessaire.
  *
  * Exécuter uniquement en CLI sur le serveur/local autorisé.
  * Ce script ne crée aucun compte et ne modifie ni rôles, ni permissions,
