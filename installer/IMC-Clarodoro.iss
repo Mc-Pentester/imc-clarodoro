@@ -98,6 +98,24 @@ begin
       'La configuration des services Clarodaro a échoué. Consultez le journal : ' +
       ExpandConstant('{commonappdata}\IMC-Clarodaro\logs\installer-services.log')
     );
+  if WizardSilent and (GetEnv('IMC_BOOTSTRAP_PASSWORD') = '') then
+    RaiseException('Une installation silencieuse exige IMC_BOOTSTRAP_PASSWORD pour créer le compte PDG initial.');
+
+  Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\\installer\\Initialize-PDG-Account.ps1') +
+    '" -AppRoot "' + ExpandConstant('{app}') + '"';
+  if not Exec(
+    ExpandConstant('{sys}\\WindowsPowerShell\\v1.0\\powershell.exe'),
+    Parameters,
+    ExpandConstant('{app}'),
+    SW_SHOW,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+    RaiseException('Impossible d ouvrir la fenêtre de création du compte PDG.');
+  if ResultCode <> 0 then
+    RaiseException('Le compte PDG est obligatoire. L installation ne peut pas être finalisée. Les données existantes sont conservées.');
+
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -127,25 +145,6 @@ begin
     end;
   end;
 
-  if CurStep = ssPostInstall then
-  begin
-    if WizardSilent and (GetEnv('IMC_BOOTSTRAP_PASSWORD') = '') then
-      RaiseException('Une installation silencieuse exige IMC_BOOTSTRAP_PASSWORD pour créer le compte PDG initial.');
-    Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
-      ExpandConstant('{app}\installer\Initialize-PDG-Account.ps1') +
-      '" -AppRoot "' + ExpandConstant('{app}') + '"';
-    if not Exec(
-      ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      Parameters,
-      ExpandConstant('{app}'),
-      SW_SHOW,
-      ewWaitUntilTerminated,
-      ResultCode
-    ) then
-      RaiseException('Impossible d ouvrir la fenêtre de création du compte PDG.');
-    if ResultCode <> 0 then
-      RaiseException('Le compte PDG est obligatoire. L installation ne peut pas être finalisée. Aucun compte existant ni aucune donnée ne seront réinitialisés.');
-  end;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -173,7 +172,6 @@ begin
 end;
 
 [Run]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\installer\Initialize-PDG-Account.ps1"" -AppRoot ""{app}"""; Description: "Initialiser le compte PDG si nécessaire"; Flags: postinstall skipifsilent; Tasks: createpdg
 Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; Description: "Ouvrir IMC-Clarodaro"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
