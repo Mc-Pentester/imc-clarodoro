@@ -55,7 +55,7 @@ require("runtime" in router and "installer" in router and "database" in router a
         "HTTP router must deny direct access to runtimes, secrets and internal directories")
 require("Initialize-PDG-Account.ps1" in iss and "AfterInstall: ConfigureAfterFiles" in iss
         and "WizardSilent" in iss and "IMC_BOOTSTRAP_PASSWORD" in iss
-        and "createpdg" not in iss and "skipifsilent" not in iss,
+        and "Tasks: createpdg" not in iss and "Initialiser le compte PDG si nécessaire" not in iss,
         "mandatory PDG setup must run after database provisioning and cannot be skipped")
 require("LOWER(u.username)" in pdg_setup and "r.name" in pdg_setup and "bootstrap-auth.php" in pdg_setup,
         "first-PDG script must check existing account before bootstrap")
@@ -77,7 +77,7 @@ require("Prepare-Bundled-Runtimes.ps1" in workflow,
 require("1.1.0" in workflow, "installer artifact version mismatch")
 require("Smoke test clean install" in workflow and "Réinstallation sans désinstallation" in workflow,
         "Windows clean-install and in-place-reinstall smoke test missing")
-require("installer_upgrade_sentinel" in workflow and "PG_VERSION" in workflow and "Reinstall after a full uninstall" in workflow,
+require("installer_upgrade_sentinel" in workflow and "PG_VERSION" in workflow and "Reinstall after a full uninstall" in workflow\n        and "pdgHashBeforeUpgrade" in workflow and "pdgHashAfterUpgrade" in workflow,
         "Windows smoke test does not verify PostgreSQL data preservation")
 require("/eleves.html" in workflow and "JavaScript brut" in workflow,
         "Windows HTTP smoke test is missing the eleves.html raw-JavaScript regression check")
