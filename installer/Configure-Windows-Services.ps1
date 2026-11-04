@@ -323,6 +323,10 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             } while (-not $ready -and (Get-Date) -lt $deadline)
             if (-not $ready) { throw 'PostgreSQL ne répond pas après 60 secondes.' }
 
+            # Relire le secret administrateur persistant utilisé par initdb : le compte postgres
+            # est réservé au bootstrap initial, jamais aux tests de réinstallation/restauration.
+            $pgAdminPassword = [System.IO.File]::ReadAllText($adminSecretFile).TrimEnd("`r", "`n")
+            if ([string]::IsNullOrWhiteSpace($pgAdminPassword)) { throw 'Le secret administrateur PostgreSQL persistant est vide.' }
             $env:PGPASSWORD = $pgAdminPassword
             $databaseSetupFile = Join-Path $configRoot 'create-application-database.sql'
             $databaseSetupSql = "CREATE ROLE imc_clarodaro_app LOGIN PASSWORD '$appPassword';" + [Environment]::NewLine + "CREATE DATABASE imc_clarodoro OWNER imc_clarodaro_app ENCODING 'UTF8';" + [Environment]::NewLine
@@ -387,8 +391,14 @@ elseif ($hasProtectedConfig -and $managedLocalDatabase) {
     Write-Step 'Réenregistrement du service PostgreSQL pour le cluster ProgramData conservé.'
     & icacls.exe $dataRoot /grant '*S-1-5-20:(X)' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'ACL du chemin PostgreSQL impossible.' }
-    & icacls.exe $dataDirectory /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'ACL du cluster PostgreSQL impossible.' }
+    # Ajouter les droits du service sans remplacer les ACL existantes du cluster conservé.
+    # /grant est volontairement additif : aucune ACE préexistante n'est retirée.
+    & icacls.exe $dataDirectory /grant '*S-1-5-20:(OI)(CI)F' /T /C | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Impossible d accorder les droits au service PostgreSQL sur le cluster conservé.' }
+    $postgresConfig = Join-Path $dataDirectory 'postgresql.conf'
+    if (-not (Test-Path -LiteralPath $postgresConfig -PathType Leaf)) { throw 'postgresql.conf absent du cluster conservé ; aucune réparation destructive ne sera tentée.' }
+    & icacls.exe $postgresConfig /grant '*S-1-5-20:F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner au service PostgreSQL la lecture du fichier postgresql.conf.' }
 
     # Les ACL de traversee ont deja ete appliquees et controlees par le code retour icacls ci-dessus.
     # Eviter le controle secondaire via les objets ACL PowerShell sur les runners Windows.
