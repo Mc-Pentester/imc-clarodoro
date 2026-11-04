@@ -60,8 +60,9 @@ require("Initialize-PDG-Account.ps1" in iss and "AfterInstall: ConfigureAfterFil
 require("LOWER(u.username)" in pdg_setup and "r.name" in pdg_setup and "bootstrap-auth.php" in pdg_setup,
         "first-PDG script must check existing account before bootstrap")
 require("Show-PdgCredentialDialog" in pdg_setup and "UseSystemPasswordChar" in pdg_setup
-        and "IMC_BOOTSTRAP_PASSWORD" not in pdg_setup and "bootstrap-auth.php" in pdg_setup,
-        "first-PDG setup must use a masked GUI prompt and pass password only to the CLI bootstrap")
+        and "IMC_BOOTSTRAP_PASSWORD" in pdg_setup and "bootstrap-auth.php" in pdg_setup
+        and "$first = Show-PdgCredentialDialog" in pdg_setup,
+        "first-PDG setup must prompt interactively by default, with explicit secret support for silent CI only")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
 require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
