@@ -71,7 +71,38 @@ $exitCode = proc_close($process);
 unset($environment['IMC_BOOTSTRAP_PASSWORD'], $password, $confirmation, $data);
 
 if ($exitCode !== 0) {
-    error_log('Clarodaro first-run bootstrap failed: ' . trim((string) $stderr . ' ' . (string) $stdout));
+    // Le serveur PHP tourne sous LocalService : error_log() est redirigé vers
+    // stderr et peut ne pas être collecté tant que le processus reste actif.
+    // Écrire aussi le diagnostic dans le répertoire ProgramData protégé,
+    // sans jamais journaliser le mot de passe fourni par l'utilisateur.
+    $diagnostic = trim((string) $stderr . PHP_EOL . (string) $stdout);
+    if ($diagnostic === '') {
+        $diagnostic = 'Le script bootstrap-auth.php a échoué sans produire de sortie.';
+    }
+    if (is_string($password ?? null) && $password !== '') {
+        $diagnostic = str_replace($password, '[REDACTED]', $diagnostic);
+    }
+
+    $programData = getenv('ProgramData');
+    $diagnosticPath = is_string($programData) && $programData !== ''
+        ? rtrim($programData, DIRECTORY_SEPARATOR . '/\\') . DIRECTORY_SEPARATOR
+            . 'IMC-Clarodaro' . DIRECTORY_SEPARATOR . 'logs' . DIRECTORY_SEPARATOR
+            . 'first-run-setup.log'
+        : '';
+    $logLine = sprintf(
+        "[%s] Bootstrap PDG échoué (code %d): %s%s",
+        date(DATE_ATOM),
+        $exitCode,
+        $diagnostic,
+        PHP_EOL
+    );
+    $written = $diagnosticPath !== ''
+        ? @file_put_contents($diagnosticPath, $logLine, FILE_APPEND | LOCK_EX)
+        : false;
+    if ($written === false) {
+        error_log('Clarodaro first-run bootstrap failed (code ' . $exitCode . '): ' . $diagnostic);
+    }
+
     apiError(409, 'La création du compte PDG a échoué. Vérifiez que la configuration initiale n’a pas déjà été effectuée.');
 }
 
