@@ -153,14 +153,11 @@ try {
         throw 'Impossible de vérifier de façon fiable si un compte PDG existe. Initialisation annulée.'
     }
 
-    # Un secret d'environnement n'est accepté que pour un déploiement automatisé explicite (CI).
-    # En installation interactive, l'utilisateur saisit lui-même son mot de passe dans la fenêtre sécurisée.
-    $first = [string]$env:IMC_BOOTSTRAP_PASSWORD
-    if ([string]::IsNullOrWhiteSpace($first)) {
-        $first = Show-PdgCredentialDialog
-        if ($null -eq $first) {
-            throw 'Création du compte PDG annulée. L''installation ne peut pas être finalisée sans ce compte.'
-        }
+    # Aucun mot de passe transmis par variable d'environnement ou automatisation :
+    # le futur administrateur doit saisir et confirmer lui-même son mot de passe pendant l'installation.
+    $first = Show-PdgCredentialDialog
+    if ($null -eq $first) {
+        throw 'Création du compte PDG annulée. L''installation ne peut pas être finalisée sans ce compte.'
     }
     if ($first.Length -lt 12 -or $first -notmatch '^[\x20-\x7E]+$') {
         throw 'Le mot de passe PDG doit contenir au moins 12 caractères ASCII imprimables.'
