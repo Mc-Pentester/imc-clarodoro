@@ -54,13 +54,13 @@ require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
 require("runtime" in router and "installer" in router and "database" in router and "router.php" in router and "strncasecmp" in router,
         "HTTP router must deny direct access to runtimes, secrets and internal directories")
 require("Initialize-PDG-Account.ps1" in iss and "AfterInstall: ConfigureAfterFiles" in iss
-        and "WizardSilent" in iss and "IMC_BOOTSTRAP_PASSWORD" in iss
+        and "WizardSilent" not in iss and "IMC_BOOTSTRAP_PASSWORD" not in iss
         and "Tasks: createpdg" not in iss and "Initialiser le compte PDG si nécessaire" not in iss,
         "mandatory PDG setup must run after database provisioning and cannot be skipped")
 require("LOWER(u.username)" in pdg_setup and "r.name" in pdg_setup and "bootstrap-auth.php" in pdg_setup,
         "first-PDG script must check existing account before bootstrap")
 require("Show-PdgCredentialDialog" in pdg_setup and "UseSystemPasswordChar" in pdg_setup
-        and "IMC_BOOTSTRAP_PASSWORD" in pdg_setup and "bootstrap-auth.php" in pdg_setup,
+        and "IMC_BOOTSTRAP_PASSWORD" not in pdg_setup and "bootstrap-auth.php" in pdg_setup,
         "first-PDG setup must use a masked GUI prompt and pass password only to the CLI bootstrap")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
