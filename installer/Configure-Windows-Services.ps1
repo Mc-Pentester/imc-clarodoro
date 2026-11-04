@@ -325,7 +325,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
 
             # Relire le secret administrateur persistant utilisé par initdb : le compte postgres
             # est réservé au bootstrap initial, jamais aux tests de réinstallation/restauration.
-            $pgAdminPassword = [System.IO.File]::ReadAllText($adminSecretFile).TrimEnd("`r", "`n")
+            $pgAdminPassword = [System.IO.File]::ReadAllText($adminSecretFile).Trim()
             if ([string]::IsNullOrWhiteSpace($pgAdminPassword)) { throw 'Le secret administrateur PostgreSQL persistant est vide.' }
             $env:PGPASSWORD = $pgAdminPassword
             $databaseSetupFile = Join-Path $configRoot 'create-application-database.sql'
