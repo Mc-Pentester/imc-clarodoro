@@ -425,6 +425,23 @@ elseif ($hasProtectedConfig -and $managedLocalDatabase) {
             }
         }
 
+        # PostgreSQL écrit souvent ses erreurs de démarrage dans le journal Application
+        # lorsqu'il est exécuté comme service Windows sans logging_collector.
+        Write-Step "=== Événements PostgreSQL du journal Application ==="
+        $applicationEvents = Get-WinEvent -LogName Application -MaxEvents 100 -ErrorAction SilentlyContinue
+        if ($applicationEvents) {
+            $applicationEvents |
+                Where-Object {
+                    $_.ProviderName -match 'PostgreSQL|pg_ctl|postgres' -or
+                    $_.Message -like "*$dataDirectory*" -or
+                    $_.Message -like "*$serviceName*"
+                } |
+                Select-Object -First 30 |
+                ForEach-Object {
+                    Write-Step "Application Event ID=$($_.Id), Provider=$($_.ProviderName), Time=$($_.TimeCreated): $($_.Message)"
+                }
+        }
+
         # Vérifier les journaux PostgreSQL
         $pgLogDir = Join-Path $dataDirectory 'log'
         if (Test-Path -LiteralPath $pgLogDir -PathType Container) {
@@ -435,9 +452,14 @@ elseif ($hasProtectedConfig -and $managedLocalDatabase) {
             }
         }
 
-        # Vérifier les ACL sur le répertoire de données
-        Write-Step "=== ACL sur le répertoire de données ==="
-        & icacls.exe $dataDirectory | Out-Host
+        # Vérifier les ACL de chaque parent, pas seulement celles du cluster.
+        Write-Step "=== ACL sur les chemins PostgreSQL ==="
+        foreach ($aclPath in @($programDataRoot, $dataRoot, $dataDirectory, $runtimeParent, $postgresRuntimeRoot, $pgBin)) {
+            if (Test-Path -LiteralPath $aclPath) {
+                Write-Step "--- $aclPath"
+                & icacls.exe $aclPath | Out-Host
+            }
+        }
 
         throw "Le service PostgreSQL réenregistré n'a pas pu démarrer. Statut: $($serviceCheck.Status), Erreur: $startError"
     }
