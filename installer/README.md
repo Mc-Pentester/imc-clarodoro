@@ -36,8 +36,10 @@ Les comptes PHP (LocalService) et PostgreSQL (NetworkService) sont distincts et 
 - Un répertoire de données existant sans configuration cohérente n'est jamais réinitialisé.
 - Une initialisation interrompue laisse un marqueur qui bloque le démarrage automatique jusqu'à réparation.
 - `database/schema.sql` et les migrations ne sont jamais exécutés sur une base existante ; ils sont réservés à la création d'une base neuve par cet installateur. Aucune restauration n'est lancée.
-- L'option de configuration initiale vérifie d'abord si un utilisateur PDG existe. Si aucun n'existe, elle demande deux fois un mot de passe puis appelle le bootstrap CLI existant. Si un PDG existe, elle ne modifie rien. En installation silencieuse, l'invite est ignorée.
-- Le compte PDG n'est jamais créé ou réinitialisé par une mise à jour. Le script peut être lancé manuellement si l'invite a été ignorée.
+- Après la préparation de la base et le démarrage des services, l'installateur affiche une fenêtre obligatoire de création du compte PDG si aucun utilisateur portant l'identifiant `pdg` ou le rôle `PDG` n'existe. Le mot de passe est masqué, confirmé deux fois, validé (12 caractères ASCII imprimables minimum), puis transmis au bootstrap CLI ; seul son hash est stocké.
+- Si un compte PDG existe déjà, l'installateur ne demande aucun nouveau mot de passe et conserve son hash, son rôle et ses permissions. Cette règle s'applique aux mises à jour, réinstallations et réinstallations après désinstallation.
+- Annuler ou échouer la création du PDG interrompt le parcours d'installation : l'installation ne peut pas être déclarée terminée sans compte PDG. Les données et comptes existants ne sont pas réinitialisés.
+- En mode silencieux, aucun dialogue ne peut être affiché : le déploiement doit fournir explicitement `IMC_BOOTSTRAP_PASSWORD` dans l'environnement du processus d'installation. Sans cette variable, l'installation silencieuse est refusée. Le workflow CI fournit un secret de test dédié et vérifie que le hash PDG ne change pas après réinstallation.
 - La base, la configuration et les journaux d'installation/PHP sont stockés dans ProgramData. Le répertoire historique `backups` reste dans l'application. La désinstallation conserve ces données.
 
 ## Limites et validations obligatoires
