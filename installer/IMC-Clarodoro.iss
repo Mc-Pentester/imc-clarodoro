@@ -98,8 +98,8 @@ begin
       'La configuration des services Clarodaro a échoué. Consultez le journal : ' +
       ExpandConstant('{commonappdata}\IMC-Clarodaro\logs\installer-services.log')
     );
-  if WizardSilent and (GetEnv('IMC_BOOTSTRAP_PASSWORD') = '') then
-    RaiseException('Une installation silencieuse exige IMC_BOOTSTRAP_PASSWORD pour créer le compte PDG initial.');
+  { La création du premier PDG est toujours demandée à l'utilisateur dans la fenêtre dédiée.
+    Aucune variable d'environnement ne peut fournir automatiquement le mot de passe. }
 
   Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\installer\Initialize-PDG-Account.ps1') +
