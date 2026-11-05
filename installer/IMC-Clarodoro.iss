@@ -122,7 +122,7 @@ begin
       ) then
         RaiseException('Impossible de préparer l arret des services avant la mise à jour.');
       if ResultCode <> 0 then
-        RaiseException('Arrêt sécurisé des services impossible. Mise à jour annulée avant remplacement des fichiers.');
+        RaiseException('Arrêt sécurisé des services impossible. Mise à jour annulée avant remplacement des fichiers. Consultez le journal : ' + ExpandConstant('{commonappdata}\\IMC-Clarodaro\\logs\\upgrade-preparation.log'));
     end;
   end;
 
