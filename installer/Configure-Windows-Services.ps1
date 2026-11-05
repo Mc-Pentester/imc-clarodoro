@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$AppRoot,
     [int]$PostgreSqlPort = 55432,
-    [int]$HttpPort = 8080
+    [int]$HttpPort = 18080
 )
 
 $ErrorActionPreference = 'Stop'
