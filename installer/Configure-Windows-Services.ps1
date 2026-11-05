@@ -552,6 +552,27 @@ else {
     Write-Step 'Configuration de base existante détectée. PostgreSQL externe ou historique conservé ; aucune instance ni base ne sera créée.'
 }
 
+# Apply only migrations that are pending in the configured database. The migration
+# runner verifies checksums and refuses to replay a populated database without a
+# migration baseline, so existing records are never reset or overwritten.
+if ($hasProtectedConfig -or $hasLegacyConfig) {
+    Write-Step 'Vérification des migrations de la base existante avant le démarrage de Clarodaro.'
+    $env:IMC_CLARODARO_ENV_FILE = if ($hasProtectedConfig) { $environmentFile } else { $legacyEnvironmentFile }
+    Push-Location $AppRoot
+    try {
+        & $php 'database\\migrate.php' '--status'
+        if ($LASTEXITCODE -ne 0) { throw 'La vérification des migrations de la base existante a échoué.' }
+        & $php 'database\\migrate.php' '--apply'
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Application des migrations en attente impossible. Les données existantes sont conservées ; consulter le journal pour établir un baseline ou corriger la migration.'
+        }
+    }
+    finally {
+        Pop-Location
+        Remove-Item Env:\\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
+    }
+}
+
 # Do not overwrite a legacy root .env. The PHP launcher selects ProgramData only
 # when that protected configuration was created by this installer.
 if ($hasProtectedConfig) {
