@@ -22,7 +22,7 @@ require("IMC-Clarodaro-PostgreSQL" in configure, "dedicated PostgreSQL service n
 require("NETWORK SERVICE" in configure and "LOCAL SERVICE" in configure and "S-1-5-20" in configure and "S-1-5-19" in configure,
         "restricted, separate Windows service identities missing")
 require("IMC-Clarodaro-PHP-Server" in configure, "PHP startup task name missing")
-require("55432" in configure and "8080" in configure, "dedicated ports/default HTTP port missing")
+require("55432" in configure and "18080" in configure, "dedicated ports/default HTTP port missing")
 require("Test-PortAvailable" in configure, "port conflict protection missing")
 require("WindowsIdentity]::GetCurrent().User.Value" in configure and "$dataRoot /grant $dataRootInstallerAce" in configure
         and "$dataDirectory /inheritance:r /grant:r" in configure and "$dataDirectory /remove:g $installerAce" in configure,
@@ -46,9 +46,15 @@ require("hasProtectedConfig" in configure and "hasLegacyConfig" in configure,
         "existing configuration preservation guards missing")
 require("Set-PrivateAcl $legacyEnvironmentFile" in configure and "icacls.exe $AppRoot /reset" in configure and "Permissions: users-modify" not in iss,
         "installed code and legacy database secrets must not be writable by all local users")
-require("0.0.0.0:$HttpPort" in launcher, "PHP startup launcher is not configurable")
+require("127.0.0.1" in launcher and "0.0.0.0" not in launcher and "HttpBindAddress" in launcher,
+        "PHP integrated server must bind to localhost only by default")
 require("IMC_CLARODARO_ENV_FILE" in launcher and "router.php" in launcher,
         "PHP server does not load protected environment or router")
+require("[int]$HttpPort = 18080" in cleanup and "-LocalPort $HttpPort" in cleanup,
+        "uninstall must monitor the configured HTTP port (18080 by default)")
+require("-HttpPort 18080" in iss, "Inno Setup must pass the configured HTTP port to uninstall cleanup")
+require("New-NetFirewallRule" not in configure and "Remove-NetFirewallRule" in configure,
+        "installer must not expose the built-in PHP server through an inbound firewall rule")
 require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup and "NETWORK SERVICE" in cleanup and "LOCAL SERVICE" in cleanup,
         "owned task/service cleanup missing")
 require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,

@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$AppRoot,
     [int]$PostgreSqlPort = 55432,
-    [int]$HttpPort = 18080
+    [int]$HttpPort = 18080,
+    [string]$HttpBindAddress = '127.0.0.1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,6 +112,9 @@ foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $php)) {
 }
 if ($PostgreSqlPort -lt 1024 -or $PostgreSqlPort -gt 65535 -or $HttpPort -lt 1024 -or $HttpPort -gt 65535) {
     throw 'Port invalide.'
+}
+if ($HttpBindAddress -ne '127.0.0.1') {
+    throw 'Le serveur PHP intégré est limité à localhost. Pour un accès LAN, configurer un reverse proxy HTTPS dédié.'
 }
 $launcher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -598,7 +602,7 @@ if (-not (Test-PortAvailable $HttpPort) -and -not $task) {
 $powershell = Join-Path $PSHOME 'powershell.exe'
 $arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $launcher + '" -AppRoot "' + $AppRoot + '"'
 if ($taskEnvironmentFile) { $arguments += ' -EnvironmentFile "' + $taskEnvironmentFile + '"' }
-$arguments += " -HttpPort $HttpPort"
+$arguments += " -HttpPort $HttpPort -HttpBindAddress $HttpBindAddress"
 
 $action = New-ScheduledTaskAction -Execute $powershell -Argument $arguments -WorkingDirectory $AppRoot
 $trigger = New-ScheduledTaskTrigger -AtStartup
@@ -639,13 +643,10 @@ if (Test-PortAvailable $HttpPort) {
 # EDB ou un autre service peut répondre sur 8080 sans servir l'application.
 Test-ClarodaroHttpEndpoint -Port $HttpPort -ExpectedPhpPath $php
 
-try {
-    if (-not (Get-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $HttpPort -Profile Private | Out-Null
-    }
-}
-catch {
-    Write-Warning "Règle pare-feu non créée automatiquement : $($_.Exception.Message)"
+$legacyFirewallRule = Get-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -ErrorAction SilentlyContinue
+if ($legacyFirewallRule) {
+    $legacyFirewallRule | Remove-NetFirewallRule -ErrorAction Stop
+    Write-Step 'Ancienne règle pare-feu HTTP LAN supprimée ; Clarodaro reste accessible uniquement depuis localhost.'
 }
 
 Write-Step "Serveur PHP planifié au démarrage sur le port $HttpPort."

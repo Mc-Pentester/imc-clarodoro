@@ -140,7 +140,7 @@ begin
   begin
     Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
       ExpandConstant('{app}\installer\Remove-Windows-Services.ps1') +
-      '" -AppRoot "' + ExpandConstant('{app}') + '"';
+      '" -AppRoot "' + ExpandConstant('{app}') + '" -HttpPort 18080';
     if not Exec(
       ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters,
