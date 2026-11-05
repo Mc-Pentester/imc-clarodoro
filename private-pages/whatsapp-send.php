@@ -81,8 +81,8 @@ $('openWhatsApp').addEventListener('click',async()=>{
       body:JSON.stringify({parent_id:verifiedConsent.parentId,purpose:verifiedConsent.purpose,message})
     });
     const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
-    if(!response.ok||data.success!==true||!/^\\+[1-9][0-9]{7,14}$/.test(data.phone_e164||''))throw Error(data.error||'La vérification finale a échoué.');
-    const digits=data.phone_e164.replace(/\\D/g,'');
+    if(!response.ok||data.success!==true||!/^\+[1-9][0-9]{7,14}$/.test(data.phone_e164||''))throw Error(data.error||'La vérification finale a échoué.');
+    const digits=data.phone_e164.replace(/\D/g,'');
     popup.location.href='https://wa.me/'+digits+'?text='+encodeURIComponent(message);
     $('message').value='';
     invalidateConsent();
