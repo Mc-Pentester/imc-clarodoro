@@ -596,6 +596,7 @@ tr:nth-child(even) {
 </header>
 <header class="entete-ecole">
 
+    <img src="/logo-clarodaro.png" alt="Logo Institution Mixte Clarodaro" style="display:block;width:64px;height:64px;object-fit:contain;margin:0 auto 10px;">
     <div class="informations-ecole">
         <h1>Institution Mixte Clarodaro</h1>
         <p>Clarodaro, la clarté du savoir !</p>
