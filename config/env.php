@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * IMC-Clarodoro - Local environment loader.
+ * IMC-Clarodaro - Local environment loader.
  *
  * IMC_CLARODARO_ENV_FILE may point to the protected ProgramData configuration
  * used by the Windows installer. Without it, the legacy project-root .env
