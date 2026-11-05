@@ -406,7 +406,7 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             if ($LASTEXITCODE -ne 0) { throw 'Création de l historique de migrations initial échouée.' }
             Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 
-            
+
         }
         finally {
             Remove-Item -LiteralPath $passwordFile -Force -ErrorAction SilentlyContinue
