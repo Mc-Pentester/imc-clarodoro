@@ -15,6 +15,8 @@ for (const match of script.matchAll(/\$\('([^']+)'\)/g)) {
   assert.ok(ids.includes(match[1]), `Missing DOM element referenced by script: ${match[1]}`);
 }
 assert.ok(script.includes('/api/whatsapp/manual-preparations.php'), 'Final server-side consent/audit endpoint missing');
+assert.ok(script.includes(String.raw`!/ ^\+[1-9][0-9]{7,14}$/.test(data.phone_e164||'')`.replace('!/ ^','!/')), 'Final E.164 validation must accept a literal plus sign');
+assert.ok(script.includes(String.raw`replace(/\D/g,'')`), 'Phone normalization must remove all non-digits');
 assert.ok(script.includes("'X-CSRF-Token':csrf"), 'CSRF header missing on preparation request');
 assert.ok(script.includes('popup.location.href=\'https://wa.me/'), 'WhatsApp click-to-chat navigation missing');
 assert.ok(!/localStorage|sessionStorage/.test(script), 'Message must not be persisted in browser storage');
