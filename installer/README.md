@@ -19,11 +19,11 @@ Après copie des fichiers, l'installateur exécute `Configure-Windows-Services.p
 - Enregistre uniquement le service `IMC-Clarodaro-PostgreSQL` sous le compte restreint NetworkService, avec les données sous ProgramData et le port local 55432 par défaut.
 - Crée un rôle applicatif et une base dédiés avec des secrets aléatoires ; la configuration protégée est conservée dans `%ProgramData%\IMC-Clarodaro\config\.env`.
 - Exécute `database/schema.sql` uniquement sur cette base neuve et vide, crée l'historique de migrations initial, puis lance `database/migrate.php --status` et `--apply`.
-- Démarre PHP au démarrage de Windows via une tâche planifiée `IMC-Clarodaro-PHP-Server` sous le compte restreint LocalService, avec le routeur PHP et le port 8080.
-- Ajoute une règle pare-feu TCP 8080 limitée au profil réseau privé.
+- Démarre PHP au démarrage de Windows via une tâche planifiée `IMC-Clarodaro-PHP-Server` sous le compte restreint LocalService, avec le routeur PHP et le port 18080.
+- Ajoute une aucune règle pare-feu entrante n'est créée ; le serveur écoute uniquement sur 127.0.0.1:18080.
 - Journalise la configuration dans `%ProgramData%\IMC-Clarodaro\logs\installer-services.log`.
 
-Les comptes PHP (LocalService) et PostgreSQL (NetworkService) sont distincts et limités ; les permissions d écriture sont accordées uniquement aux répertoires nécessaires. La tâche PHP est une tâche planifiée au démarrage, pas un service Windows natif. Le serveur PHP intégré est mono-processus sous Windows et l'accès LAN actuel utilise HTTP sans TLS. Il doit être remplacé ou complété par un serveur HTTP de production avec HTTPS avant toute distribution commerciale ; pour les essais, limiter l'accès à un réseau privé de confiance.
+Les comptes PHP (LocalService) et PostgreSQL (NetworkService) sont distincts et limités ; les permissions d écriture sont accordées uniquement aux répertoires nécessaires. La tâche PHP est une tâche planifiée au démarrage, pas un service Windows natif. Le serveur PHP intégré est mono-processus sous Windows et écoute exclusivement sur 127.0.0.1:18080. Aucun accès LAN en HTTP clair n'est activé et aucune règle pare-feu entrante n'est créée. Pour un accès depuis d'autres postes, déployer explicitement un reverse proxy HTTPS avec certificat et filtrage réseau ; ne pas exposer directement le serveur PHP intégré.
 
 ## Protections de données et mises à jour
 
@@ -51,7 +51,7 @@ L'intégration des runtimes et l'orchestration des services sont maintenant pré
 3. accès local et depuis un autre poste du LAN ;
 4. réinstallation et mise à jour avec configuration et données existantes ;
 5. chemin contenant espaces et caractères accentués ;
-6. conflit sur les ports 55432 et 8080 ;
+6. conflit sur les ports 55432 et 18080 ;
 7. présence d'un PostgreSQL tiers ;
 8. désinstallation sans suppression de ProgramData ni des données.
 

@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory = $true)][string]$AppRoot
+    [Parameter(Mandatory = $true)][string]$AppRoot,
+    [int]$HttpPort = 18080
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,7 +53,7 @@ try {
         $taskStopDeadline = (Get-Date).AddSeconds(45)
         do {
             $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-            $listener = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
+            $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
                 Select-Object -First 1
             if (-not $listener -and (-not $currentTask -or [string]$currentTask.State -ne 'Running')) { break }
             Start-Sleep -Seconds 1
@@ -61,7 +62,7 @@ try {
         $listener = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
             Select-Object -First 1
         if ($listener) {
-            throw "Le port 8080 reste occupé (PID $($listener.OwningProcess)). La tâche n'est pas supprimée."
+            throw "Le port HTTP $HttpPort reste occupé (PID $($listener.OwningProcess)). La tâche n'est pas supprimée."
         }
 
         $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue

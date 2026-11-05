@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$AppRoot,
     [string]$EnvironmentFile = '',
-    [int]$HttpPort = 8080
+    [int]$HttpPort = 18080,
+    [string]$HttpBindAddress = '127.0.0.1'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,7 +61,8 @@ try {
         throw "PHP ne peut pas être exécuté (code $versionExitCode)."
     }
 
-    Write-LauncherLog 'Lancement du serveur PHP intégré sur toutes les interfaces LAN.'
+    if ($HttpBindAddress -ne '127.0.0.1') { throw 'Le serveur PHP intégré est limité à localhost ; un accès LAN exige un reverse proxy HTTPS.' }
+    Write-LauncherLog 'Lancement du serveur PHP intégré sur localhost uniquement.'
     # Windows PowerShell 5.1 converts native stderr into ErrorRecords. PHP writes
     # its normal "Development Server started" banner to stderr, so do not pipe it
     # through PowerShell with ErrorActionPreference=Stop.
@@ -68,7 +70,7 @@ try {
     $stderrLog = Join-Path $logRoot 'php-server.stderr.log'
     $arguments = @(
         '-S',
-        "0.0.0.0:$HttpPort",
+        ('{0}:{1}' -f $HttpBindAddress, $HttpPort),
         '-t',
         ('"' + $AppRoot + '"'),
         ('"' + $router + '"')

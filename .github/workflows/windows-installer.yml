@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - feature/windows-installer-clarodaro
+    tags:
+      - 'clarodaro-v*'
   pull_request:
     branches:
       - main
@@ -167,6 +169,16 @@ jobs:
           $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
           if ($install.ExitCode -ne 0) {
             throw "Installation silencieuse échouée : code $($install.ExitCode)"
+          }
+          $initialHttpListeners = @(Get-NetTCPConnection -State Listen -LocalPort 18080 -ErrorAction SilentlyContinue)
+          if (-not ($initialHttpListeners | Where-Object { $_.LocalAddress -eq "127.0.0.1" })) {
+            throw "Le serveur PHP ne doit écouter que sur 127.0.0.1:18080."
+          }
+          if ($initialHttpListeners | Where-Object { $_.LocalAddress -notin @("127.0.0.1", "::1") }) {
+            throw "Le serveur PHP est exposé sur une interface réseau non locale."
+          }
+          if (Get-NetFirewallRule -DisplayName "IMC-Clarodaro HTTP LAN" -ErrorAction SilentlyContinue) {
+            throw "Une ancienne règle pare-feu expose encore le serveur HTTP Clarodaro."
           }
 
           try {
