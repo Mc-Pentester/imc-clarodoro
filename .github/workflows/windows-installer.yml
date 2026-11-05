@@ -265,7 +265,7 @@ jobs:
             Write-Host 'Connexion du compte PDG après création : PASS.'
 
             $listenerBeforeDashboard = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $listenerBeforeDashboard) { throw 'Le serveur PHP a cessé d’écouter après la connexion PDG.' }
+            if (-not $listenerBeforeDashboard) { throw 'Le serveur PHP ne repond plus avant le chargement du tableau de bord PDG.' }
             $dashboardResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/pdg.html' -WebSession $loginSession -TimeoutSec 20
             if ($dashboardResponse.StatusCode -ne 200 -or $dashboardResponse.Content -notmatch 'zonePDG') {
               throw 'PDG dashboard did not load with the authenticated session.'
