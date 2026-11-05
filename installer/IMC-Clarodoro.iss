@@ -48,6 +48,8 @@ Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignorev
 Source: "Configure-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Remove-Windows-Services.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
 Source: "Prepare-Upgrade.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion; AfterInstall: ConfigureAfterFiles
+; The upgrade guard must come from this installer, not from the older installed version.
+Source: "Prepare-Upgrade.ps1"; Flags: dontcopy
 ; Keep persistent configuration and user data during upgrades and uninstall.
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
@@ -107,10 +109,11 @@ var
 begin
   if CurStep = ssInstall then
   begin
-    if FileExists(ExpandConstant('{app}\installer\Prepare-Upgrade.ps1')) then
+    if DirExists(ExpandConstant('{app}')) then
     begin
+      ExtractTemporaryFile('Prepare-Upgrade.ps1');
       Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
-        ExpandConstant('{app}\installer\Prepare-Upgrade.ps1') +
+        ExpandConstant('{tmp}\Prepare-Upgrade.ps1') +
         '" -AppRoot "' + ExpandConstant('{app}') + '"';
       if not Exec(
         ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
