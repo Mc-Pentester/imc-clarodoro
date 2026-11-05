@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory = $true)][string]$AppRoot
+    [Parameter(Mandatory = $true)][string]$AppRoot,
+    [int]$HttpPort = 18080
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,13 +27,29 @@ if ($task) {
     if ($taskAction -notlike "*$expectedLauncher*" -or [string]$task.Principal.UserId -notmatch "LOCAL SERVICE|S-1-5-19") {
         throw "La tâche $taskName ne correspond pas à cette installation. Aucun arrêt effectué."
     }
-    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    $deadline = (Get-Date).AddSeconds(25)
-    while ((Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1) -and (Get-Date) -lt $deadline) {
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction Stop
+    $expectedPhp = [System.IO.Path]::GetFullPath((Join-Path $AppRoot 'runtime\\php\\php.exe'))
+    $deadline = (Get-Date).AddSeconds(45)
+    do {
+        $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if (-not $listener) { break }
+
+        $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
+        if (-not $listenerProcess -or -not $listenerProcess.ExecutablePath) {
+            throw "Impossible d'identifier le processus qui écoute sur le port HTTP $HttpPort (PID $($listener.OwningProcess)). Aucun fichier ne sera remplacé."
+        }
+        $actualExecutable = [System.IO.Path]::GetFullPath([string]$listenerProcess.ExecutablePath)
+        if (-not [string]::Equals($actualExecutable, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Le port HTTP $HttpPort est occupé par un autre programme : $actualExecutable. Aucun processus tiers ne sera arrêté."
+        }
         Start-Sleep -Seconds 1
-    }
-    if (Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1) {
-        throw 'Le serveur PHP ne sest pas arrêté. Mise à jour interrompue avant remplacement des fichiers.'
+    } while ((Get-Date) -lt $deadline)
+
+    $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($listener) {
+        throw "Le serveur PHP Clarodaro (PID $($listener.OwningProcess)) ne s'est pas arrêté sur le port $HttpPort. Mise à jour interrompue avant remplacement des fichiers."
     }
 }
 
