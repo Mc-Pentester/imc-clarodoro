@@ -169,16 +169,18 @@ jobs:
 
           echo 'F-02-H API authentication + authorized student GET: PASS'
 
-      - name: Verify badge consumes server API without local data fallback
+      - name: Verify protected badge page consumes server API without local data fallback
         run: |
           set -euo pipefail
-          grep -Fq 'fetch("api/students/index.php"' badge.html
-          grep -Fq 'student.last_name' badge.html
-          grep -Fq 'student.first_name' badge.html
-          grep -Fq 'profile.classe || student.class_name' badge.html
-          grep -Fq 'profile.annee_scolaire || profile.annee' badge.html
-          grep -Fq 'IMCAuth.requireAuth("personnel.html")' badge.html
-          if grep -nE 'imc_students|imc_active_year|IMCSecureStorage.*imc_students|localStorage.*imc_students' badge.html; then
+          BADGE_PAGE='private-pages/badge.php'
+          test -f "$BADGE_PAGE"
+          grep -Fq 'fetch("api/students/index.php"' "$BADGE_PAGE"
+          grep -Fq 'student.last_name' "$BADGE_PAGE"
+          grep -Fq 'student.first_name' "$BADGE_PAGE"
+          grep -Fq 'profile.classe || student.class_name' "$BADGE_PAGE"
+          grep -Fq 'profile.annee_scolaire || profile.annee' "$BADGE_PAGE"
+          grep -Fq "'badge.html' => ['public' => 'badge.html', 'file' => 'badge.php', 'permission' => 'badge.read'" secure-page.php
+          if grep -nE 'imc_students|imc_active_year|IMCSecureStorage.*imc_students|localStorage.*imc_students' "$BADGE_PAGE"; then
             echo 'FAIL: badge still reads student source-of-truth from browser storage'
             exit 1
           fi
