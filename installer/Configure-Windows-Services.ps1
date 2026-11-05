@@ -320,9 +320,15 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
             $startError = $null
             try {
                 Start-Service -Name $serviceName -ErrorAction Stop
+                # Le SCM peut laisser le service en StartPending après Start-Service.
+                # Attendre Running avant de conclure à un échec sur les machines lentes.
+                (Get-Service -Name $serviceName -ErrorAction Stop).WaitForStatus(
+                    'Running',
+                    [TimeSpan]::FromSeconds(60)
+                )
             } catch {
                 $startError = $_.Exception.Message
-                Write-Step "Erreur Start-Service: $startError"
+                Write-Step "Erreur démarrage/attente PostgreSQL: $startError"
             }
 
             $serviceCheck = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
@@ -429,7 +435,11 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
 elseif ($service) {
     Write-Step 'Instance PostgreSQL Clarodaro existante détectée ; aucune initialisation ni migration ne sera exécutée.'
     if ((Get-Service -Name $serviceName).Status -ne 'Running') {
-        Start-Service -Name $serviceName
+        Start-Service -Name $serviceName -ErrorAction Stop
+        (Get-Service -Name $serviceName -ErrorAction Stop).WaitForStatus(
+            'Running',
+            [TimeSpan]::FromSeconds(60)
+        )
     }
 }
 elseif ($hasProtectedConfig -and $managedLocalDatabase) {
@@ -465,9 +475,14 @@ elseif ($hasProtectedConfig -and $managedLocalDatabase) {
     $startError = $null
     try {
         Start-Service -Name $serviceName -ErrorAction Stop
+        # Même attente explicite lors du réenregistrement d'un cluster existant.
+        (Get-Service -Name $serviceName -ErrorAction Stop).WaitForStatus(
+            'Running',
+            [TimeSpan]::FromSeconds(60)
+        )
     } catch {
         $startError = $_.Exception.Message
-        Write-Step "Erreur Start-Service: $startError"
+        Write-Step "Erreur démarrage/attente PostgreSQL: $startError"
     }
 
     $serviceCheck = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
