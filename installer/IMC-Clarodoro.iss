@@ -52,8 +52,8 @@ Source: "Prepare-Upgrade.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion;
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
 [Icons]
-Name: "{autoprograms}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14
-Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
+Name: "{autoprograms}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14
+Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
 
 [Code]
 
@@ -153,7 +153,7 @@ begin
 end;
 
 [Run]
-Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:8080/"""; Description: "Ouvrir IMC-Clarodaro"; Flags: postinstall nowait skipifsilent
+Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; Description: "Ouvrir IMC-Clarodaro"; Flags: postinstall nowait skipifsilent
 
 [UninstallDelete]
 ; Intentionally empty: uninstall must not delete .env, backups, logs or database data.
