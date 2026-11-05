@@ -260,7 +260,7 @@ jobs:
             }
             $loginResult = $loginResponse.Content | ConvertFrom-Json
             if (-not $loginResult.success -or -not $loginResult.user -or $loginResult.user.role -ne 'PDG') {
-              throw 'L’API de connexion n’a pas confirmé une session PDG valide.'
+              throw 'Login API did not confirm a valid PDG session.'
             }
             Write-Host 'Connexion du compte PDG après création : PASS.'
 
@@ -268,13 +268,13 @@ jobs:
             if (-not $listenerBeforeDashboard) { throw 'Le serveur PHP a cessé d’écouter après la connexion PDG.' }
             $dashboardResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/pdg.html' -WebSession $loginSession -TimeoutSec 20
             if ($dashboardResponse.StatusCode -ne 200 -or $dashboardResponse.Content -notmatch 'zonePDG') {
-              throw 'Après connexion, le tableau de bord PDG ne se charge pas avec la session authentifiée.'
+              throw 'PDG dashboard did not load with the authenticated session.'
             }
             $listenerAfterDashboard = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1
             if (-not $listenerAfterDashboard -or $listenerBeforeDashboard.OwningProcess -ne $listenerAfterDashboard.OwningProcess) {
               throw 'Le processus serveur PHP a disparu ou changé après l’ouverture du tableau de bord PDG.'
             }
-            Write-Host 'Ouverture du tableau de bord PDG et maintien du serveur PHP : PASS.'
+            Write-Host 'PDG dashboard opened and PHP server stayed active: PASS.'
 
             $blockedHttpPaths = @(
               '/.env',
