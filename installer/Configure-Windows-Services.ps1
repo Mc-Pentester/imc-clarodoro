@@ -560,16 +560,16 @@ if ($hasProtectedConfig -or $hasLegacyConfig) {
     $env:IMC_CLARODARO_ENV_FILE = if ($hasProtectedConfig) { $environmentFile } else { $legacyEnvironmentFile }
     Push-Location $AppRoot
     try {
-        & $php 'database\\migrate.php' '--status'
+        & $php 'database\migrate.php' '--status'
         if ($LASTEXITCODE -ne 0) { throw 'La vérification des migrations de la base existante a échoué.' }
-        & $php 'database\\migrate.php' '--apply'
+        & $php 'database\migrate.php' '--apply'
         if ($LASTEXITCODE -ne 0) {
             throw 'Application des migrations en attente impossible. Les données existantes sont conservées ; consulter le journal pour établir un baseline ou corriger la migration.'
         }
     }
     finally {
         Pop-Location
-        Remove-Item Env:\\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
+        Remove-Item Env:\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
     }
 }
 
