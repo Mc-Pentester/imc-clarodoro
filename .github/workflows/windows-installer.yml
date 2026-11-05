@@ -250,6 +250,32 @@ jobs:
             if (-not $setupResult.success) { throw 'La création du compte PDG via le parcours utilisateur a échoué.' }
             Write-Host 'Création du premier compte PDG via HTTP après installation : PASS.'
 
+            # Reproduce the complete first-use path: login, authenticated dashboard,
+            # and PHP listener survival after the redirect target is requested.
+            $loginSession = $null
+            $loginBody = @{ username = 'pdg'; password = $ciPdgPassword } | ConvertTo-Json -Compress
+            $loginResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/api/auth/login.php' -Method Post -SessionVariable loginSession -ContentType 'application/json' -Headers @{ Accept = 'application/json' } -Body $loginBody -TimeoutSec 20
+            if ($loginResponse.StatusCode -ne 200) {
+              throw "La connexion PDG après création a échoué : HTTP $($loginResponse.StatusCode)."
+            }
+            $loginResult = $loginResponse.Content | ConvertFrom-Json
+            if (-not $loginResult.success -or -not $loginResult.user -or $loginResult.user.role -ne 'PDG') {
+              throw 'L’API de connexion n’a pas confirmé une session PDG valide.'
+            }
+            Write-Host 'Connexion du compte PDG après création : PASS.'
+
+            $listenerBeforeDashboard = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $listenerBeforeDashboard) { throw 'Le serveur PHP a cessé d’écouter après la connexion PDG.' }
+            $dashboardResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:8080/pdg.html' -WebSession $loginSession -TimeoutSec 20
+            if ($dashboardResponse.StatusCode -ne 200 -or $dashboardResponse.Content -notmatch 'zonePDG') {
+              throw 'Après connexion, le tableau de bord PDG ne se charge pas avec la session authentifiée.'
+            }
+            $listenerAfterDashboard = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $listenerAfterDashboard -or $listenerBeforeDashboard.OwningProcess -ne $listenerAfterDashboard.OwningProcess) {
+              throw 'Le processus serveur PHP a disparu ou changé après l’ouverture du tableau de bord PDG.'
+            }
+            Write-Host 'Ouverture du tableau de bord PDG et maintien du serveur PHP : PASS.'
+
             $blockedHttpPaths = @(
               '/.env',
               '/runtime/php/php.ini',
