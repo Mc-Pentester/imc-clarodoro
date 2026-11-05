@@ -375,7 +375,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 
     <div class="identite-clarodaro">
         <!-- LOGO DE L'INSTITUTION : EN HAUT -->
-        <img src="logo-clarodaro.png"
+        <img src="/logo-clarodaro.png"
              alt="Logo Institution Mixte Clarodaro">
 
         <!-- NOM DE L'INSTITUTION : EN DESSOUS DU LOGO -->

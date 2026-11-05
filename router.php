@@ -2,9 +2,19 @@
 declare(strict_types=1);
 
 /**
- * Routeur pour le serveur PHP intégré : php -S 127.0.0.1:8090 router.php
+ * Routeur pour le serveur PHP intégré.
+ * Les fichiers applicatifs internes, runtimes, secrets et données ne sont jamais servis directement.
  */
 $path = rawurldecode((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH));
+$path = str_replace('\\', '/', $path);
+$path = preg_replace('#/+#', '/', $path) ?? '/';
+$lowerPath = strtolower($path);
+
+if (preg_match('#(?:^|/)\\.\\.(?:/|$)#', $path) === 1 || preg_match('#(?:^|/)\\.[^/]*#', $path) === 1) {
+    http_response_code(404);
+    exit('Not found');
+}
+
 $protected = [
     '/index.html' => 'index.html',
     '/eleves.html' => 'index.html',
@@ -15,7 +25,13 @@ $protected = [
     '/payroll-recovery.html' => 'payroll-recovery.html',
     '/resultats.html' => 'resultats.html',
     '/vacations.html' => 'vacations.html',
+    '/vacances.html' => 'vacations.html',
 ];
+
+if ($path === '/setup' || $path === '/setup/') {
+    require __DIR__ . '/setup-page.php';
+    exit;
+}
 
 if ($path === '/') {
     $_GET['page'] = 'index.html';
@@ -23,8 +39,8 @@ if ($path === '/') {
     exit;
 }
 
-if (isset($protected[$path]) || isset($protected[strtolower($path)])) {
-    $_GET['page'] = $protected[$path] ?? $protected[strtolower($path)];
+if (isset($protected[$path]) || isset($protected[$lowerPath])) {
+    $_GET['page'] = $protected[$path] ?? $protected[$lowerPath];
     require __DIR__ . '/secure-page.php';
     exit;
 }
@@ -34,13 +50,34 @@ if ($path === '/whatsapp-send.html') {
     exit;
 }
 
-if (str_starts_with($path, '/private-pages/')) {
+$blockedDirectories = [
+    '/runtime', '/installer', '/database', '/scripts', '/config',
+    '/logs', '/backups', '/uploads', '/storage', '/tmp', '/cache',
+    '/exports', '/private-pages', '/audit', '/docs', '/.git', '/.github',
+];
+foreach ($blockedDirectories as $directory) {
+    if ($lowerPath === $directory || str_starts_with($lowerPath, $directory . '/')) {
+        http_response_code(404);
+        exit('Not found');
+    }
+}
+
+if (in_array($lowerPath, ['/router.php', '/secure-page.php', '/bootstrap-auth.php'], true)
+    || preg_match('/\\.(sql|ps1|ini|exe|dll|bat|cmd|log|bak|zip)$/i', $path) === 1) {
     http_response_code(404);
     exit('Not found');
 }
 
-if ($path !== '/router.php' && is_file(__DIR__ . $path)) {
+$documentRoot = realpath(__DIR__);
+$requestedFile = realpath(__DIR__ . $path);
+if (
+    $documentRoot !== false
+    && $requestedFile !== false
+    && is_file($requestedFile)
+    && strncasecmp($requestedFile, $documentRoot . DIRECTORY_SEPARATOR, strlen($documentRoot . DIRECTORY_SEPARATOR)) === 0
+) {
     return false;
 }
 
-return false;
+http_response_code(404);
+exit('Not found');

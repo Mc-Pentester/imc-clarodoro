@@ -19,6 +19,42 @@ $pdo = getDatabaseConnection();
 $pdo->beginTransaction();
 
 try {
+    /*
+     * Verrou transactionnel : empêche deux exécutions concurrentes du
+     * bootstrap de passer simultanément le contrôle de première création.
+     */
+    $pdo->query("SELECT pg_advisory_xact_lock(hashtext('imc-clarodaro-bootstrap-auth-v1'))");
+
+    // Valider le secret avant toute écriture dans les tables RBAC.
+    $password = getenv('IMC_BOOTSTRAP_PASSWORD');
+
+    if (!is_string($password) || strlen($password) < 12) {
+        throw new RuntimeException(
+            'IMC_BOOTSTRAP_PASSWORD doit contenir au moins 12 caractères.'
+        );
+    }
+
+    /*
+     * Ce script est réservé à l'initialisation. Dès qu'un compte "pdg"
+     * existe ou qu'un utilisateur possède le rôle PDG, on s'arrête sans
+     * modifier utilisateurs, rôles, permissions ni associations.
+     */
+    $existingPdgStmt = $pdo->query(
+        "SELECT 1
+         FROM users u
+         LEFT JOIN roles r ON r.id = u.role_id
+         WHERE LOWER(u.username) = 'pdg'
+            OR r.name = 'PDG'
+         LIMIT 1"
+    );
+
+    if ($existingPdgStmt->fetchColumn() !== false) {
+        throw new RuntimeException(
+            'Initialisation refusée : un compte PDG existe déjà. '
+            . 'Aucun compte, rôle ou droit existant n’a été modifié. '
+            . 'Utilisez la procédure de récupération PDG si nécessaire.'
+        );
+    }
     $roles = [
         'PDG',
         'Directeur',
@@ -82,10 +118,7 @@ try {
     $permissionStmt = $pdo->prepare(
         'INSERT INTO permissions (name, description)
          VALUES (:name, :description)
-         ON CONFLICT (name)
-         DO UPDATE SET
-             description = EXCLUDED.description,
-             updated_at = NOW()'
+         ON CONFLICT (name) DO NOTHING'
     );
 
     foreach ($permissions as $permission) {
@@ -172,14 +205,6 @@ try {
         }
     }
 
-    $password = getenv('IMC_BOOTSTRAP_PASSWORD');
-
-    if (!is_string($password) || strlen($password) < 12) {
-        throw new RuntimeException(
-            'IMC_BOOTSTRAP_PASSWORD doit contenir au moins 12 caractères.'
-        );
-    }
-
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
     if ($passwordHash === false) {
@@ -196,13 +221,7 @@ try {
             r.id,
             :status
          FROM roles r
-         WHERE r.name = :role
-         ON CONFLICT (username)
-         DO UPDATE SET
-            password_hash = EXCLUDED.password_hash,
-            role_id = EXCLUDED.role_id,
-            status = EXCLUDED.status,
-            updated_at = NOW()'
+         WHERE r.name = :role'
     );
 
     $userStmt->execute([
@@ -211,6 +230,12 @@ try {
         ':status' => 'ACTIVE',
         ':role' => 'PDG',
     ]);
+
+    if ($userStmt->rowCount() !== 1) {
+        throw new RuntimeException(
+            'Création du compte PDG impossible : rôle PDG absent ou conflit utilisateur.'
+        );
+    }
 
     $pdo->commit();
 

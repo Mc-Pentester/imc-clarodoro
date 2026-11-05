@@ -32,6 +32,14 @@ $page = $pages[$requestedPage];
 
 try {
     $pdo = getDatabaseConnection();
+    $existingPdg = $pdo->query(
+        "SELECT 1 FROM users u LEFT JOIN roles r ON r.id = u.role_id
+         WHERE LOWER(u.username) = 'pdg' OR r.name = 'PDG' LIMIT 1"
+    )->fetchColumn();
+    if ($existingPdg === false) {
+        require __DIR__ . '/setup-page.php';
+        exit;
+    }
     $access = imcPageAccess($pdo, $page['permission'], $page['role']);
 } catch (Throwable $error) {
     error_log('IMC page authorization unavailable: ' . $error->getMessage());

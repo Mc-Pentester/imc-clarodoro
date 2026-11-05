@@ -446,6 +446,7 @@ imcRequirePageAccess('paies.read', 'PDG', $pdo ?? null);
 
 <header class="entete-ecole">
 
+    <img src="/logo-clarodaro.png" alt="Logo Institution Mixte Clarodaro" style="display:block;width:64px;height:64px;object-fit:contain;margin:0 auto 10px;">
     <div class="informations-ecole">
 
         <h1>Institution Mixte Clarodaro</h1>

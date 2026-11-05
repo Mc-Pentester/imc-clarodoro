@@ -1,0 +1,140 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../config/auth.php';
+
+header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, private');
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Allow: POST');
+    apiError(405, 'Méthode non autorisée');
+}
+
+configureAuthSession();
+requireCsrfToken();
+$data = readJsonBody();
+$password = isset($data['password']) && is_string($data['password']) ? $data['password'] : '';
+$confirmation = isset($data['confirmation']) && is_string($data['confirmation']) ? $data['confirmation'] : '';
+
+if (strlen($password) < 12 || preg_match('/^[\x20-\x7E]+$/D', $password) !== 1) {
+    apiError(400, 'Le mot de passe doit contenir au moins 12 caractères ASCII imprimables.');
+}
+if (!hash_equals($password, $confirmation)) {
+    apiError(400, 'Les deux mots de passe ne correspondent pas.');
+}
+
+$pdo = getDatabaseConnection();
+$existing = $pdo->query(
+    "SELECT 1 FROM users u LEFT JOIN roles r ON r.id = u.role_id
+     WHERE LOWER(u.username) = 'pdg' OR r.name = 'PDG' LIMIT 1"
+)->fetchColumn();
+if ($existing !== false) {
+    apiError(409, 'La configuration initiale est déjà terminée.');
+}
+
+$applicationRoot = dirname(__DIR__, 2);
+$bootstrap = $applicationRoot . DIRECTORY_SEPARATOR . 'bootstrap-auth.php';
+if (!is_file($bootstrap) || !function_exists('proc_open')) {
+    error_log('Clarodaro first-run bootstrap unavailable: missing CLI script or proc_open.');
+    apiError(503, 'La création initiale du compte est momentanément indisponible.');
+}
+
+// Le processus CLI doit relire exactement la configuration protégée du serveur.
+ // Ne pas lui transmettre les éventuels DB_* hérités du compte de service Windows :
+ // ils peuvent désigner le superutilisateur postgres au lieu du compte applicatif.
+$environment = getenv();
+if (!is_array($environment)) {
+    $environment = [];
+}
+$configFile = getenv('IMC_CLARODARO_ENV_FILE');
+if (is_string($configFile) && trim($configFile) !== '') {
+    $environment['IMC_CLARODARO_ENV_FILE'] = $configFile;
+} else {
+    unset($environment['IMC_CLARODARO_ENV_FILE']);
+}
+foreach (['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'] as $databaseVariable) {
+    unset($environment[$databaseVariable]);
+}
+$environment['IMC_BOOTSTRAP_PASSWORD'] = $password;
+$descriptors = [
+    0 => ['pipe', 'r'],
+    1 => ['pipe', 'w'],
+    2 => ['pipe', 'w'],
+];
+
+$process = proc_open(
+    // Passer un nom relatif évite de transmettre un chemin Windows Unicode
+    // comme argument CLI (notamment dans les dossiers contenant des accents).
+    // Le répertoire de travail fournit le chemin réel au processus enfant.
+    [PHP_BINARY, '-f', 'bootstrap-auth.php'],
+    $descriptors,
+    $pipes,
+    $applicationRoot,
+    $environment,
+    ['bypass_shell' => true]
+);
+if (!is_resource($process)) {
+    apiError(503, 'Impossible de démarrer la configuration initiale.');
+}
+fclose($pipes[0]);
+$stdout = stream_get_contents($pipes[1]);
+fclose($pipes[1]);
+$stderr = stream_get_contents($pipes[2]);
+fclose($pipes[2]);
+$exitCode = proc_close($process);
+unset($environment['IMC_BOOTSTRAP_PASSWORD'], $data);
+
+if ($exitCode !== 0) {
+    // Le serveur PHP tourne sous LocalService : error_log() est redirigé vers
+    // stderr et peut ne pas être collecté tant que le processus reste actif.
+    // Écrire aussi le diagnostic dans le répertoire ProgramData protégé,
+    // sans jamais journaliser le mot de passe fourni par l'utilisateur.
+    $diagnostic = trim((string) $stderr . PHP_EOL . (string) $stdout);
+    if ($diagnostic === '') {
+        $diagnostic = 'Le script bootstrap-auth.php a échoué sans produire de sortie.';
+    }
+    if (is_string($password ?? null) && $password !== '') {
+        $diagnostic = str_replace($password, '[REDACTED]', $diagnostic);
+    }
+
+    $programData = getenv('ProgramData');
+    $diagnosticPath = is_string($programData) && $programData !== ''
+        ? rtrim($programData, DIRECTORY_SEPARATOR . '/\\') . DIRECTORY_SEPARATOR
+            . 'IMC-Clarodaro' . DIRECTORY_SEPARATOR . 'logs' . DIRECTORY_SEPARATOR
+            . 'first-run-setup.log'
+        : '';
+    $logLine = sprintf(
+        "[%s] Bootstrap PDG échoué (code %d): %s%s",
+        date(DATE_ATOM),
+        $exitCode,
+        $diagnostic,
+        PHP_EOL
+    );
+    $written = $diagnosticPath !== ''
+        ? @file_put_contents($diagnosticPath, $logLine, FILE_APPEND | LOCK_EX)
+        : false;
+    if ($written === false) {
+        error_log('Clarodaro first-run bootstrap failed (code ' . $exitCode . '): ' . $diagnostic);
+    }
+
+    unset($password, $confirmation);
+    apiError(409, 'La création du compte PDG a échoué. Vérifiez que la configuration initiale n’a pas déjà été effectuée.');
+}
+
+unset($password, $confirmation);
+
+$verify = $pdo->query(
+    "SELECT COUNT(*) FROM users u INNER JOIN roles r ON r.id = u.role_id
+     WHERE LOWER(u.username) = 'pdg' AND r.name = 'PDG' AND u.status = 'ACTIVE'"
+)->fetchColumn();
+if ((int) $verify !== 1) {
+    error_log('Clarodaro first-run bootstrap exited successfully but PDG verification failed.');
+    apiError(500, 'Le compte PDG n’a pas pu être vérifié après sa création.');
+}
+
+$_SESSION = [];
+session_destroy();
+
+echo json_encode(['success' => true], JSON_UNESCAPED_UNICODE);

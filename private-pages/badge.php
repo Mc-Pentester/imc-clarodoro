@@ -511,6 +511,7 @@ button:hover{
             alt="Logo gauche">
 
         <div class="bloc-identite">
+            <img src="/logo-clarodaro.png" alt="Logo Institution Mixte Clarodaro" style="display:block;width:64px;height:64px;object-fit:contain;margin:0 auto 10px;">
 
             <div class="institution">
                 INSTITUTION MIXTE

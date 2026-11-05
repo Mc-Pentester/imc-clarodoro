@@ -1,0 +1,527 @@
+name: Windows installer package
+
+on:
+  push:
+    branches:
+      - feature/windows-installer-clarodaro
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-installer:
+    name: Build Inno Setup installer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download and verify bundled PHP and PostgreSQL runtimes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & .\installer\Prepare-Bundled-Runtimes.ps1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Préparation des runtimes embarqués échouée (code $LASTEXITCODE)."
+          }
+
+      - name: Install or locate Inno Setup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $candidates = @(
+            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+            (Join-Path $env:ChocolateyInstall 'lib\innosetup\tools\ISCC.exe')
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+          if (-not $candidates) {
+            choco install innosetup --yes --no-progress --force
+            if ($LASTEXITCODE -ne 0) {
+              throw "Installation Inno Setup échouée (code $LASTEXITCODE)."
+            }
+          }
+
+          $searchRoots = @(
+            $env:ProgramFiles,
+            ${env:ProgramFiles(x86)},
+            $env:ChocolateyInstall
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+
+          $found = foreach ($candidate in $candidates) { $candidate }
+          if (-not $found) {
+            $found = Get-ChildItem -Path $searchRoots -Filter 'ISCC.exe' -File -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty FullName
+          }
+
+          $iscc = $found | Select-Object -First 1
+          if (-not $iscc -or -not (Test-Path -LiteralPath $iscc)) {
+            throw "ISCC.exe introuvable après installation. Répertoires inspectés : $($searchRoots -join ', ')"
+          }
+
+          "INNO_SETUP_COMPILER=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Compilateur Inno Setup : $iscc"
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:INNO_SETUP_COMPILER -or -not (Test-Path -LiteralPath $env:INNO_SETUP_COMPILER)) {
+            throw "Variable INNO_SETUP_COMPILER absente ou invalide."
+          }
+           $installerScript = 'installer\IMC-Clarodoro.iss'
+          if (-not (Test-Path -LiteralPath $installerScript -PathType Leaf)) {
+            throw "Script Inno Setup introuvable : $installerScript"
+          }
+          & $env:INNO_SETUP_COMPILER $installerScript
+          if ($LASTEXITCODE -ne 0) {
+            throw "Compilation Inno Setup échouée (code $LASTEXITCODE)."
+          }
+          $artifact = 'dist\IMC-Clarodaro-Setup-1.1.0.exe'
+          if (-not (Test-Path -LiteralPath $artifact)) {
+            throw "Installateur absent : $artifact"
+          }
+
+      - name: Smoke test clean install, in-place reinstall, PHP/PostgreSQL startup and data-preserving uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Resolve-Path 'dist\IMC-Clarodaro-Setup-1.1.0.exe').Path
+          $installDir = Join-Path $env:ProgramFiles 'IMC-Clarodaro Test é'
+          $dataDir = Join-Path $env:ProgramData 'IMC-Clarodaro\PostgreSQL\data'
+          $configFile = Join-Path $env:ProgramData 'IMC-Clarodaro\config\.env'
+          $serviceName = 'IMC-Clarodaro-PostgreSQL'
+          $taskName = 'IMC-Clarodaro-PHP-Server'
+
+          function Save-InstallerFailureDiagnostics([string]$Reason) {
+            $diagnosticRoot = Join-Path $env:RUNNER_TEMP 'clarodaro-diagnostics'
+            New-Item -ItemType Directory -Path $diagnosticRoot -Force | Out-Null
+            $diagnosticFile = Join-Path $diagnosticRoot 'windows-installer-failure.txt'
+            Start-Transcript -Path $diagnosticFile -Append | Out-Null
+            try {
+              Write-Host "=== SMOKE TEST FAILURE ==="
+              Write-Host $Reason
+              Write-Host "=== SERVICE DETAILS ==="
+              Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue |
+                Select-Object Name,State,StartName,PathName,ExitCode,ServiceSpecificExitCode,ProcessId,StartMode | Format-List
+              Get-Service -Name $serviceName -ErrorAction SilentlyContinue | Format-List *
+              Write-Host "=== POSTGRESQL APPLICATION EVENTS ==="
+              $applicationEvents = Get-WinEvent -LogName Application -MaxEvents 150 -ErrorAction SilentlyContinue
+              $applicationEvents | Where-Object {
+                $_.ProviderName -match 'PostgreSQL|pg_ctl|postgres' -or
+                $_.Message -like "*$dataDir*" -or $_.Message -like "*$serviceName*"
+              } | Select-Object -First 40 Id,TimeCreated,ProviderName,Message | Format-List
+              Write-Host "=== SERVICE CONTROL MANAGER EVENTS ==="
+              $events = Get-WinEvent -LogName System -FilterXPath "*[System[(EventID=7000 or EventID=7009 or EventID=7011 or EventID=7023 or EventID=7031 or EventID=7034 or EventID=7036 or EventID=7045) and TimeCreated[timediff(@SystemTime) <= 7200000]]]" -MaxEvents 100 -ErrorAction SilentlyContinue
+              $events | Where-Object { $_.Message -like "*$serviceName*" -or $_.Message -like '*PostgreSQL*' } |
+                Select-Object Id,TimeCreated,ProviderName,Message | Format-List
+              Write-Host "=== ACLS ON SERVICE PATHS ==="
+              $paths = @($env:ProgramData,
+                (Join-Path $env:ProgramData 'IMC-Clarodaro'),
+                (Join-Path $env:ProgramData 'IMC-Clarodaro\runtime'),
+                (Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql'),
+                (Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin'),
+                (Join-Path $env:ProgramData 'IMC-Clarodaro\PostgreSQL'),
+                $dataDir)
+              foreach ($path in $paths) {
+                if (Test-Path -LiteralPath $path) { Write-Host "--- $path"; & icacls.exe $path }
+              }
+              Write-Host "=== POSTGRESQL EXECUTABLES ==="
+              foreach ($exe in @('pg_ctl.exe','postgres.exe','psql.exe')) {
+                $path = Join-Path $env:ProgramData ("IMC-Clarodaro\runtime\postgresql\bin\" + $exe)
+                if (Test-Path -LiteralPath $path) {
+                  Get-Item -LiteralPath $path | Select-Object FullName,Length,Attributes
+                  & icacls.exe $path
+                } else { Write-Host "MISSING: $path" }
+              }
+              Write-Host "=== INSTALLER AND POSTGRESQL LOGS (CONFIG CONTENT EXCLUDED) ==="
+              foreach ($path in @((Join-Path $env:ProgramData 'IMC-Clarodaro\logs\installer-services.log'),
+                                  (Join-Path $env:ProgramData 'IMC-Clarodaro\logs\php-server.log'),
+                                  (Join-Path $env:ProgramData 'IMC-Clarodaro\logs\php-server.stdout.log'),
+                                  (Join-Path $env:ProgramData 'IMC-Clarodaro\logs\php-server.stderr.log'),
+                        (Join-Path $env:ProgramData 'IMC-Clarodaro\logs\uninstall-services.log'))) {
+                if (Test-Path -LiteralPath $path -PathType Leaf) {
+                  Write-Host "--- $path"; Get-Content -LiteralPath $path -Tail 300
+                }
+              }
+              $pgLogDir = Join-Path $dataDir 'log'
+              if (Test-Path -LiteralPath $pgLogDir -PathType Container) {
+                Get-ChildItem -LiteralPath $pgLogDir -File -ErrorAction SilentlyContinue |
+                  Sort-Object LastWriteTime -Descending | Select-Object -First 5 |
+                  ForEach-Object { Write-Host "--- $($_.FullName)"; Get-Content -LiteralPath $_.FullName -Tail 200 }
+              }
+              Write-Host "=== POSTGRESQL FILE METADATA ==="
+              foreach ($name in @('PG_VERSION','postgresql.conf','pg_hba.conf','postmaster.pid')) {
+                $path = Join-Path $dataDir $name
+                if (Test-Path -LiteralPath $path) { Get-Item -LiteralPath $path | Select-Object FullName,Length,LastWriteTime,Attributes }
+              }
+            }
+            finally { Stop-Transcript | Out-Null }
+          }
+
+          $installArgs = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="' + $installDir + '"'))
+          $install = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "Installation silencieuse échouée : code $($install.ExitCode)"
+          }
+
+          try {
+            $serviceDeadline = (Get-Date).AddSeconds(90)
+            do {
+              $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+              if ($service -and $service.Status -eq 'Running') { break }
+              Start-Sleep -Seconds 2
+            } while ((Get-Date) -lt $serviceDeadline)
+            if (-not $service -or $service.Status -ne 'Running') {
+              throw 'Le service PostgreSQL Clarodaro ne fonctionne pas.'
+            }
+            $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+            if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'PostgreSQL ne fonctionne pas sous un compte de service restreint.' }
+            $postgresRuntime = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\pg_ctl.exe'
+            if ($serviceInfo.PathName -notlike "*$postgresRuntime*") { throw 'Le service PostgreSQL doit utiliser le runtime ASCII indépendant du dossier applicatif.' }
+
+            if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION'))) {
+              throw 'Le cluster PostgreSQL initial na pas été créé.'
+            }
+            if (-not (Test-Path -LiteralPath $configFile)) {
+              throw 'La configuration protégée ProgramData est absente.'
+            }
+
+            # Test de connexion PostgreSQL avec psql
+            $psql = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\psql.exe'
+            $dbValues = @{}
+            foreach ($line in Get-Content -LiteralPath $configFile) {
+              $separator = $line.IndexOf('=')
+              if ($separator -gt 0) { $dbValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
+            }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $psqlTest = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c 'SELECT 1;' 2>&1
+            if ($LASTEXITCODE -ne 0) {
+              throw "Test de connexion PostgreSQL échoué: $psqlTest"
+            }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+            Write-Host 'Test de connexion PostgreSQL réussi.'
+
+            $php = Join-Path $installDir 'runtime\php\php.exe'
+            $env:IMC_CLARODARO_ENV_FILE = $configFile
+            Push-Location $installDir
+            try {
+              $migrationStatus = & $php 'database\migrate.php' '--status' 2>&1
+              if ($LASTEXITCODE -ne 0 -or ($migrationStatus -match 'PENDING|DRIFT|MISSING')) { throw 'La base neuve ne possède pas un historique de migrations complet et cohérent.' }
+            }
+            finally {
+              Pop-Location
+              Remove-Item Env:\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
+            }
+
+            $httpDeadline = (Get-Date).AddSeconds(45)
+            $httpReady = $false
+            do {
+              $listener = Get-NetTCPConnection -State Listen -LocalPort 18080 -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($listener) { $httpReady = $true; break }
+              Start-Sleep -Seconds 1
+            } while ((Get-Date) -lt $httpDeadline)
+            if (-not $httpReady) { throw 'Le serveur PHP ne répond pas sur le port 18080.' }
+
+            # A clean install must leave the database without any PDG account.
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $psql = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\psql.exe'
+            $pdgCountBeforeSetup = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT COUNT(*) FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE LOWER(u.username) = 'pdg' OR r.name = 'PDG';"
+            if ($LASTEXITCODE -ne 0 -or ($pdgCountBeforeSetup -join '').Trim() -ne '0') {
+              throw 'Le programme d installation a créé un compte PDG automatiquement : ce comportement est interdit.'
+            }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+
+            # The first administrator is created by submitting the browser setup form after installation.
+            $setupSession = $null
+            $setupResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:18080/setup' -SessionVariable setupSession -TimeoutSec 10
+            if ($setupResponse.StatusCode -ne 200 -or $setupResponse.Content -notmatch 'Créer mon compte PDG') {
+              throw 'La page de première configuration post-installation est absente.'
+            }
+            $csrfMatch = [regex]::Match($setupResponse.Content, '<meta name="csrf-token" content="([^"]+)"')
+            if (-not $csrfMatch.Success) { throw 'Le jeton CSRF de la première configuration est absent.' }
+            $ciPdgPassword = ([Guid]::NewGuid().ToString('N') + 'Aa9!')
+            $setupBody = @{ password = $ciPdgPassword; confirmation = $ciPdgPassword } | ConvertTo-Json -Compress
+            $setupResult = Invoke-RestMethod -Uri 'http://127.0.0.1:18080/api/auth/initial-setup.php' -Method Post -WebSession $setupSession -Headers @{ 'X-CSRF-Token' = $csrfMatch.Groups[1].Value } -ContentType 'application/json' -Body $setupBody -TimeoutSec 20
+            if (-not $setupResult.success) { throw 'La création du compte PDG via le parcours utilisateur a échoué.' }
+            Write-Host 'Création du premier compte PDG via HTTP après installation : PASS.'
+
+            # Reproduce the complete first-use path: login, authenticated dashboard,
+            # and PHP listener survival after the redirect target is requested.
+            $loginSession = $null
+            $loginBody = @{ username = 'pdg'; password = $ciPdgPassword } | ConvertTo-Json -Compress
+            $loginResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:18080/api/auth/login.php' -Method Post -SessionVariable loginSession -ContentType 'application/json' -Headers @{ Accept = 'application/json' } -Body $loginBody -TimeoutSec 20
+            if ($loginResponse.StatusCode -ne 200) {
+              throw "La connexion PDG après création a échoué : HTTP $($loginResponse.StatusCode)."
+            }
+            $loginResult = $loginResponse.Content | ConvertFrom-Json
+            if (-not $loginResult.success -or -not $loginResult.user -or $loginResult.user.role -ne 'PDG') {
+              throw 'Login API did not confirm a valid PDG session.'
+            }
+            Write-Host 'Connexion du compte PDG après création : PASS.'
+
+            $listenerBeforeDashboard = Get-NetTCPConnection -State Listen -LocalPort 18080 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $listenerBeforeDashboard) { throw 'Le serveur PHP ne repond plus avant le chargement du tableau de bord PDG.' }
+            $dashboardResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:18080/pdg.html' -WebSession $loginSession -TimeoutSec 20
+            if ($dashboardResponse.StatusCode -ne 200 -or $dashboardResponse.Content -notmatch 'zonePDG') {
+              throw 'PDG dashboard did not load with the authenticated session.'
+            }
+            $listenerAfterDashboard = Get-NetTCPConnection -State Listen -LocalPort 18080 -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $listenerAfterDashboard -or $listenerBeforeDashboard.OwningProcess -ne $listenerAfterDashboard.OwningProcess) {
+              throw 'Le processus serveur PHP a disparu ou changé après l-ouverture du tableau de bord PDG.'
+            }
+            Write-Host 'PDG dashboard opened and PHP server stayed active: PASS.'
+
+            $blockedHttpPaths = @(
+              '/.env',
+              '/runtime/php/php.ini',
+              '/runtime/php/php.exe',
+              '/runtime/postgresql/bin/postgres.exe',
+              '/installer/Configure-Windows-Services.ps1',
+              '/database/schema.sql',
+              '/Scripts/RESET-PDG-PASSWORD.php',
+              '/backups/',
+              '/router.php'
+            )
+            foreach ($blockedPath in $blockedHttpPaths) {
+              $response = Invoke-WebRequest -Uri ("http://127.0.0.1:18080" + $blockedPath) -SkipHttpErrorCheck -TimeoutSec 10
+              if ($response.StatusCode -ne 404) {
+                throw "Le routeur expose un fichier ou dossier interne : $blockedPath (HTTP $($response.StatusCode))."
+              }
+            }
+
+            $elevesResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:18080/eleves.html' -SkipHttpErrorCheck -TimeoutSec 10
+            if ($elevesResponse.Content.TrimStart() -match '^(const|let|var)\s' -or ($elevesResponse.StatusCode -eq 200 -and $elevesResponse.Content.TrimStart() -notmatch '^(?i)<!doctype html|<html')) {
+              throw 'La route eleves.html renvoie du JavaScript brut au lieu d une page HTML protégée.'
+            }
+
+            $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            if (-not $task) { throw 'La tâche de démarrage PHP est absente.' }
+            if ([string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') { throw 'PHP ne fonctionne pas sous un compte de service restreint.' }
+
+            # Create a database sentinel, then reinstall over the same directory.
+            $dbValues = @{}
+            foreach ($line in Get-Content -LiteralPath $configFile) {
+              $separator = $line.IndexOf('=')
+              if ($separator -gt 0) { $dbValues[$line.Substring(0, $separator)] = $line.Substring($separator + 1) }
+            }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $psql = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\psql.exe'
+            $pdgCount = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT COUNT(*) FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE LOWER(u.username) = 'pdg' OR r.name = 'PDG';"
+            if ($LASTEXITCODE -ne 0 -or ($pdgCount -join '').Trim() -ne '1') {
+              throw 'Le compte PDG initial obligatoire n a pas été créé exactement une fois.'
+            }
+            $pdgHashBeforeUpgrade = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT password_hash FROM users WHERE LOWER(username) = 'pdg';"
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($pdgHashBeforeUpgrade -join '').Trim())) {
+              throw 'Le hash du mot de passe PDG est absent après création.'
+            }
+            & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -v ON_ERROR_STOP=1 -c "CREATE TABLE public.installer_upgrade_sentinel (id integer PRIMARY KEY, marker text NOT NULL); INSERT INTO public.installer_upgrade_sentinel VALUES (1, 'preserve-me');"
+            if ($LASTEXITCODE -ne 0) { throw 'Impossible de créer le témoin de conservation en base.' }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+
+            $upgrade = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+            if ($upgrade.ExitCode -ne 0) { throw "Réinstallation sans désinstallation échouée : code $($upgrade.ExitCode)" }
+
+            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+            if (-not $service -or $service.Status -ne 'Running') { throw 'PostgreSQL ne redémarre pas après réinstallation.' }
+            $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+            if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'Le compte de service PostgreSQL a changé pendant la réinstallation.' }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $sentinel = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c 'SELECT marker FROM public.installer_upgrade_sentinel WHERE id = 1;'
+            if ($LASTEXITCODE -ne 0 -or ($sentinel -join '').Trim() -ne 'preserve-me') {
+              throw 'La réinstallation a modifié ou perdu les données PostgreSQL existantes.'
+            }
+            $pdgHashAfterUpgrade = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT password_hash FROM users WHERE LOWER(username) = 'pdg';"
+            if ($LASTEXITCODE -ne 0 -or ($pdgHashAfterUpgrade -join '').Trim() -ne ($pdgHashBeforeUpgrade -join '').Trim()) {
+              throw 'La réinstallation a modifié le hash du mot de passe PDG existant.'
+            }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+
+            $httpDeadline = (Get-Date).AddSeconds(45)
+            $httpReady = $false
+            do {
+              $listener = Get-NetTCPConnection -State Listen -LocalPort 18080 -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($listener) { $httpReady = $true; break }
+              Start-Sleep -Seconds 1
+            } while ((Get-Date) -lt $httpDeadline)
+            if (-not $httpReady) { throw 'Le serveur PHP ne redémarre pas après réinstallation.' }
+          }
+          catch {
+            $failureReason = $_.Exception.Message
+            Write-Host "Windows installer smoke test failed: $failureReason" -ForegroundColor Red
+            try { Save-InstallerFailureDiagnostics -Reason $failureReason }
+            catch { Write-Host "Diagnostic capture failed: $($_.Exception.Message)" -ForegroundColor Yellow }
+            throw
+          }
+          finally {
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+            $uninstaller = Join-Path $installDir 'unins000.exe'
+            if (Test-Path -LiteralPath $uninstaller) {
+              $uninstallLog = Join-Path $env:RUNNER_TEMP 'clarodaro-uninstall.log'
+              $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/LOG="' + $uninstallLog + '"')) -Wait -PassThru
+              if ($uninstall.ExitCode -ne 0) {
+                if (Test-Path -LiteralPath $uninstallLog) {
+                  Get-Content -LiteralPath $uninstallLog -Tail 200 | ForEach-Object { Write-Host "UNINSTALL: $_" }
+                  Copy-Item -LiteralPath $uninstallLog -Destination (Join-Path $env:RUNNER_TEMP 'clarodaro-diagnostics\uninstall-failure.log') -Force
+                }
+                throw "Désinstallation silencieuse échouée : code $($uninstall.ExitCode)"
+              }
+            }
+          }
+
+          if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION'))) {
+            throw 'ÉCHEC : les données PostgreSQL ont été supprimées à la désinstallation.'
+          }
+          if (-not (Test-Path -LiteralPath $configFile)) {
+            throw 'ÉCHEC : la configuration ProgramData a été supprimée à la désinstallation.'
+          }
+          if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+            throw 'La tâche PHP Clarodaro est restée enregistrée après désinstallation.'
+          }
+          if (Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue) {
+            throw 'Le service PostgreSQL Clarodaro est resté enregistré après désinstallation.'
+          }
+          # Reinstall after a full uninstall: restore the owned service around the preserved cluster.
+          $restore = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          if ($restore.ExitCode -ne 0) { throw "Réinstallation après désinstallation échouée : code $($restore.ExitCode)" }
+          try {
+            $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+            if (-not $service -or $service.Status -ne 'Running') { throw 'Le service PostgreSQL conservé n a pas été réenregistré.' }
+            if ($dbValues['DB_USER'] -ne 'imc_clarodaro_app') { throw 'Le test de restauration doit utiliser le compte applicatif du .env, jamais le superutilisateur postgres.' }
+            $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+            if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'Compte PostgreSQL incorrect après réinstallation.' }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $sentinel = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c 'SELECT marker FROM public.installer_upgrade_sentinel WHERE id = 1;'
+            if ($LASTEXITCODE -ne 0 -or ($sentinel -join '').Trim() -ne 'preserve-me') {
+              throw 'Les données PostgreSQL conservées ne sont pas accessibles après réinstallation.'
+            }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+            $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            if (-not $task -or [string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') {
+              throw 'La tâche PHP LocalService n a pas été restaurée.'
+            }
+          }
+          finally {
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+            $uninstaller = Join-Path $installDir 'unins000.exe'
+            if (Test-Path -LiteralPath $uninstaller) {
+              $finalUninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+              if ($finalUninstall.ExitCode -ne 0) { throw "Désinstallation finale échouée : code $($finalUninstall.ExitCode)" }
+            }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION')) -or -not (Test-Path -LiteralPath $configFile)) {
+            throw 'Les données ProgramData n ont pas survécu à la seconde désinstallation.'
+          }
+          if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+            throw 'La tâche PHP est restée après la seconde désinstallation.'
+          }
+          if (Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue) {
+            throw 'Le service PostgreSQL est resté après la seconde désinstallation.'
+          }
+          Write-Host 'INSTALL / REINSTALL / UNINSTALL / RESTORE EXISTING CLUSTER / DATA PRESERVATION: PASS'
+
+      - name: Show Windows installer diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:ProgramData 'IMC-Clarodaro'
+          $savedDiagnostics = Join-Path $env:RUNNER_TEMP 'clarodaro-diagnostics'
+          $programDataLogs = Join-Path $savedDiagnostics 'programdata-logs'
+          $postgresLogs = Join-Path $savedDiagnostics 'postgresql-logs'
+          New-Item -ItemType Directory -Path $programDataLogs,$postgresLogs -Force | Out-Null
+
+          # Stage logs under RUNNER_TEMP so the artifact action receives one root.
+          $installerLogRoot = Join-Path $root 'logs'
+          if (Test-Path -LiteralPath $installerLogRoot -PathType Container) {
+            Get-ChildItem -LiteralPath $installerLogRoot -Filter '*.log' -File -ErrorAction SilentlyContinue |
+              Copy-Item -Destination $programDataLogs -Force
+          }
+          $postgresLogRoot = Join-Path $root 'PostgreSQL\data\log'
+          if (Test-Path -LiteralPath $postgresLogRoot -PathType Container) {
+            Get-ChildItem -LiteralPath $postgresLogRoot -File -ErrorAction SilentlyContinue |
+              Copy-Item -Destination $postgresLogs -Force
+          }
+
+          $serviceName = 'IMC-Clarodaro-PostgreSQL'
+          Write-Host "=== Diagnostics captured before cleanup ==="
+          $savedDiagnostics = Join-Path $env:RUNNER_TEMP 'clarodaro-diagnostics'
+          if (Test-Path -LiteralPath $savedDiagnostics) {
+            Get-ChildItem -LiteralPath $savedDiagnostics -File | ForEach-Object {
+              Write-Host "--- $($_.FullName)"
+              Get-Content -LiteralPath $_.FullName -Tail 500
+            }
+          }
+
+          Write-Host "=== Service PostgreSQL ==="
+          Get-Service -Name $serviceName -ErrorAction SilentlyContinue | Format-List *
+          Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue | Format-List *
+
+          Write-Host "=== Tâche PHP et historique Task Scheduler ==="
+          $taskName = 'IMC-Clarodaro-PHP-Server'
+          $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+          if ($task) { $task | Format-List *; $task.Actions | Format-List *; Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue | Format-List * }
+          Get-WinEvent -LogName 'Microsoft-Windows-TaskScheduler/Operational' -MaxEvents 100 -ErrorAction SilentlyContinue |
+            Where-Object { $_.Message -like "*$taskName*" } | Select-Object -First 30 Id,TimeCreated,Message | Format-List
+
+          Write-Host "=== Evenements Service Control Manager recents ==="
+          $eventLog = Get-WinEvent -LogName System -FilterXPath "*[System[(EventID=7045 or EventID=7036) and TimeCreated[timediff(@SystemTime) <= 3600000]]]" -MaxEvents 50 -ErrorAction SilentlyContinue
+          if ($eventLog) {
+            $eventLog | Where-Object { $_.Message -like "*$serviceName*" -or $_.Message -like "*PostgreSQL*" } | ForEach-Object {
+              Write-Host "ID: $($_.Id), Time: $($_.TimeCreated), Message: $($_.Message)"
+            }
+          }
+
+          Write-Host "=== ACL sur le repertoire de donnees PostgreSQL ==="
+          $dataDir = Join-Path $root 'PostgreSQL\data'
+          if (Test-Path -LiteralPath $dataDir) {
+            & icacls.exe $dataDir | Out-Host
+          }
+
+          Write-Host "=== ACL sur le runtime PostgreSQL ==="
+          $pgRuntime = Join-Path $root 'runtime\postgresql'
+          if (Test-Path -LiteralPath $pgRuntime) {
+            & icacls.exe $pgRuntime | Out-Host
+          }
+
+          Write-Host "=== Verification du compte NetworkService ==="
+          $ntAccount = New-Object System.Security.Principal.NTAccount('NETWORK SERVICE')
+          $ntSid = $ntAccount.Translate([System.Security.Principal.SecurityIdentifier])
+          Write-Host "NetworkService SID: $ntSid"
+
+          foreach ($path in @(
+            (Join-Path $root 'logs\installer-services.log'),
+            (Join-Path $root 'logs\php-server.log'),
+            (Join-Path $root 'PostgreSQL\data\log')
+          )) {
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+              Write-Host "=== $path ==="
+              Get-Content -LiteralPath $path -Tail 250
+            }
+            elseif (Test-Path -LiteralPath $path -PathType Container) {
+              Get-ChildItem -LiteralPath $path -File | ForEach-Object {
+                Write-Host "=== $($_.FullName) ==="
+                Get-Content -LiteralPath $_.FullName -Tail 250
+              }
+            }
+          }
+
+      - name: Upload Windows installer diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-diagnostics
+          path: ${{ runner.temp }}/clarodaro-diagnostics/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IMC-Clarodaro-Windows-Installer
+          path: dist/IMC-Clarodaro-Setup-1.1.0.exe
+          if-no-files-found: error
+          retention-days: 14
