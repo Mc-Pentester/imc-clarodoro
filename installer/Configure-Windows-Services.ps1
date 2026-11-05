@@ -29,6 +29,57 @@ function Test-PortAvailable([int]$Port) {
     return ($null -eq $listener)
 }
 
+function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
+    $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if (-not $listener) {
+        throw "Aucun processus n'écoute sur le port HTTP $Port."
+    }
+
+    $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
+    if (-not $listenerProcess -or -not $listenerProcess.ExecutablePath) {
+        throw "Impossible d'identifier le processus qui écoute sur le port $Port."
+    }
+    $actualExecutable = [System.IO.Path]::GetFullPath([string]$listenerProcess.ExecutablePath)
+    $expectedExecutable = [System.IO.Path]::GetFullPath($ExpectedPhpPath)
+    if (-not [string]::Equals($actualExecutable, $expectedExecutable, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Le port HTTP $Port est occupé par un autre programme : $actualExecutable. Clarodaro PHP attendu : $expectedExecutable"
+    }
+
+    $request = [System.Net.HttpWebRequest]::Create("http://127.0.0.1:$Port/")
+    $request.Method = 'GET'
+    $request.AllowAutoRedirect = $false
+    $request.Timeout = 8000
+    $response = $null
+    try {
+        $response = $request.GetResponse()
+    }
+    catch [System.Net.WebException] {
+        $response = $_.Exception.Response
+        if (-not $response) { throw "Le serveur PHP écoute mais ne répond pas en HTTP : $($_.Exception.Message)" }
+    }
+
+    try {
+        $statusCode = [int]$response.StatusCode
+        $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+        try { $body = $reader.ReadToEnd() } finally { $reader.Dispose() }
+    }
+    finally {
+        if ($response) { $response.Dispose() }
+    }
+
+    if ($statusCode -lt 200 -or $statusCode -ge 500) {
+        throw "Le serveur PHP répond avec HTTP $statusCode au lieu d'une page Clarodaro exploitable."
+    }
+    if ($body -notmatch '(?i)Clarodaro|IMC-Clarodaro') {
+        throw "Le port $Port répond, mais le contenu ne correspond pas à Clarodaro. Le serveur HTTP inattendu ne sera pas accepté."
+    }
+    if ($body -notmatch '(?i)Bienvenue sur Clarodaro|Connexion requise|Créer mon compte PDG|Configuration terminée') {
+        throw "Le serveur répond avec une page Clarodaro inattendue (HTTP $statusCode)."
+    }
+    Write-Step "Contrôle HTTP Clarodaro réussi : port $Port, processus PHP identifié, HTTP $statusCode."
+}
+
 $AppRoot = [System.IO.Path]::GetFullPath($AppRoot)
 $programDataRoot = Join-Path $env:ProgramData 'IMC-Clarodaro'
 $configRoot = Join-Path $programDataRoot 'config'
@@ -547,6 +598,10 @@ if (Test-PortAvailable $HttpPort) {
     }
     throw "Le serveur PHP n'a pas démarré sur le port $HttpPort (LastTaskResult=$($taskInfo.LastTaskResult))."
 }
+
+# Ne pas confondre un simple port TCP ouvert avec le serveur web Clarodaro.
+# EDB ou un autre service peut répondre sur 8080 sans servir l'application.
+Test-ClarodaroHttpEndpoint -Port $HttpPort -ExpectedPhpPath $php
 
 try {
     if (-not (Get-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -ErrorAction SilentlyContinue)) {
