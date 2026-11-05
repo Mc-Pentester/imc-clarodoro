@@ -272,7 +272,7 @@ jobs:
             }
             $listenerAfterDashboard = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -First 1
             if (-not $listenerAfterDashboard -or $listenerBeforeDashboard.OwningProcess -ne $listenerAfterDashboard.OwningProcess) {
-              throw 'Le processus serveur PHP a disparu ou changé après l’ouverture du tableau de bord PDG.'
+              throw 'Le processus serveur PHP a disparu ou changé après l-ouverture du tableau de bord PDG.'
             }
             Write-Host 'PDG dashboard opened and PHP server stayed active: PASS.'
 
