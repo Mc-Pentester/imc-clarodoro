@@ -488,6 +488,7 @@ tr:nth-child(even) td{
 
 <header class="no-print">
 
+<img src="/logo-clarodaro.png" alt="Logo Institution Mixte Clarodaro" style="display:block;width:64px;height:64px;object-fit:contain;margin:0 auto 10px;">
 <h1>Finances</h1>
 
 <p>
