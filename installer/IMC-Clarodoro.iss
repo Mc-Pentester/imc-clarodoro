@@ -59,6 +59,32 @@ Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c 
 
 [Code]
 
+var
+  PurgeClarodaroData: Boolean;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := True;
+  PurgeClarodaroData := False;
+  if CmdLineParamExists('/PURGEDATA') then
+    PurgeClarodaroData := True
+  else if not UninstallSilent then
+  begin
+    if MsgBox(
+      'Souhaitez-vous supprimer aussi les données locales de Clarodaro ?' + #13#10 + #13#10 +
+      'OUI : supprimer définitivement la base PostgreSQL, le compte PDG, les comptes utilisateurs, les paramètres, les sauvegardes, les fichiers téléversés et les journaux.' + #13#10 + #13#10 +
+      'NON : conserver toutes ces données pour une éventuelle réinstallation. C''est le choix recommandé.',
+      mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    begin
+      if MsgBox(
+        'CONFIRMATION FINALE : toutes les données de cet établissement seront supprimées sans possibilité de récupération par Clarodaro.' + #13#10 + #13#10 +
+        'Assurez-vous de disposer d''une sauvegarde externe si nécessaire. Confirmer la suppression définitive ?',
+        mbCriticalError, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        PurgeClarodaroData := True;
+    end;
+  end;
+end;
+
 procedure ConfigureAfterFiles;
 var
   ResultCode: Integer;
@@ -141,6 +167,8 @@ begin
     Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
       ExpandConstant('{app}\installer\Remove-Windows-Services.ps1') +
       '" -AppRoot "' + ExpandConstant('{app}') + '"';
+    if PurgeClarodaroData then
+      Parameters := Parameters + ' -PurgeData';
     if not Exec(
       ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters,
