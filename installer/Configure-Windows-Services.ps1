@@ -148,7 +148,7 @@ elseif (-not (Test-PortAvailable $HttpPort)) {
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
 
 $preservedAppDataRoot = Join-Path $programDataRoot 'preserved-app-data'
-foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs')) {
+foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs', 'exports')) {
     $savedDirectory = Join-Path $preservedAppDataRoot $relativeDirectory
     $installedDirectory = Join-Path $AppRoot $relativeDirectory
     if (Test-Path -LiteralPath $savedDirectory -PathType Container) {
