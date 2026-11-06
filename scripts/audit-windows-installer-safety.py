@@ -51,8 +51,11 @@ require("IMC_CLARODARO_ENV_FILE" in launcher and "router.php" in launcher,
         "PHP server does not load protected environment or router")
 require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup and "NETWORK SERVICE" in cleanup and "LOCAL SERVICE" in cleanup,
         "owned task/service cleanup missing")
-require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
-        "uninstall must preserve ProgramData database and config")
+require("PostgreSQL\\data" in cleanup and "PurgeData" in cleanup and "Remove-Item -LiteralPath $programDataRoot -Recurse -Force" in cleanup,
+        "uninstall must preserve ProgramData by default and purge it only after explicit opt-in")
+require("CmdLineParamExists('/PURGEDATA')" in iss and "PurgeClarodaroData" in iss
+        and "MB_DEFBUTTON2" in iss and " -PurgeData" in iss,
+        "uninstaller must offer a safe default data-preservation choice and a separately confirmed full purge")
 require("runtime" in router and "installer" in router and "database" in router and "router.php" in router and "strncasecmp" in router,
         "HTTP router must deny direct access to runtimes, secrets and internal directories")
 require("Initialize-PDG-Account.ps1" not in iss and "IMC_BOOTSTRAP_PASSWORD" not in iss
@@ -71,8 +74,8 @@ require("pdgCountBeforeSetup" in workflow and "setupSession" in workflow
         "Windows smoke test must prove no PDG is created during install and create it through post-install HTTP")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
-require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
-        "uninstall cleanup hook missing")
+require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss and "InitializeUninstall" in iss,
+        "uninstall cleanup and data-choice hooks missing")
 require("Configure-Windows-Services.ps1" in iss and "AfterInstall: ConfigureAfterFiles" in iss and "procedure ConfigureAfterFiles" in iss,
         "post-file-copy service provisioning hook missing")
 require("Remove-Windows-Services.ps1" in iss and "Start-Clarodaro-Server.ps1" in iss,
