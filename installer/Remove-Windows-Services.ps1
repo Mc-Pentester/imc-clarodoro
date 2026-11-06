@@ -18,6 +18,19 @@ $expectedLauncher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 $expectedPhp = Join-Path $AppRoot 'runtime\php\php.exe'
 $expectedRouter = Join-Path $AppRoot 'router.php'
 
+function Get-Sha256Hex([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha256.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($bytes)).Replace('-', '')
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Copy-DirectoryWithoutOverwrite([string]$Source, [string]$Destination) {
     if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
@@ -27,14 +40,14 @@ function Copy-DirectoryWithoutOverwrite([string]$Source, [string]$Destination) {
         $target = Join-Path $Destination $relative
         New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
         if (Test-Path -LiteralPath $target -PathType Leaf) {
-            $sourceHash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
-            $targetHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+            $sourceHash = (Get-Sha256Hex -Path $file.FullName)
+            $targetHash = (Get-Sha256Hex -Path $target)
             if ($sourceHash -ne $targetHash) { throw "Conflit de données pendant la conservation : $target. Aucun fichier existant ne sera écrasé." }
         } else {
             Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
         }
-        $verifiedHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
-        $expectedHash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+        $verifiedHash = (Get-Sha256Hex -Path $target)
+        $expectedHash = (Get-Sha256Hex -Path $file.FullName)
         if ($verifiedHash -ne $expectedHash) { throw "Vérification SHA-256 échouée après copie : $target" }
     }
 }
@@ -275,13 +288,13 @@ try {
             foreach ($legacyFile in $legacyEnvironmentFiles) {
                 $savedFile = Join-Path $legacyEnvironmentRoot $legacyFile.Name
                 if (Test-Path -LiteralPath $savedFile -PathType Leaf) {
-                    $oldHash = (Get-FileHash -LiteralPath $legacyFile.FullName -Algorithm SHA256).Hash
-                    $newHash = (Get-FileHash -LiteralPath $savedFile -Algorithm SHA256).Hash
+                    $oldHash = (Get-Sha256Hex -Path $legacyFile.FullName)
+                    $newHash = (Get-Sha256Hex -Path $savedFile)
                     if ($oldHash -ne $newHash) { throw "Conflit de configuration historique : $($legacyFile.Name). Aucun secret ne sera écrasé." }
                 } else {
                     Copy-Item -LiteralPath $legacyFile.FullName -Destination $savedFile -ErrorAction Stop
                 }
-                if ((Get-FileHash -LiteralPath $legacyFile.FullName -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $savedFile -Algorithm SHA256).Hash) {
+                if ((Get-Sha256Hex -Path $legacyFile.FullName) -ne (Get-Sha256Hex -Path $savedFile)) {
                     throw "Vérification SHA-256 échouée pour la configuration historique : $($legacyFile.Name)"
                 }
                 Remove-Item -LiteralPath $legacyFile.FullName -Force -ErrorAction Stop
