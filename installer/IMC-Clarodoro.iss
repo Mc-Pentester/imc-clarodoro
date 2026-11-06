@@ -30,10 +30,10 @@ Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDesc
 
 [Dirs]
 Name: "{app}"
-Name: "{app}\logs"; Flags: uninsneveruninstall
-Name: "{app}\backups"; Flags: uninsneveruninstall
-Name: "{app}\uploads"; Flags: uninsneveruninstall
-Name: "{app}\storage"; Flags: uninsneveruninstall
+Name: "{app}\logs"
+Name: "{app}\backups"
+Name: "{app}\uploads"
+Name: "{app}\storage"
 Name: "{app}\installer"
 
 [Files]
