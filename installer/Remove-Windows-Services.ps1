@@ -223,6 +223,15 @@ try {
         Write-RemovalLog 'Aucune règle pare-feu HTTP LAN à supprimer.'
     }
 
+    # Remove only disposable runtime work directories; exports are preserved above.
+    foreach ($temporaryDirectory in @('tmp', 'cache')) {
+        $temporaryPath = Join-Path $AppRoot $temporaryDirectory
+        if (Test-Path -LiteralPath $temporaryPath -PathType Container) {
+            Remove-Item -LiteralPath $temporaryPath -Recurse -Force -ErrorAction Stop
+            Write-RemovalLog "Répertoire temporaire supprimé : $temporaryDirectory"
+        }
+    }
+
     if ($PurgeData) {
         $expectedDataRoot = [System.IO.Path]::GetFullPath((Join-Path $env:ProgramData 'IMC-Clarodaro')).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
         $actualDataRoot = [System.IO.Path]::GetFullPath($programDataRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
@@ -237,7 +246,7 @@ try {
     }
     else {
         $preservedAppDataRoot = Join-Path $programDataRoot 'preserved-app-data'
-        foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs')) {
+        foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs', 'exports')) {
             $installedDirectory = Join-Path $AppRoot $relativeDirectory
             if (Test-Path -LiteralPath $installedDirectory -PathType Container) {
                 $savedDirectory = Join-Path $preservedAppDataRoot $relativeDirectory
