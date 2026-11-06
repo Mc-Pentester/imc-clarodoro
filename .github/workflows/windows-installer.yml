@@ -304,7 +304,7 @@ jobs:
             if ([string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') { throw 'PHP ne fonctionne pas sous un compte de service restreint.' }
 
             # Create file sentinels in writable app directories; uninstall must move them to ProgramData and reinstall must restore them.
-            foreach ($relativeDirectory in @('backups','uploads','storage','logs')) {
+            foreach ($relativeDirectory in @('backups','uploads','storage','logs','exports')) {
               $directory = Join-Path $installDir $relativeDirectory
               New-Item -ItemType Directory -Path $directory -Force | Out-Null
               Set-Content -LiteralPath (Join-Path $directory 'uninstall-preservation-smoke.txt') -Value ("preserve-" + $relativeDirectory) -Encoding utf8
@@ -335,7 +335,7 @@ jobs:
 
             $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             if (-not $service -or $service.Status -ne 'Running') { throw 'PostgreSQL ne redémarre pas après réinstallation.' }
-            foreach ($relativeDirectory in @('backups','uploads','storage','logs')) {
+            foreach ($relativeDirectory in @('backups','uploads','storage','logs','exports')) {
               $sentinel = Join-Path (Join-Path $installDir $relativeDirectory) 'uninstall-preservation-smoke.txt'
               if (-not (Test-Path -LiteralPath $sentinel) -or (Get-Content -LiteralPath $sentinel -Raw).Trim() -notmatch ("preserve-" + $relativeDirectory)) {
                 throw "Les fichiers $relativeDirectory n ont pas été restaurés après réinstallation."
@@ -432,7 +432,7 @@ jobs:
           if (Test-Path -LiteralPath $installDir) {
             throw 'Le dossier Program Files IMC-Clarodaro est resté après la désinstallation normale.'
           }
-          foreach ($relativeDirectory in @('backups','uploads','storage','logs')) {
+          foreach ($relativeDirectory in @('backups','uploads','storage','logs','exports')) {
             $savedSentinel = Join-Path (Join-Path (Join-Path $env:ProgramData 'IMC-Clarodaro\preserved-app-data') $relativeDirectory) 'uninstall-preservation-smoke.txt'
             if (-not (Test-Path -LiteralPath $savedSentinel)) {
               throw "Les données $relativeDirectory n ont pas été conservées hors de Program Files."
