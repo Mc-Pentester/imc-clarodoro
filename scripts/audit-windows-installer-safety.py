@@ -54,7 +54,7 @@ require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup and
 require("PostgreSQL\\data" in cleanup and "PurgeData" in cleanup and "Remove-Item -LiteralPath $programDataRoot -Recurse -Force" in cleanup,
         "uninstall must preserve ProgramData by default and purge it only after explicit opt-in")
 require("Copy-DirectoryWithoutOverwrite" in cleanup and "preserved-app-data" in cleanup
-        and "Get-FileHash" in cleanup and "Copy-DirectoryWithoutOverwrite" in configure
+        and "Get-Sha256Hex" in cleanup and "Copy-DirectoryWithoutOverwrite" in configure
         and "exports" in cleanup and "exports" in configure
         and "legacy-env" in cleanup and "legacy-env" in configure,
         "uninstall must preserve and verify app-local user files outside Program Files, then restore them on reinstall")
