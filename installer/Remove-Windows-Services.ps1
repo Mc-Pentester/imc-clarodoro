@@ -18,6 +18,27 @@ $expectedLauncher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 $expectedPhp = Join-Path $AppRoot 'runtime\php\php.exe'
 $expectedRouter = Join-Path $AppRoot 'router.php'
 
+function Copy-DirectoryWithoutOverwrite([string]$Source, [string]$Destination) {
+    if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $sourceRoot = [System.IO.Path]::GetFullPath($Source).TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    foreach ($file in Get-ChildItem -LiteralPath $Source -File -Recurse -Force) {
+        $relative = $file.FullName.Substring($sourceRoot.Length)
+        $target = Join-Path $Destination $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+            $sourceHash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+            $targetHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+            if ($sourceHash -ne $targetHash) { throw "Conflit de données pendant la conservation : $target. Aucun fichier existant ne sera écrasé." }
+        } else {
+            Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+        }
+        $verifiedHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+        $expectedHash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+        if ($verifiedHash -ne $expectedHash) { throw "Vérification SHA-256 échouée après copie : $target" }
+    }
+}
+
 function Write-RemovalLog([string]$Message) {
     $line = '{0} {1}{2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'), $Message, [Environment]::NewLine
     try {
@@ -215,7 +236,17 @@ try {
         Write-Host 'Données locales Clarodaro supprimées définitivement.'
     }
     else {
-        Write-RemovalLog 'Nettoyage terminé. PostgreSQL data, configuration, secrets, sauvegardes, fichiers téléversés et journaux ProgramData sont conservés.'
+        $preservedAppDataRoot = Join-Path $programDataRoot 'preserved-app-data'
+        foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs')) {
+            $installedDirectory = Join-Path $AppRoot $relativeDirectory
+            if (Test-Path -LiteralPath $installedDirectory -PathType Container) {
+                $savedDirectory = Join-Path $preservedAppDataRoot $relativeDirectory
+                Write-RemovalLog "Conservation des fichiers applicatifs : $relativeDirectory"
+                Copy-DirectoryWithoutOverwrite -Source $installedDirectory -Destination $savedDirectory
+                Remove-Item -LiteralPath $installedDirectory -Recurse -Force -ErrorAction Stop
+            }
+        }
+        Write-RemovalLog 'Nettoyage terminé. PostgreSQL data, configuration, secrets, sauvegardes, fichiers téléversés, stockage applicatif et journaux ProgramData sont conservés.'
     }
     exit 0
 }
