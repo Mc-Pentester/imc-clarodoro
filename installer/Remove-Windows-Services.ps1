@@ -233,6 +233,18 @@ try {
     }
 
     if ($PurgeData) {
+        # The user explicitly chose full deletion: remove legacy app-local data
+        # and secrets that Inno Setup excludes from its ordinary file manifest.
+        foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs', 'exports', 'tmp', 'cache')) {
+            $appDataPath = Join-Path $AppRoot $relativeDirectory
+            if (Test-Path -LiteralPath $appDataPath -PathType Container) {
+                Remove-Item -LiteralPath $appDataPath -Recurse -Force -ErrorAction Stop
+            }
+        }
+        Get-ChildItem -LiteralPath $AppRoot -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq '.env' -or $_.Name -like '.env.*' } |
+            Remove-Item -Force -ErrorAction Stop
+
         $expectedDataRoot = [System.IO.Path]::GetFullPath((Join-Path $env:ProgramData 'IMC-Clarodaro')).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
         $actualDataRoot = [System.IO.Path]::GetFullPath($programDataRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
         if (-not [string]::Equals($actualDataRoot, $expectedDataRoot, [StringComparison]::OrdinalIgnoreCase)) {
