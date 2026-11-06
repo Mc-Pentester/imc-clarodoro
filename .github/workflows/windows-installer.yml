@@ -86,7 +86,7 @@ jobs:
             throw "Installateur absent : $artifact"
           }
 
-      - name: Smoke test clean install, in-place reinstall, PHP/PostgreSQL startup and data-preserving uninstall
+      - name: Smoke test clean install, reinstall, data-preserving uninstall and explicit full data purge
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -303,6 +303,13 @@ jobs:
             if (-not $task) { throw 'La tâche de démarrage PHP est absente.' }
             if ([string]$task.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') { throw 'PHP ne fonctionne pas sous un compte de service restreint.' }
 
+            # Create file sentinels in writable app directories; uninstall must move them to ProgramData and reinstall must restore them.
+            foreach ($relativeDirectory in @('backups','uploads','storage','logs')) {
+              $directory = Join-Path $installDir $relativeDirectory
+              New-Item -ItemType Directory -Path $directory -Force | Out-Null
+              Set-Content -LiteralPath (Join-Path $directory 'uninstall-preservation-smoke.txt') -Value ("preserve-" + $relativeDirectory) -Encoding utf8
+            }
+
             # Create a database sentinel, then reinstall over the same directory.
             $dbValues = @{}
             foreach ($line in Get-Content -LiteralPath $configFile) {
@@ -328,6 +335,12 @@ jobs:
 
             $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             if (-not $service -or $service.Status -ne 'Running') { throw 'PostgreSQL ne redémarre pas après réinstallation.' }
+            foreach ($relativeDirectory in @('backups','uploads','storage','logs')) {
+              $sentinel = Join-Path (Join-Path $installDir $relativeDirectory) 'uninstall-preservation-smoke.txt'
+              if (-not (Test-Path -LiteralPath $sentinel) -or (Get-Content -LiteralPath $sentinel -Raw).Trim() -notmatch ("preserve-" + $relativeDirectory)) {
+                throw "Les fichiers $relativeDirectory n ont pas été restaurés après réinstallation."
+              }
+            }
             $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
             if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'Le compte de service PostgreSQL a changé pendant la réinstallation.' }
             $env:PGPASSWORD = $dbValues['DB_PASSWORD']
@@ -415,6 +428,36 @@ jobs:
           }
           if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'PG_VERSION')) -or -not (Test-Path -LiteralPath $configFile)) {
             throw 'Les données ProgramData n ont pas survécu à la seconde désinstallation.'
+          }
+          if (Test-Path -LiteralPath $installDir) {
+            throw 'Le dossier Program Files IMC-Clarodaro est resté après la désinstallation normale.'
+          }
+          foreach ($relativeDirectory in @('backups','uploads','storage','logs')) {
+            $savedSentinel = Join-Path (Join-Path (Join-Path $env:ProgramData 'IMC-Clarodaro\preserved-app-data') $relativeDirectory) 'uninstall-preservation-smoke.txt'
+            if (-not (Test-Path -LiteralPath $savedSentinel)) {
+              throw "Les données $relativeDirectory n ont pas été conservées hors de Program Files."
+            }
+          }
+
+          # Validate the explicitly requested full purge on a fresh installed copy.
+          $purgeInstall = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+          if ($purgeInstall.ExitCode -ne 0) { throw "Installation avant purge complète échouée : code $($purgeInstall.ExitCode)" }
+          $purgeUninstaller = Join-Path $installDir 'unins000.exe'
+          if (-not (Test-Path -LiteralPath $purgeUninstaller)) { throw 'Désinstallateur introuvable avant purge complète.' }
+          $purge = Start-Process -FilePath $purgeUninstaller -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/PURGEDATA') -Wait -PassThru
+          if ($purge.ExitCode -ne 0) { throw "Désinstallation avec purge complète échouée : code $($purge.ExitCode)" }
+          $programDataRoot = Join-Path $env:ProgramData 'IMC-Clarodaro'
+          if (Test-Path -LiteralPath $programDataRoot) {
+            throw 'La purge complète a laissé des données locales dans ProgramData.'
+          }
+          if (Test-Path -LiteralPath $installDir) {
+            throw 'La purge complète a laissé le dossier Program Files IMC-Clarodaro.'
+          }
+          if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
+            throw 'La tâche PHP est restée après la purge complète.'
+          }
+          if (Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue) {
+            throw 'Le service PostgreSQL est resté après la purge complète.'
           }
           if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
             throw 'La tâche PHP est restée après la seconde désinstallation.'
