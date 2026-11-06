@@ -255,6 +255,26 @@ try {
                 Remove-Item -LiteralPath $installedDirectory -Recurse -Force -ErrorAction Stop
             }
         }
+        $legacyEnvironmentFiles = @(Get-ChildItem -LiteralPath $AppRoot -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq '.env' -or $_.Name -like '.env.*' })
+        if ($legacyEnvironmentFiles.Count -gt 0) {
+            $legacyEnvironmentRoot = Join-Path $preservedAppDataRoot 'legacy-env'
+            New-Item -ItemType Directory -Path $legacyEnvironmentRoot -Force | Out-Null
+            foreach ($legacyFile in $legacyEnvironmentFiles) {
+                $savedFile = Join-Path $legacyEnvironmentRoot $legacyFile.Name
+                if (Test-Path -LiteralPath $savedFile -PathType Leaf) {
+                    $oldHash = (Get-FileHash -LiteralPath $legacyFile.FullName -Algorithm SHA256).Hash
+                    $newHash = (Get-FileHash -LiteralPath $savedFile -Algorithm SHA256).Hash
+                    if ($oldHash -ne $newHash) { throw "Conflit de configuration historique : $($legacyFile.Name). Aucun secret ne sera écrasé." }
+                } else {
+                    Copy-Item -LiteralPath $legacyFile.FullName -Destination $savedFile -ErrorAction Stop
+                }
+                if ((Get-FileHash -LiteralPath $legacyFile.FullName -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $savedFile -Algorithm SHA256).Hash) {
+                    throw "Vérification SHA-256 échouée pour la configuration historique : $($legacyFile.Name)"
+                }
+                Remove-Item -LiteralPath $legacyFile.FullName -Force -ErrorAction Stop
+            }
+        }
         Write-RemovalLog 'Nettoyage terminé. PostgreSQL data, configuration, secrets, sauvegardes, fichiers téléversés, stockage applicatif et journaux ProgramData sont conservés.'
     }
     exit 0
