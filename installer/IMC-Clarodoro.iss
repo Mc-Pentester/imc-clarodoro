@@ -59,6 +59,9 @@ Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c 
 
 [Code]
 
+var
+  PurgeClarodaroData: Boolean;
+
 function CmdLineParamExists(const Value: string): Boolean;
 var
   I: Integer;
@@ -71,9 +74,6 @@ begin
       Exit;
     end;
 end;
-
-var
-  PurgeClarodaroData: Boolean;
 
 function InitializeUninstall(): Boolean;
 begin
