@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$AppRoot,
-    [int]$HttpPort = 18080
+    [int]$HttpPort = 18080,
+    [switch]$PurgeData
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,6 +112,42 @@ try {
     }
     else {
         Write-RemovalLog 'Aucune tâche PHP Clarodaro à supprimer.'
+        # A previous uninstall may have removed the task while leaving its PHP child alive.
+        $expectedPhpFullPath = [System.IO.Path]::GetFullPath($expectedPhp)
+        $expectedRouterFullPath = [System.IO.Path]::GetFullPath($expectedRouter)
+        $orphanedPhp = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                [string]$_.CommandLine -like "*$expectedRouterFullPath*" -and
+                [string]$_.CommandLine -like "*0.0.0.0:$HttpPort*"
+            })
+        foreach ($phpProcess in $orphanedPhp) {
+            Write-RemovalLog ("Arrêt du processus PHP orphelin Clarodaro PID " + $phpProcess.ProcessId + '.')
+            Stop-Process -Id ([int]$phpProcess.ProcessId) -Force -ErrorAction Stop
+        }
+        $orphanDeadline = (Get-Date).AddSeconds(45)
+        do {
+            $remaining = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.ExecutablePath -and
+                    [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                    [string]$_.CommandLine -like "*$expectedRouterFullPath*"
+                })
+            $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($remaining.Count -eq 0 -and -not $listener) { break }
+            if ($listener) {
+                $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
+                if (-not $listenerProcess -or -not $listenerProcess.ExecutablePath -or
+                    -not [string]::Equals([System.IO.Path]::GetFullPath([string]$listenerProcess.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Le port HTTP $HttpPort est occupé par un processus tiers (PID $($listener.OwningProcess)). Il ne sera pas arrêté."
+                }
+            }
+            Start-Sleep -Seconds 1
+        } while ((Get-Date) -lt $orphanDeadline)
+        $remaining = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.ExecutablePath -and [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and [string]$_.CommandLine -like "*$expectedRouterFullPath*" })
+        if ($remaining.Count -gt 0) { throw "Un processus PHP orphelin Clarodaro reste actif (PID $($remaining[0].ProcessId))." }
     }
 
     $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
@@ -165,7 +202,21 @@ try {
         Write-RemovalLog 'Aucune règle pare-feu HTTP LAN à supprimer.'
     }
 
-    Write-RemovalLog 'Nettoyage terminé. PostgreSQL data, configuration, secrets, sauvegardes, fichiers téléversés et journaux ProgramData sont conservés.'
+    if ($PurgeData) {
+        $expectedDataRoot = [System.IO.Path]::GetFullPath((Join-Path $env:ProgramData 'IMC-Clarodaro')).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+        $actualDataRoot = [System.IO.Path]::GetFullPath($programDataRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+        if (-not [string]::Equals($actualDataRoot, $expectedDataRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Chemin de suppression ProgramData inattendu : $actualDataRoot"
+        }
+        if (Test-Path -LiteralPath $programDataRoot) {
+            Write-RemovalLog 'Purge explicitement demandée : suppression des données PostgreSQL, comptes (dont PDG), configurations, secrets, sauvegardes, fichiers téléversés, runtimes et journaux.'
+            Remove-Item -LiteralPath $programDataRoot -Recurse -Force -ErrorAction Stop
+        }
+        Write-Host 'Données locales Clarodaro supprimées définitivement.'
+    }
+    else {
+        Write-RemovalLog 'Nettoyage terminé. PostgreSQL data, configuration, secrets, sauvegardes, fichiers téléversés et journaux ProgramData sont conservés.'
+    }
     exit 0
 }
 catch {
