@@ -85,7 +85,7 @@ begin
   begin
     if MsgBox(
       'Souhaitez-vous supprimer aussi les données locales de Clarodaro ?' + #13#10 + #13#10 +
-      'OUI : supprimer définitivement la base PostgreSQL, le compte PDG, les comptes utilisateurs, les paramètres, les sauvegardes, les fichiers téléversés et les journaux.' + #13#10 + #13#10 +
+      'OUI : supprimer définitivement la base PostgreSQL, le compte PDG, les comptes utilisateurs, les paramètres, les sauvegardes, les exports, le stockage, les fichiers téléversés, les secrets et les journaux.' + #13#10 + #13#10 +
       'NON : conserver toutes ces données pour une éventuelle réinstallation. C''est le choix recommandé.',
       mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
     begin
