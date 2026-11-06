@@ -157,6 +157,12 @@ foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs', 'expor
         Remove-Item -LiteralPath $savedDirectory -Recurse -Force -ErrorAction Stop
     }
 }
+$legacyEnvironmentRoot = Join-Path $preservedAppDataRoot 'legacy-env'
+if (Test-Path -LiteralPath $legacyEnvironmentRoot -PathType Container) {
+    Write-Step 'Restauration de la configuration historique .env conservée.'
+    Copy-DirectoryWithoutOverwrite -Source $legacyEnvironmentRoot -Destination $AppRoot
+    Remove-Item -LiteralPath $legacyEnvironmentRoot -Recurse -Force -ErrorAction Stop
+}
 if ((Test-Path -LiteralPath $preservedAppDataRoot -PathType Container) -and
     -not (Get-ChildItem -LiteralPath $preservedAppDataRoot -Force | Select-Object -First 1)) {
     Remove-Item -LiteralPath $preservedAppDataRoot -Force
