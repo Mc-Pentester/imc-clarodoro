@@ -309,6 +309,7 @@ jobs:
               New-Item -ItemType Directory -Path $directory -Force | Out-Null
               Set-Content -LiteralPath (Join-Path $directory 'uninstall-preservation-smoke.txt') -Value ("preserve-" + $relativeDirectory) -Encoding utf8
             }
+            Set-Content -LiteralPath (Join-Path $installDir '.env') -Value 'LEGACY_INSTALLER_SMOKE=preserve' -Encoding utf8
 
             # Create a database sentinel, then reinstall over the same directory.
             $dbValues = @{}
@@ -340,6 +341,9 @@ jobs:
               if (-not (Test-Path -LiteralPath $sentinel) -or (Get-Content -LiteralPath $sentinel -Raw).Trim() -notmatch ("preserve-" + $relativeDirectory)) {
                 throw "Les fichiers $relativeDirectory n ont pas été restaurés après réinstallation."
               }
+            }
+            if (-not (Test-Path -LiteralPath (Join-Path $installDir '.env'))) {
+              throw 'La configuration historique .env n a pas été restaurée après réinstallation.'
             }
             $serviceInfo = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
             if ($serviceInfo.StartName -notmatch 'NETWORK SERVICE|S-1-5-20') { throw 'Le compte de service PostgreSQL a changé pendant la réinstallation.' }
@@ -437,6 +441,9 @@ jobs:
             if (-not (Test-Path -LiteralPath $savedSentinel)) {
               throw "Les données $relativeDirectory n ont pas été conservées hors de Program Files."
             }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path (Join-Path $env:ProgramData 'IMC-Clarodaro\preserved-app-data\legacy-env') '.env'))) {
+            throw 'Le fichier .env historique n a pas été conservé hors de Program Files.'
           }
 
           # Validate the explicitly requested full purge on a fresh installed copy.
