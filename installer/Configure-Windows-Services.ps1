@@ -17,6 +17,19 @@ function Write-Step([string]$Message) {
     Write-Host "[Clarodaro] $Message"
 }
 
+function Get-Sha256Hex([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha256.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($bytes)).Replace('-', '')
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Copy-DirectoryWithoutOverwrite([string]$Source, [string]$Destination) {
     if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
@@ -26,14 +39,14 @@ function Copy-DirectoryWithoutOverwrite([string]$Source, [string]$Destination) {
         $target = Join-Path $Destination $relative
         New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
         if (Test-Path -LiteralPath $target -PathType Leaf) {
-            $sourceHash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
-            $targetHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
+            $sourceHash = (Get-Sha256Hex -Path $file.FullName)
+            $targetHash = (Get-Sha256Hex -Path $target)
             if ($sourceHash -ne $targetHash) { throw "Conflit de données pendant la conservation : $target. Aucun fichier existant ne sera écrasé." }
         } else {
             Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
         }
-        $verifiedHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash
-        $expectedHash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+        $verifiedHash = (Get-Sha256Hex -Path $target)
+        $expectedHash = (Get-Sha256Hex -Path $file.FullName)
         if ($verifiedHash -ne $expectedHash) { throw "Vérification SHA-256 échouée après copie : $target" }
     }
 }
