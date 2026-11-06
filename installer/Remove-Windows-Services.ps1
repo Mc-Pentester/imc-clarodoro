@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory = $true)][string]$AppRoot
+    [Parameter(Mandatory = $true)][string]$AppRoot,
+    [int]$HttpPort = 18080
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +14,8 @@ $serviceName = 'IMC-Clarodaro-PostgreSQL'
 $taskName = 'IMC-Clarodaro-PHP-Server'
 $expectedPgCtl = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\pg_ctl.exe'
 $expectedLauncher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
+$expectedPhp = Join-Path $AppRoot 'runtime\php\php.exe'
+$expectedRouter = Join-Path $AppRoot 'router.php'
 
 function Write-RemovalLog([string]$Message) {
     $line = '{0} {1}{2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'), $Message, [Environment]::NewLine
@@ -49,19 +52,53 @@ try {
         else {
             Write-RemovalLog ("La tâche PHP est déjà à l'état " + [string]$task.State + ' ; aucun arrêt forcé nécessaire.')
         }
+        # Stop only the PHP process launched from this exact installation.
+        # Stopping a Scheduled Task does not reliably terminate every child process.
+        $expectedPhpFullPath = [System.IO.Path]::GetFullPath($expectedPhp)
+        $expectedRouterFullPath = [System.IO.Path]::GetFullPath($expectedRouter)
+        $ownedPhpProcesses = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                [string]$_.CommandLine -like "*$expectedRouterFullPath*" -and
+                [string]$_.CommandLine -like "*0.0.0.0:$HttpPort*"
+            })
+        foreach ($phpProcess in $ownedPhpProcesses) {
+            Write-RemovalLog ("Arrêt du processus PHP Clarodaro PID " + $phpProcess.ProcessId + '.')
+            Stop-Process -Id ([int]$phpProcess.ProcessId) -Force -ErrorAction Stop
+        }
+
         $taskStopDeadline = (Get-Date).AddSeconds(45)
         do {
             $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-            $listener = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
+            $remainingPhp = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.ExecutablePath -and
+                    [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                    [string]$_.CommandLine -like "*$expectedRouterFullPath*" -and
+                    [string]$_.CommandLine -like "*0.0.0.0:$HttpPort*"
+                })
+            $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
                 Select-Object -First 1
-            if (-not $listener -and (-not $currentTask -or [string]$currentTask.State -ne 'Running')) { break }
+            if ($remainingPhp.Count -eq 0 -and -not $listener -and (-not $currentTask -or [string]$currentTask.State -ne 'Running')) { break }
             Start-Sleep -Seconds 1
         } while ((Get-Date) -lt $taskStopDeadline)
 
-        $listener = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
+        $remainingPhp = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                [string]$_.CommandLine -like "*$expectedRouterFullPath*" -and
+                [string]$_.CommandLine -like "*0.0.0.0:$HttpPort*"
+            })
+        if ($remainingPhp.Count -gt 0) {
+            throw "Le processus PHP Clarodaro reste actif après la demande d'arrêt (PID $($remainingPhp[0].ProcessId))."
+        }
+
+        $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
             Select-Object -First 1
         if ($listener) {
-            throw "Le port 8080 reste occupé (PID $($listener.OwningProcess)). La tâche n'est pas supprimée."
+            throw "Le port HTTP $HttpPort reste occupé par le PID $($listener.OwningProcess). Aucun processus tiers ne sera arrêté."
         }
 
         $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
