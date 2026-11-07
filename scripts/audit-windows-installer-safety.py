@@ -78,9 +78,17 @@ require("Create my account" not in setup_page and "Créer mon compte PDG" in set
 require("requireCsrfToken" in setup_api and "proc_open" in setup_api
         and "IMC_BOOTSTRAP_PASSWORD" in setup_api and "password_hash" not in setup_api,
         "one-time HTTP setup must validate CSRF and delegate account creation to the guarded CLI bootstrap")
-require("pdgCountBeforeSetup" in workflow and "setupSession" in workflow
-        and "api/auth/initial-setup.php" in workflow,
-        "Windows smoke test must prove no PDG is created during install and create it through post-install HTTP")
+require("pdgCountBeforeSetup" in workflow and "scripts/first-run-browser-smoke.mjs" in workflow
+        and "CLARODARO_TEST_PDG_PASSWORD" in workflow and "Parcours navigateur de première configuration PDG : PASS." in workflow,
+        "Windows smoke test must prove no PDG is created during install, then create it through the real browser setup form")
+require("setupSession" not in workflow,
+        "obsolete HTTP-only setup-session smoke-test marker must not be required")
+browser_smoke = read("scripts/first-run-browser-smoke.mjs")
+require("playwright" in browser_smoke and "Bienvenue sur Clarodaro" in browser_smoke
+        and "CLIENT-SIDE 12-CHARACTER MINIMUM" in browser_smoke
+        and "UNICODE PDG PASSWORD CREATION" in browser_smoke
+        and "SECOND SETUP REFUSED (HTTP 409)" in browser_smoke,
+        "real-browser first-run test must cover the visible form, password validation, Unicode password and one-time setup refusal")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
 require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss and "InitializeUninstall" in iss,
