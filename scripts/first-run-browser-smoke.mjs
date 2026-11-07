@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-const baseUrl = (process.env.IMC_BASE_URL || "http://127.0.0.1:18080").replace(/\\/$/, "");
+const baseUrl = (process.env.IMC_BASE_URL || "http://127.0.0.1:18080").replace(/\/$/, "");
 const password = process.env.CLARODARO_TEST_PDG_PASSWORD;
 if (!password) throw new Error("CLARODARO_TEST_PDG_PASSWORD is required.");
 
