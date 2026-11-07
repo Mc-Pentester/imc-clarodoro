@@ -20,6 +20,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Node.js for real browser smoke test
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright Chromium
+        shell: pwsh
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          if ($LASTEXITCODE -ne 0) { throw 'Installation de Playwright échouée.' }
+          npx playwright install chromium
+          if ($LASTEXITCODE -ne 0) { throw 'Installation de Chromium pour Playwright échouée.' }
+
       - name: Download and verify bundled PHP and PostgreSQL runtimes
         shell: pwsh
         run: |
@@ -236,19 +249,14 @@ jobs:
             }
             Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 
-            # The first administrator is created by submitting the browser setup form after installation.
-            $setupSession = $null
-            $setupResponse = Invoke-WebRequest -Uri 'http://127.0.0.1:18080/setup' -SessionVariable setupSession -TimeoutSec 10
-            if ($setupResponse.StatusCode -ne 200 -or $setupResponse.Content -notmatch 'Créer mon compte PDG') {
-              throw 'La page de première configuration post-installation est absente.'
-            }
-            $csrfMatch = [regex]::Match($setupResponse.Content, '<meta name="csrf-token" content="([^"]+)"')
-            if (-not $csrfMatch.Success) { throw 'Le jeton CSRF de la première configuration est absent.' }
-            $ciPdgPassword = ([Guid]::NewGuid().ToString('N') + 'Aa9!')
-            $setupBody = @{ password = $ciPdgPassword; confirmation = $ciPdgPassword } | ConvertTo-Json -Compress
-            $setupResult = Invoke-RestMethod -Uri 'http://127.0.0.1:18080/api/auth/initial-setup.php' -Method Post -WebSession $setupSession -Headers @{ 'X-CSRF-Token' = $csrfMatch.Groups[1].Value } -ContentType 'application/json' -Body $setupBody -TimeoutSec 20
-            if (-not $setupResult.success) { throw 'La création du compte PDG via le parcours utilisateur a échoué.' }
-            Write-Host 'Création du premier compte PDG via HTTP après installation : PASS.'
+            # The first administrator must be created by a real browser through the visible setup form.
+            # The accented password proves that Unicode is accepted end-to-end (browser, HTTP API and CLI bootstrap).
+            $ciPdgPassword = 'Clar0daroÉcole-2026!'
+            $env:CLARODARO_TEST_PDG_PASSWORD = $ciPdgPassword
+            & node scripts/first-run-browser-smoke.mjs
+            if ($LASTEXITCODE -ne 0) { throw "Le test navigateur de première configuration a échoué (code $LASTEXITCODE)." }
+            Remove-Item Env:\\CLARODARO_TEST_PDG_PASSWORD -ErrorAction SilentlyContinue
+            Write-Host 'Parcours navigateur de première configuration PDG : PASS.'
 
             # Reproduce the complete first-use path: login, authenticated dashboard,
             # and PHP listener survival after the redirect target is requested.
