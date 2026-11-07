@@ -255,7 +255,7 @@ jobs:
             $env:CLARODARO_TEST_PDG_PASSWORD = $ciPdgPassword
             & node scripts/first-run-browser-smoke.mjs
             if ($LASTEXITCODE -ne 0) { throw "Le test navigateur de première configuration a échoué (code $LASTEXITCODE)." }
-            Remove-Item Env:\\CLARODARO_TEST_PDG_PASSWORD -ErrorAction SilentlyContinue
+            Remove-Item Env:\CLARODARO_TEST_PDG_PASSWORD -ErrorAction SilentlyContinue
             Write-Host 'Parcours navigateur de première configuration PDG : PASS.'
 
             # Reproduce the complete first-use path: login, authenticated dashboard,
