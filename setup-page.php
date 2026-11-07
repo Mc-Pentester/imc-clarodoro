@@ -53,7 +53,7 @@ small{color:#64748b}#message{white-space:pre-wrap;margin-top:14px}
 <label for="password">Mot de passe (12 caractères minimum)</label>
 <input id="password" type="password" required autocomplete="new-password">
 <label for="confirmation">Confirmer le mot de passe</label>
-<input id="confirmation" type="password" minlength="12" required autocomplete="new-password">
+<input id="confirmation" type="password" required autocomplete="new-password">
 <button id="submit" type="submit">Créer mon compte PDG</button>
 <p id="message" role="status" aria-live="polite"></p>
 </form>
