@@ -1,5 +1,7 @@
 param(
-    [Parameter(Mandatory = $true)][string]$AppRoot
+    [Parameter(Mandatory = $true)][string]$AppRoot,
+    [int]$HttpPort = 18080,
+    [switch]$PurgeData
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +15,42 @@ $serviceName = 'IMC-Clarodaro-PostgreSQL'
 $taskName = 'IMC-Clarodaro-PHP-Server'
 $expectedPgCtl = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\pg_ctl.exe'
 $expectedLauncher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
+$expectedPhp = Join-Path $AppRoot 'runtime\php\php.exe'
+$expectedRouter = Join-Path $AppRoot 'router.php'
+
+function Get-Sha256Hex([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha256.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($bytes)).Replace('-', '')
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
+function Copy-DirectoryWithoutOverwrite([string]$Source, [string]$Destination) {
+    if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $sourceRoot = [System.IO.Path]::GetFullPath($Source).TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    foreach ($file in Get-ChildItem -LiteralPath $Source -File -Recurse -Force) {
+        $relative = $file.FullName.Substring($sourceRoot.Length)
+        $target = Join-Path $Destination $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+            $sourceHash = (Get-Sha256Hex -Path $file.FullName)
+            $targetHash = (Get-Sha256Hex -Path $target)
+            if ($sourceHash -ne $targetHash) { throw "Conflit de données pendant la conservation : $target. Aucun fichier existant ne sera écrasé." }
+        } else {
+            Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+        }
+        $verifiedHash = (Get-Sha256Hex -Path $target)
+        $expectedHash = (Get-Sha256Hex -Path $file.FullName)
+        if ($verifiedHash -ne $expectedHash) { throw "Vérification SHA-256 échouée après copie : $target" }
+    }
+}
 
 function Write-RemovalLog([string]$Message) {
     $line = '{0} {1}{2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'), $Message, [Environment]::NewLine
@@ -49,19 +87,53 @@ try {
         else {
             Write-RemovalLog ("La tâche PHP est déjà à l'état " + [string]$task.State + ' ; aucun arrêt forcé nécessaire.')
         }
+        # Stop only the PHP process launched from this exact installation.
+        # Stopping a Scheduled Task does not reliably terminate every child process.
+        $expectedPhpFullPath = [System.IO.Path]::GetFullPath($expectedPhp)
+        $expectedRouterFullPath = [System.IO.Path]::GetFullPath($expectedRouter)
+        $ownedPhpProcesses = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                [string]$_.CommandLine -like "*$expectedRouterFullPath*" -and
+                [string]$_.CommandLine -like "*0.0.0.0:$HttpPort*"
+            })
+        foreach ($phpProcess in $ownedPhpProcesses) {
+            Write-RemovalLog ("Arrêt du processus PHP Clarodaro PID " + $phpProcess.ProcessId + '.')
+            Stop-Process -Id ([int]$phpProcess.ProcessId) -Force -ErrorAction Stop
+        }
+
         $taskStopDeadline = (Get-Date).AddSeconds(45)
         do {
             $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-            $listener = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
+            $remainingPhp = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.ExecutablePath -and
+                    [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                    [string]$_.CommandLine -like "*$expectedRouterFullPath*" -and
+                    [string]$_.CommandLine -like "*0.0.0.0:$HttpPort*"
+                })
+            $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
                 Select-Object -First 1
-            if (-not $listener -and (-not $currentTask -or [string]$currentTask.State -ne 'Running')) { break }
+            if ($remainingPhp.Count -eq 0 -and -not $listener -and (-not $currentTask -or [string]$currentTask.State -ne 'Running')) { break }
             Start-Sleep -Seconds 1
         } while ((Get-Date) -lt $taskStopDeadline)
 
-        $listener = Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
+        $remainingPhp = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                [string]$_.CommandLine -like "*$expectedRouterFullPath*" -and
+                [string]$_.CommandLine -like "*0.0.0.0:$HttpPort*"
+            })
+        if ($remainingPhp.Count -gt 0) {
+            throw "Le processus PHP Clarodaro reste actif après la demande d'arrêt (PID $($remainingPhp[0].ProcessId))."
+        }
+
+        $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
             Select-Object -First 1
         if ($listener) {
-            throw "Le port 8080 reste occupé (PID $($listener.OwningProcess)). La tâche n'est pas supprimée."
+            throw "Le port HTTP $HttpPort reste occupé par le PID $($listener.OwningProcess). Aucun processus tiers ne sera arrêté."
         }
 
         $currentTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -74,6 +146,42 @@ try {
     }
     else {
         Write-RemovalLog 'Aucune tâche PHP Clarodaro à supprimer.'
+        # A previous uninstall may have removed the task while leaving its PHP child alive.
+        $expectedPhpFullPath = [System.IO.Path]::GetFullPath($expectedPhp)
+        $expectedRouterFullPath = [System.IO.Path]::GetFullPath($expectedRouter)
+        $orphanedPhp = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                [string]$_.CommandLine -like "*$expectedRouterFullPath*" -and
+                [string]$_.CommandLine -like "*0.0.0.0:$HttpPort*"
+            })
+        foreach ($phpProcess in $orphanedPhp) {
+            Write-RemovalLog ("Arrêt du processus PHP orphelin Clarodaro PID " + $phpProcess.ProcessId + '.')
+            Stop-Process -Id ([int]$phpProcess.ProcessId) -Force -ErrorAction Stop
+        }
+        $orphanDeadline = (Get-Date).AddSeconds(45)
+        do {
+            $remaining = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.ExecutablePath -and
+                    [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and
+                    [string]$_.CommandLine -like "*$expectedRouterFullPath*"
+                })
+            $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($remaining.Count -eq 0 -and -not $listener) { break }
+            if ($listener) {
+                $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
+                if (-not $listenerProcess -or -not $listenerProcess.ExecutablePath -or
+                    -not [string]::Equals([System.IO.Path]::GetFullPath([string]$listenerProcess.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Le port HTTP $HttpPort est occupé par un processus tiers (PID $($listener.OwningProcess)). Il ne sera pas arrêté."
+                }
+            }
+            Start-Sleep -Seconds 1
+        } while ((Get-Date) -lt $orphanDeadline)
+        $remaining = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.ExecutablePath -and [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhpFullPath, [StringComparison]::OrdinalIgnoreCase) -and [string]$_.CommandLine -like "*$expectedRouterFullPath*" })
+        if ($remaining.Count -gt 0) { throw "Un processus PHP orphelin Clarodaro reste actif (PID $($remaining[0].ProcessId))." }
     }
 
     $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
@@ -128,7 +236,72 @@ try {
         Write-RemovalLog 'Aucune règle pare-feu HTTP LAN à supprimer.'
     }
 
-    Write-RemovalLog 'Nettoyage terminé. PostgreSQL data, configuration, secrets, sauvegardes, fichiers téléversés et journaux ProgramData sont conservés.'
+    # Remove only disposable runtime work directories; exports are preserved above.
+    foreach ($temporaryDirectory in @('tmp', 'cache')) {
+        $temporaryPath = Join-Path $AppRoot $temporaryDirectory
+        if (Test-Path -LiteralPath $temporaryPath -PathType Container) {
+            Remove-Item -LiteralPath $temporaryPath -Recurse -Force -ErrorAction Stop
+            Write-RemovalLog "Répertoire temporaire supprimé : $temporaryDirectory"
+        }
+    }
+
+    if ($PurgeData) {
+        # The user explicitly chose full deletion: remove legacy app-local data
+        # and secrets that Inno Setup excludes from its ordinary file manifest.
+        foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs', 'exports', 'tmp', 'cache')) {
+            $appDataPath = Join-Path $AppRoot $relativeDirectory
+            if (Test-Path -LiteralPath $appDataPath -PathType Container) {
+                Remove-Item -LiteralPath $appDataPath -Recurse -Force -ErrorAction Stop
+            }
+        }
+        Get-ChildItem -LiteralPath $AppRoot -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq '.env' -or $_.Name -like '.env.*' } |
+            Remove-Item -Force -ErrorAction Stop
+
+        $expectedDataRoot = [System.IO.Path]::GetFullPath((Join-Path $env:ProgramData 'IMC-Clarodaro')).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+        $actualDataRoot = [System.IO.Path]::GetFullPath($programDataRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+        if (-not [string]::Equals($actualDataRoot, $expectedDataRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Chemin de suppression ProgramData inattendu : $actualDataRoot"
+        }
+        if (Test-Path -LiteralPath $programDataRoot) {
+            Write-RemovalLog 'Purge explicitement demandée : suppression des données PostgreSQL, comptes (dont PDG), configurations, secrets, sauvegardes, fichiers téléversés, runtimes et journaux.'
+            Remove-Item -LiteralPath $programDataRoot -Recurse -Force -ErrorAction Stop
+        }
+        Write-Host 'Données locales Clarodaro supprimées définitivement.'
+    }
+    else {
+        $preservedAppDataRoot = Join-Path $programDataRoot 'preserved-app-data'
+        foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs', 'exports')) {
+            $installedDirectory = Join-Path $AppRoot $relativeDirectory
+            if (Test-Path -LiteralPath $installedDirectory -PathType Container) {
+                $savedDirectory = Join-Path $preservedAppDataRoot $relativeDirectory
+                Write-RemovalLog "Conservation des fichiers applicatifs : $relativeDirectory"
+                Copy-DirectoryWithoutOverwrite -Source $installedDirectory -Destination $savedDirectory
+                Remove-Item -LiteralPath $installedDirectory -Recurse -Force -ErrorAction Stop
+            }
+        }
+        $legacyEnvironmentFiles = @(Get-ChildItem -LiteralPath $AppRoot -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -eq '.env' -or $_.Name -like '.env.*' })
+        if ($legacyEnvironmentFiles.Count -gt 0) {
+            $legacyEnvironmentRoot = Join-Path $preservedAppDataRoot 'legacy-env'
+            New-Item -ItemType Directory -Path $legacyEnvironmentRoot -Force | Out-Null
+            foreach ($legacyFile in $legacyEnvironmentFiles) {
+                $savedFile = Join-Path $legacyEnvironmentRoot $legacyFile.Name
+                if (Test-Path -LiteralPath $savedFile -PathType Leaf) {
+                    $oldHash = (Get-Sha256Hex -Path $legacyFile.FullName)
+                    $newHash = (Get-Sha256Hex -Path $savedFile)
+                    if ($oldHash -ne $newHash) { throw "Conflit de configuration historique : $($legacyFile.Name). Aucun secret ne sera écrasé." }
+                } else {
+                    Copy-Item -LiteralPath $legacyFile.FullName -Destination $savedFile -ErrorAction Stop
+                }
+                if ((Get-Sha256Hex -Path $legacyFile.FullName) -ne (Get-Sha256Hex -Path $savedFile)) {
+                    throw "Vérification SHA-256 échouée pour la configuration historique : $($legacyFile.Name)"
+                }
+                Remove-Item -LiteralPath $legacyFile.FullName -Force -ErrorAction Stop
+            }
+        }
+        Write-RemovalLog 'Nettoyage terminé. PostgreSQL data, configuration, secrets, sauvegardes, fichiers téléversés, stockage applicatif et journaux ProgramData sont conservés.'
+    }
     exit 0
 }
 catch {

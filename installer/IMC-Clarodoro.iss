@@ -30,10 +30,10 @@ Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDesc
 
 [Dirs]
 Name: "{app}"
-Name: "{app}\logs"; Flags: uninsneveruninstall
-Name: "{app}\backups"; Flags: uninsneveruninstall
-Name: "{app}\uploads"; Flags: uninsneveruninstall
-Name: "{app}\storage"; Flags: uninsneveruninstall
+Name: "{app}\logs"
+Name: "{app}\backups"
+Name: "{app}\uploads"
+Name: "{app}\storage"
 Name: "{app}\installer"
 
 [Files]
@@ -58,6 +58,45 @@ Name: "{autoprograms}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c
 Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
 
 [Code]
+
+var
+  PurgeClarodaroData: Boolean;
+
+function CmdLineParamExists(const Value: string): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), Value) = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := True;
+  PurgeClarodaroData := False;
+  if CmdLineParamExists('/PURGEDATA') then
+    PurgeClarodaroData := True
+  else if not UninstallSilent then
+  begin
+    if MsgBox(
+      'Souhaitez-vous supprimer aussi les données locales de Clarodaro ?' + #13#10 + #13#10 +
+      'OUI : supprimer définitivement la base PostgreSQL, le compte PDG, les comptes utilisateurs, les paramètres, les sauvegardes, les exports, le stockage, les fichiers téléversés, les secrets et les journaux.' + #13#10 + #13#10 +
+      'NON : conserver toutes ces données pour une éventuelle réinstallation. C''est le choix recommandé.',
+      mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    begin
+      if MsgBox(
+        'CONFIRMATION FINALE : toutes les données de cet établissement seront supprimées sans possibilité de récupération par Clarodaro.' + #13#10 + #13#10 +
+        'Assurez-vous de disposer d''une sauvegarde externe si nécessaire. Confirmer la suppression définitive ?',
+        mbCriticalError, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        PurgeClarodaroData := True;
+    end;
+  end;
+end;
 
 procedure ConfigureAfterFiles;
 var
@@ -141,6 +180,8 @@ begin
     Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
       ExpandConstant('{app}\installer\Remove-Windows-Services.ps1') +
       '" -AppRoot "' + ExpandConstant('{app}') + '"';
+    if PurgeClarodaroData then
+      Parameters := Parameters + ' -PurgeData';
     if not Exec(
       ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters,

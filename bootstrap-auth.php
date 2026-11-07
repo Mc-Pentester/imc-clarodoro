@@ -28,9 +28,20 @@ try {
     // Valider le secret avant toute écriture dans les tables RBAC.
     $password = getenv('IMC_BOOTSTRAP_PASSWORD');
 
-    if (!is_string($password) || strlen($password) < 12) {
+    $passwordCharacterCount = is_string($password)
+        ? preg_match_all('/./us', $password, $passwordCharacters)
+        : false;
+
+    if (
+        !is_string($password) ||
+        $password === '' ||
+        strlen($password) > 1024 ||
+        $passwordCharacterCount === false ||
+        $passwordCharacterCount < 12 ||
+        preg_match('/[\x00-\x1F\x7F]/u', $password) === 1
+    ) {
         throw new RuntimeException(
-            'IMC_BOOTSTRAP_PASSWORD doit contenir au moins 12 caractères.'
+            'IMC_BOOTSTRAP_PASSWORD doit contenir au moins 12 caractères Unicode valides.'
         );
     }
 

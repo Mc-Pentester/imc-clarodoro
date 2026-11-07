@@ -17,6 +17,40 @@ function Write-Step([string]$Message) {
     Write-Host "[Clarodaro] $Message"
 }
 
+function Get-Sha256Hex([string]$Path) {
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha256.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($bytes)).Replace('-', '')
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
+function Copy-DirectoryWithoutOverwrite([string]$Source, [string]$Destination) {
+    if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
+    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+    $sourceRoot = [System.IO.Path]::GetFullPath($Source).TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    foreach ($file in Get-ChildItem -LiteralPath $Source -File -Recurse -Force) {
+        $relative = $file.FullName.Substring($sourceRoot.Length)
+        $target = Join-Path $Destination $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        if (Test-Path -LiteralPath $target -PathType Leaf) {
+            $sourceHash = (Get-Sha256Hex -Path $file.FullName)
+            $targetHash = (Get-Sha256Hex -Path $target)
+            if ($sourceHash -ne $targetHash) { throw "Conflit de données pendant la conservation : $target. Aucun fichier existant ne sera écrasé." }
+        } else {
+            Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
+        }
+        $verifiedHash = (Get-Sha256Hex -Path $target)
+        $expectedHash = (Get-Sha256Hex -Path $file.FullName)
+        if ($verifiedHash -ne $expectedHash) { throw "Vérification SHA-256 échouée après copie : $target" }
+    }
+}
+
 function Set-PrivateAcl([string]$Path) {
     $inheritance = if (Test-Path -LiteralPath $Path -PathType Container) { '(OI)(CI)F' } else { 'F' }
     & icacls.exe $Path /inheritance:r /grant:r "*S-1-5-18:$inheritance" "*S-1-5-32-544:$inheritance" | Out-Null
@@ -125,6 +159,28 @@ elseif (-not (Test-PortAvailable $HttpPort)) {
 }
 
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
+
+$preservedAppDataRoot = Join-Path $programDataRoot 'preserved-app-data'
+foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs', 'exports')) {
+    $savedDirectory = Join-Path $preservedAppDataRoot $relativeDirectory
+    $installedDirectory = Join-Path $AppRoot $relativeDirectory
+    if (Test-Path -LiteralPath $savedDirectory -PathType Container) {
+        Write-Step "Restauration des fichiers locaux conservés : $relativeDirectory"
+        Copy-DirectoryWithoutOverwrite -Source $savedDirectory -Destination $installedDirectory
+        Remove-Item -LiteralPath $savedDirectory -Recurse -Force -ErrorAction Stop
+    }
+}
+$legacyEnvironmentRoot = Join-Path $preservedAppDataRoot 'legacy-env'
+if (Test-Path -LiteralPath $legacyEnvironmentRoot -PathType Container) {
+    Write-Step 'Restauration de la configuration historique .env conservée.'
+    Copy-DirectoryWithoutOverwrite -Source $legacyEnvironmentRoot -Destination $AppRoot
+    Remove-Item -LiteralPath $legacyEnvironmentRoot -Recurse -Force -ErrorAction Stop
+}
+if ((Test-Path -LiteralPath $preservedAppDataRoot -PathType Container) -and
+    -not (Get-ChildItem -LiteralPath $preservedAppDataRoot -Force | Select-Object -First 1)) {
+    Remove-Item -LiteralPath $preservedAppDataRoot -Force
+}
+
 
 # Configurer les ACL sur les repertoires parents AVANT de creer le cluster
 # NetworkService (S-1-5-20) a besoin de droits de traversee sur tous les repertoires parents
