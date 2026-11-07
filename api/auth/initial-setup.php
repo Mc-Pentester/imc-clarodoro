@@ -27,7 +27,8 @@ if (
     preg_match('/[\x00-\x1F\x7F]/u', $password) === 1
 ) {
     apiError(400, 'Le mot de passe doit contenir au moins 12 caractères Unicode et ne peut pas contenir de caractères de contrôle.');
-}if (!hash_equals($password, $confirmation)) {
+}
+if (!hash_equals($password, $confirmation)) {
     apiError(400, 'Les deux mots de passe ne correspondent pas.');
 }
 
