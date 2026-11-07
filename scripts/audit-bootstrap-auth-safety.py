@@ -25,7 +25,7 @@ require("LOWER(u.username) = 'pdg'" in bootstrap and "r.name = 'PDG'" in bootstr
         "guard must detect both the pdg username and existing PDG role")
 require("preg_match_all('/./us', $password" in bootstrap,
         "bootstrap must count Unicode characters instead of UTF-8 bytes")
-require("preg_match('/[\\\\x00-\\\\x1F\\\\x7F]/u', $password)" in bootstrap,
+require(r"preg_match('/[\\x00-\\x1F\\x7F]/u', $password)" in bootstrap,
         "bootstrap must reject control characters")
 setup_api = Path("api/auth/initial-setup.php").read_text(encoding="utf-8")
 setup_page = Path("setup-page.php").read_text(encoding="utf-8")
