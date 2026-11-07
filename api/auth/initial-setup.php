@@ -18,10 +18,16 @@ $data = readJsonBody();
 $password = isset($data['password']) && is_string($data['password']) ? $data['password'] : '';
 $confirmation = isset($data['confirmation']) && is_string($data['confirmation']) ? $data['confirmation'] : '';
 
-if (strlen($password) < 12 || preg_match('/^[\x20-\x7E]+$/D', $password) !== 1) {
-    apiError(400, 'Le mot de passe doit contenir au moins 12 caractères ASCII imprimables.');
-}
-if (!hash_equals($password, $confirmation)) {
+$passwordCharacterCount = preg_match_all('/./us', $password, $passwordCharacters);
+if (
+    $password === '' ||
+    strlen($password) > 1024 ||
+    $passwordCharacterCount === false ||
+    $passwordCharacterCount < 12 ||
+    preg_match('/[\x00-\x1F\x7F]/u', $password) === 1
+) {
+    apiError(400, 'Le mot de passe doit contenir au moins 12 caractères Unicode et ne peut pas contenir de caractères de contrôle.');
+}if (!hash_equals($password, $confirmation)) {
     apiError(400, 'Les deux mots de passe ne correspondent pas.');
 }
 
