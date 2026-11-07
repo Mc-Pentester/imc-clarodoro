@@ -51,7 +51,7 @@ small{color:#64748b}#message{white-space:pre-wrap;margin-top:14px}
 <label for="username">Identifiant</label>
 <input id="username" value="pdg" readonly autocomplete="username">
 <label for="password">Mot de passe (12 caractères minimum)</label>
-<input id="password" type="password" minlength="12" required autocomplete="new-password">
+<input id="password" type="password" required autocomplete="new-password">
 <label for="confirmation">Confirmer le mot de passe</label>
 <input id="confirmation" type="password" minlength="12" required autocomplete="new-password">
 <button id="submit" type="submit">Créer mon compte PDG</button>
@@ -67,7 +67,7 @@ form.addEventListener('submit',async event=>{
  const message=document.getElementById('message');
  const button=document.getElementById('submit');
  message.textContent='';
- if(password.length<12){message.textContent='Le mot de passe doit contenir au moins 12 caractères.';return;}
+ if(Array.from(password).length<12){message.textContent='Le mot de passe doit contenir au moins 12 caractères.';return;}
  if(password!==confirmation){message.textContent='Les deux mots de passe ne correspondent pas.';return;}
  button.disabled=true;
  try{
