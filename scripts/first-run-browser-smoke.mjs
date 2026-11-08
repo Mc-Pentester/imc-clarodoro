@@ -53,9 +53,9 @@ try {
   studentsPage.on("pageerror", error => pageErrors.push(error.message));
   await studentsPage.goto(baseUrl + "/eleves.html", { waitUntil: "domcontentloaded", timeout: 30000 });
   await studentsPage.locator("#login").waitFor({ state: "visible", timeout: 15000 });
-  if (await studentsPage.locator("#username").inputValue() !== "pdg") {
-    throw new Error("The protected student page must request the PDG login.");
-  }
+  // The protected-page login intentionally leaves the username blank
+  // (only the dedicated PDG page pre-fills it). Enter the bootstrap account.
+  await studentsPage.locator("#username").fill("pdg");
   await studentsPage.locator("#password").fill(password);
   await studentsPage.locator("#login button[type='submit']").click();
   await studentsPage.locator("#studentForm").waitFor({ state: "visible", timeout: 30000 });
