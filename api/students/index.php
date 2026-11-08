@@ -12,11 +12,23 @@ if ($method === 'GET') {
     $pdo = getDatabaseConnection();
     $user = requirePermission($pdo, 'eleves.read');
 
-    // F-03: le schéma V1 ne relie pas encore users aux enseignants/classes.
-    // Tant que ce périmètre serveur n'existe pas, une lecture globale par un
-    // utilisateur non-PDG serait une fuite inter-classe. On échoue fermement
-    // plutôt que de retourner tous les élèves.
-    if ($user['role_name'] === 'PDG') {
+    // Les rôles qui disposent d'un droit de création ou de modification
+    // des dossiers peuvent consulter la liste complète. Les comptes en
+    // lecture seule restent strictement limités aux classes qui leur sont
+    // affectées côté serveur.
+    $manageScope = $pdo->prepare(
+        "SELECT EXISTS (
+            SELECT 1
+            FROM role_permissions rp
+            INNER JOIN permissions p ON p.id = rp.permission_id
+            WHERE rp.role_id = :role_id
+              AND p.name IN ('eleves.create', 'eleves.update')
+        )"
+    );
+    $manageScope->execute([':role_id' => $user['role_id']]);
+    $canManageStudentRecords = (bool) $manageScope->fetchColumn();
+
+    if ($canManageStudentRecords) {
         $stmt = $pdo->prepare(
             'SELECT
                 id,
@@ -49,7 +61,10 @@ if ($method === 'GET') {
                 s.sex,
                 s.address,
                 s.phone,
+                s.profile_data,
                 s.profile_data->>'classe' AS class_name,
+                s.profile_data->>'photo' AS photo,
+                s.profile_data->>'anneeScolaire' AS school_year_label,
                 s.status,
                 s.created_at,
                 s.updated_at
