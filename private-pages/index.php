@@ -996,13 +996,18 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
        INITIALISATION
     ================================================== */
 
-    document.addEventListener(
-        "DOMContentLoaded",
-        function () {
+    document.addEventListener("DOMContentLoaded", async function () {
+        const authenticated = await IMCAuth.verifySession();
+        if (!authenticated) {
+            window.location.replace("/index.html");
+            return;
+        }
 
-            IMCSecureStorage.ready.then(function (ok) {
-
-            if (!ok) return;
+        const storageReady = await IMCSecureStorage.ready;
+        if (!storageReady) {
+            afficherMessage("Le stockage sécurisé n'est pas disponible.");
+            return;
+        }
 
             creerAnnees();
 
@@ -1054,9 +1059,7 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                     enregistrerEleve
                 );
 
-            });
-        }
-    );
+    });
 
 
     /* ==================================================
@@ -1153,13 +1156,13 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             departement: profile.departement || "",
             commune: profile.commune || "",
             sectionCommunale: profile.sectionCommunale || "",
-            classe: profile.classe || "",
+            classe: profile.classe || student.class_name || "",
             nisu: profile.nisu || student.matricule || "",
             contact: profile.contact || student.phone || "",
             ninuParent: profile.ninuParent || "",
             documentInscription: profile.documentInscription || "",
-            photo: profile.photo || "",
-            anneeScolaire: profile.anneeScolaire || anneeActuelle(),
+            photo: profile.photo || student.photo || "",
+            anneeScolaire: profile.anneeScolaire || student.school_year_label || anneeActuelle(),
             status: student.status || "ACTIVE"
         };
     }
@@ -1172,7 +1175,7 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            throw new Error(data.message || "Erreur de chargement des élèves");
+            throw new Error(data.message || data.error || "Erreur de chargement des élèves");
         }
         students = Array.isArray(data.students)
             ? data.students.map(adapterEleveServeur)
@@ -1212,14 +1215,15 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                 credentials: "same-origin",
                 headers: {
                     "Content-Type": "application/json",
-                    "Accept": "application/json"
+                    "Accept": "application/json",
+                    "X-CSRF-Token": IMCAuth.getCsrfToken() || ""
                 },
                 body: JSON.stringify(payload)
             }
         );
         const data = await response.json();
         if (!response.ok || !data.success) {
-            throw new Error(data.message || "Erreur d'enregistrement");
+            throw new Error(data.message || data.error || "Erreur d'enregistrement");
         }
         return adapterEleveServeur(data.student);
     }
@@ -1340,12 +1344,16 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                     );
 
 
+                const numberTd = document.createElement("td");
+                numberTd.textContent = String(index + 1);
+                row.appendChild(numberTd);
+
                 const photoTd = document.createElement("td");
                 if (estSourceImageSûre(student.photo)) {
                     const photo = document.createElement("img");
                     photo.src = student.photo;
                     photo.className = "student-photo";
-                    photo.alt = "Photo";
+                    photo.alt = "Photo de " + (student.prenom || "l'élève");
                     photoTd.appendChild(photo);
                 } else {
                     photoTd.textContent = "—";
@@ -1360,7 +1368,6 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                             : "";
 
                 [
-                    index + 1,
                     student.nom || "",
                     student.prenom || "",
                     sexe,
