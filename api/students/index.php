@@ -24,7 +24,8 @@ if ($method === 'GET') {
            AND p.name IN ('eleves.create', 'eleves.update')"
     );
     $manageScope->execute([':role_id' => $user['role_id']]);
-    $canManageStudentRecords = (int) $manageScope->fetchColumn() > 0;
+    $canManageStudentRecords = $user['role_name'] === 'PDG'
+        || (int) $manageScope->fetchColumn() > 0;
 
     if ($canManageStudentRecords) {
         $stmt = $pdo->prepare(
