@@ -1,6 +1,6 @@
 #define MyAppName "IMC-Clarodaro"
 #define MyAppVersion "1.1.0"
-#define MyAppPublisher "Jean Rony Arena"
+#define MyAppPublisher "Jean Rony Agéna"
 #define MyAppURL "https://github.com/Mc-Pentester/imc-clarodoro"
 
 [Setup]
@@ -10,13 +10,13 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 LicenseFile=..\LICENSE-CLARODARO.txt
-DefaultDirName={autopf}\IMC-Clarodaro
+DefaultDirName={autopf}\IMC-Clarodoro
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=IMC-Clarodaro-Setup-{#MyAppVersion}
+OutputBaseFilename=IMC-Clarodoro-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -42,7 +42,7 @@ Name: "{app}\installer"
 Source: "..\*"; DestDir: "{app}"; Excludes: ".git\*,.github\*,.env,.env.*,backups\*,logs\*,tmp\*,cache\*,node_modules\*,vendor\*,dist\*,audit\*,docs\*,installer\payload\*,installer\*.iss,installer\*.ps1"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Bundled, checksum-verified PHP runtime (NTS x64) and PostgreSQL server binaries.
 Source: "payload\php\*"; DestDir: "{app}\runtime\php"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "payload\postgresql\*"; DestDir: "{commonappdata}\IMC-Clarodaro\runtime\postgresql"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "payload\postgresql\*"; DestDir: "{commonappdata}\IMC-Clarodoro\runtime\postgresql"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
 Source: "payload\runtime-manifest.json"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "payload\vc_redist.x64.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
@@ -55,8 +55,8 @@ Source: "Prepare-Upgrade.ps1"; Flags: dontcopy
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
 [Icons]
-Name: "{autoprograms}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14
-Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
+Name: "{autoprograms}\IMC-Clarodoro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14
+Name: "{autodesktop}\IMC-Clarodoro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
 
 [Code]
 
