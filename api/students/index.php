@@ -17,16 +17,14 @@ if ($method === 'GET') {
     // lecture seule restent strictement limités aux classes qui leur sont
     // affectées côté serveur.
     $manageScope = $pdo->prepare(
-        "SELECT EXISTS (
-            SELECT 1
-            FROM role_permissions rp
-            INNER JOIN permissions p ON p.id = rp.permission_id
-            WHERE rp.role_id = :role_id
-              AND p.name IN ('eleves.create', 'eleves.update')
-        )"
+        "SELECT COUNT(*)
+         FROM role_permissions rp
+         INNER JOIN permissions p ON p.id = rp.permission_id
+         WHERE rp.role_id = :role_id
+           AND p.name IN ('eleves.create', 'eleves.update')"
     );
     $manageScope->execute([':role_id' => $user['role_id']]);
-    $canManageStudentRecords = (bool) $manageScope->fetchColumn();
+    $canManageStudentRecords = (int) $manageScope->fetchColumn() > 0;
 
     if ($canManageStudentRecords) {
         $stmt = $pdo->prepare(
