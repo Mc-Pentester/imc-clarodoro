@@ -1,6 +1,6 @@
 #define MyAppName "IMC-Clarodaro"
 #define MyAppVersion "1.1.0"
-#define MyAppPublisher "IMC-Clarodaro"
+#define MyAppPublisher "Jean Rony Arena"
 #define MyAppURL "https://github.com/Mc-Pentester/imc-clarodoro"
 
 [Setup]
@@ -9,6 +9,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
+LicenseFile=..\\LICENSE-CLARODARO.txt
 DefaultDirName={autopf}\IMC-Clarodaro
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
