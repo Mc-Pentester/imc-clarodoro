@@ -48,10 +48,48 @@ try {
     throw new Error("The repeat-setup refusal message is not visible.");
   }
 
+  // Verify the real student-registration workflow after first-run setup.
+  const studentsPage = await context.newPage();
+  studentsPage.on("pageerror", error => pageErrors.push(error.message));
+  await studentsPage.goto(baseUrl + "/eleves.html", { waitUntil: "domcontentloaded", timeout: 30000 });
+  await studentsPage.locator("#login").waitFor({ state: "visible", timeout: 15000 });
+  if (await studentsPage.locator("#username").inputValue() !== "pdg") {
+    throw new Error("The protected student page must request the PDG login.");
+  }
+  await studentsPage.locator("#password").fill(password);
+  await studentsPage.locator("#login button[type='submit']").click();
+  await studentsPage.locator("#studentForm").waitFor({ state: "visible", timeout: 30000 });
+
+  const studentMarker = "BrowserSmoke-" + Date.now();
+  await studentsPage.locator("#nom").fill(studentMarker);
+  await studentsPage.locator("#prenom").fill("Inscription");
+  await studentsPage.locator("#sexe").selectOption("M");
+  await studentsPage.locator("#dateNaissance").fill("2015-01-15");
+  await studentsPage.locator("#classe").selectOption({ label: "1ère Kind" });
+  await studentsPage.locator("#studentForm button[type='submit']").click();
+
+  await studentsPage.locator("#message").getByText(/enregistrées avec succès/i).waitFor({ state: "visible", timeout: 30000 });
+  await studentsPage.locator("#studentsTableBody").getByText(studentMarker).waitFor({ state: "visible", timeout: 15000 });
+
+  // Reload proves that the row comes back from PostgreSQL, not only from browser memory.
+  await studentsPage.reload({ waitUntil: "domcontentloaded", timeout: 30000 });
+  await studentsPage.locator("#studentsTableBody").getByText(studentMarker).waitFor({ state: "visible", timeout: 30000 });
+
+  const row = studentsPage.locator("#studentsTableBody tr").filter({ hasText: studentMarker }).first();
+  const cells = await row.locator("td").allTextContents();
+  if (cells.length !== 10 || cells[0].trim() !== "1" || !cells[1].includes("—") || !cells[2].includes(studentMarker)) {
+    throw new Error("The student list columns are not aligned with the table headings: " + JSON.stringify(cells));
+  }
+
+  if (pageErrors.length) throw new Error("Browser error(s): " + pageErrors.join(" | "));
+
   console.log("BROWSER FIRST-RUN FORM: PASS");
   console.log("CLIENT-SIDE 12-CHARACTER MINIMUM: PASS");
   console.log("UNICODE PDG PASSWORD CREATION: PASS");
   console.log("SECOND SETUP REFUSED (HTTP 409): PASS");
+  console.log("STUDENT FORM SAVE: PASS");
+  console.log("STUDENT LIST AFTER PAGE RELOAD: PASS");
+  console.log("STUDENT TABLE COLUMN ALIGNMENT: PASS");
 } finally {
   await browser.close();
 }
