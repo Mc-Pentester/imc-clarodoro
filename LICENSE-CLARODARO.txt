@@ -1,0 +1,113 @@
+CONTRAT DE LICENCE UTILISATEUR FINAL
+CLARODARO
+
+Version 1.0
+Date : 8 novembre 2026
+
+TITULAIRE DES DROITS
+Jean Rony Arena, résidant en Haïti
+Ci-après dénommé « le Titulaire ».
+
+IMPORTANT
+Veuillez lire attentivement le présent contrat avant d'installer ou d'utiliser Clarodaro. L'installation ne peut se poursuivre que si vous acceptez expressément les conditions ci-dessous.
+
+1. OBJET ET ACCEPTATION
+
+Le présent contrat définit les conditions dans lesquelles le Titulaire autorise l'installation et l'utilisation du logiciel Clarodaro, une application de gestion destinée notamment aux établissements scolaires.
+
+En sélectionnant « J'accepte les termes du contrat » dans l'installateur, l'utilisateur confirme avoir pu consulter le présent contrat et accepte d'être lié par ses dispositions. Si l'utilisateur n'accepte pas ces conditions, il doit refuser le contrat et interrompre l'installation.
+
+La personne qui accepte au nom d'un établissement déclare être habilitée à engager cet établissement.
+
+2. DROIT D'UTILISATION
+
+Sous réserve du respect du présent contrat, le Titulaire accorde à l'utilisateur une licence d'utilisation personnelle, non exclusive et non cessible de Clarodaro, pour les besoins de gestion de son établissement ou de son organisation.
+
+Cette licence autorise :
+- l'installation et l'exécution de Clarodaro sur l'ordinateur prévu pour héberger l'application ;
+- l'accès à l'application depuis les postes autorisés du même établissement, conformément à la configuration technique ;
+- l'utilisation des fonctionnalités disponibles dans la version installée ;
+- la saisie, la consultation, l'exportation et la sauvegarde des données de l'établissement.
+
+La licence ne constitue ni une vente du logiciel ni un transfert de propriété intellectuelle. Toute extension de droits ou utilisation commerciale par un tiers nécessite l'autorisation écrite préalable du Titulaire.
+
+3. PROPRIÉTÉ INTELLECTUELLE
+
+Le logiciel Clarodaro, son code source propriétaire, son architecture, son interface, ses éléments graphiques, sa documentation, ses marques et ses éléments distinctifs demeurent la propriété de leurs titulaires respectifs.
+
+Aucun droit de propriété sur le logiciel n'est transféré à l'utilisateur par le présent contrat.
+
+Les composants tiers éventuellement intégrés à Clarodaro restent soumis à leurs licences respectives. Le présent contrat ne réduit pas les droits accordés par ces licences.
+
+4. RESTRICTIONS
+
+Sauf autorisation écrite du Titulaire ou disposition impérative de la loi applicable, l'utilisateur s'interdit de :
+- vendre, louer, sous-licencier, distribuer ou mettre à disposition des tiers une copie de Clarodaro ;
+- copier ou réutiliser le logiciel en dehors des besoins autorisés de son établissement ;
+- modifier, décompiler, désassembler ou tenter d'extraire le code source propriétaire ;
+- supprimer ou altérer les mentions de propriété intellectuelle ;
+- contourner les mécanismes d'authentification, de sécurité ou de contrôle des accès ;
+- utiliser Clarodaro à des fins illégales, frauduleuses ou portant atteinte aux droits d'autrui.
+
+Les exceptions qui ne peuvent être interdites par la législation applicable demeurent réservées.
+
+5. DONNÉES ET CONFIDENTIALITÉ
+
+Les données saisies, importées ou produites par l'utilisateur au moyen de Clarodaro demeurent celles de l'utilisateur ou de l'établissement concerné. Le présent contrat ne transfère pas leur propriété au Titulaire.
+
+Clarodaro est conçu pour fonctionner sur l'infrastructure locale de l'établissement. Les données ne sont pas automatiquement transmises au Titulaire du seul fait de l'installation ou de l'utilisation du logiciel. Une fonctionnalité nécessitant un service externe ou une communication à distance peut toutefois entraîner des échanges spécifiques lorsqu'elle est activée.
+
+L'établissement demeure responsable :
+- de la légalité de la collecte et de l'utilisation des données ;
+- de l'information des personnes concernées et de la protection des données des élèves et des familles ;
+- de la gestion des comptes, mots de passe et autorisations d'accès ;
+- de la sécurité de ses ordinateurs et de son réseau ;
+- de la conservation et de la protection de ses sauvegardes.
+
+Le Titulaire n'accède pas aux données locales de l'établissement par le seul effet de cette licence.
+
+6. SAUVEGARDES, MISES À JOUR ET DÉSINSTALLATION
+
+L'utilisateur est responsable de réaliser et de conserver régulièrement des sauvegardes vérifiables de ses données.
+
+Lors de la désinstallation, Clarodaro peut proposer :
+- la conservation des données locales, afin de permettre une réinstallation ultérieure ;
+- la suppression des données locales, après confirmation explicite de l'utilisateur.
+
+Une suppression confirmée peut être définitive. L'utilisateur doit donc vérifier qu'il dispose des sauvegardes nécessaires avant de choisir cette option.
+
+Les mises à jour, corrections, nouvelles versions et prestations d'assistance ne sont fournies que selon les modalités annoncées séparément par le Titulaire.
+
+7. DISPONIBILITÉ ET LIMITATION DE RESPONSABILITÉ
+
+Le logiciel est fourni dans l'état de la version installée. Le Titulaire s'efforce d'assurer son bon fonctionnement, sans garantir une disponibilité ininterrompue ni l'absence totale d'erreurs.
+
+Dans les limites autorisées par la législation haïtienne applicable, le Titulaire ne pourra être tenu responsable des dommages résultant notamment :
+- d'une utilisation incorrecte ou non autorisée du logiciel ;
+- d'une configuration inadéquate de l'ordinateur ou du réseau ;
+- d'une panne matérielle, d'une défaillance du système d'exploitation ou d'un incident extérieur ;
+- de la perte de données lorsque des sauvegardes adéquates n'ont pas été réalisées ;
+- d'une intervention ou d'une modification effectuée par un tiers non autorisé.
+
+Aucune disposition du présent contrat n'exclut une responsabilité ou un droit qui ne peut légalement être exclu ou limité.
+
+8. SUSPENSION ET FIN DE LICENCE
+
+En cas de violation substantielle du présent contrat, le Titulaire peut demander à l'utilisateur de remédier à cette violation dans un délai raisonnable. Si la violation persiste, le droit d'utilisation peut être suspendu ou résilié dans les limites prévues par la loi applicable.
+
+La fin de la licence n'entraîne aucun transfert au Titulaire de la propriété des données de l'utilisateur. L'utilisateur reste responsable de leur exportation et de leur sauvegarde avant toute désinstallation ou suppression.
+
+9. DROIT APPLICABLE
+
+Le présent contrat est régi par le droit de la République d'Haïti. Tout différend sera soumis aux juridictions compétentes conformément aux règles de droit applicables en Haïti.
+
+10. ACCEPTATION ÉLECTRONIQUE
+
+L'acceptation effectuée dans l'installateur de Clarodaro vaut manifestation électronique du consentement de l'utilisateur au présent contrat.
+
+L'utilisateur reconnaît :
+- avoir eu la possibilité de lire le contrat avant l'installation ;
+- comprendre que l'acceptation est nécessaire pour poursuivre l'installation ;
+- accepter les conditions de cette licence pour son compte ou pour l'établissement qu'il est habilité à représenter.
+
+FIN DU CONTRAT DE LICENCE UTILISATEUR FINAL — CLARODARO
