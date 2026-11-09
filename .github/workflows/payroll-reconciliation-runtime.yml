@@ -81,6 +81,7 @@ jobs:
           set -euo pipefail
           php -l api/payroll/index.php
           php -l api/payroll/reconcile.php
+          php -l private-pages/PDG.php
           python3 - <<'PY'
           import re
           from pathlib import Path
@@ -94,7 +95,7 @@ jobs:
           missing = [item for item in required if item not in pdg]
           if missing:
               raise SystemExit("Payroll UI/report contract missing: " + ", ".join(missing))
-          scripts = [s for s in re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", pdg, re.I | re.S) if s.strip()]
+          scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", pdg, re.I | re.S) if s.strip()]
           if not scripts:
               raise SystemExit("No inline JavaScript found in private-pages/PDG.php")
           for i, script in enumerate(scripts):
@@ -189,6 +190,10 @@ jobs:
           test -n "$PAYROLL_ID"
           test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$PAYROLL_ID'")" = '1050.00'
           test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_reconciliation_audit WHERE payroll_entry_id='$PAYROLL_ID'")" = '1'
+
+          PAYROLL_LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/payroll/index.php?school_year_label=2026-2027")"
+          printf '%s' "$PAYROLL_LIST" | php -r '$d=json_decode(stream_get_contents(STDIN),true); $p=array_values(array_filter($d["payroll"]??[],fn($x)=>($x["id"]??"")===$argv[1])); if(count($p)!==1 || (float)$p[0]["net_amount"]!==1050.0) exit(1);' "$PAYROLL_ID"
+          echo 'PAYROLL POSTGRESQL READ/DISPLAY API: PASS'
 
           REIMPORT_STATUS="$(curl -sS -o /tmp/reconcile-again.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/payroll/reconcile.php")"
           test "$REIMPORT_STATUS" = '200'
