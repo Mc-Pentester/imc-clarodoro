@@ -506,6 +506,11 @@ imcRequirePageAccess('paies.read', 'PDG', $pdo ?? null);
     </button>
 
     <button class="pdg"
+        onclick="ouvrirPage('payroll.html')">
+        Gestion des paies
+    </button>
+
+    <button class="pdg"
         onclick="ouvrirPage('payroll-recovery.html')">
         Reprise des paies
     </button>
