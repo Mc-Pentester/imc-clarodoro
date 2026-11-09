@@ -57,10 +57,10 @@ jobs:
             SELECT id INTO pdg_id FROM roles WHERE name='PDG';
             SELECT id INTO other_id FROM roles WHERE name='Autre';
             IF (SELECT COUNT(*) FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
-                WHERE rp.role_id=pdg_id AND p.name IN ('paies.read','paies.create','paies.update')) <> 3
-              THEN RAISE EXCEPTION 'PDG must receive all three payroll permissions from migrations'; END IF;
+                WHERE rp.role_id=pdg_id AND p.name IN ('paies.read','paies.create','paies.update','paies.reconcile')) <> 4
+              THEN RAISE EXCEPTION 'PDG must receive read/create/update/reconcile payroll permissions from migrations'; END IF;
             IF EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
-                       WHERE rp.role_id=other_id AND p.name IN ('paies.read','paies.create','paies.update'))
+                       WHERE rp.role_id=other_id AND p.name IN ('paies.read','paies.create','paies.update','paies.reconcile'))
               THEN RAISE EXCEPTION 'Payroll permissions leaked to another role'; END IF;
             IF NOT EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
                            WHERE rp.role_id=pdg_id AND p.name='whatsapp.message.send')
@@ -93,7 +93,7 @@ jobs:
           ON CONFLICT (name) DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000008001',id FROM permissions
-          WHERE name IN ('paies.reconcile','eleves.read','finances.read','personnel.read','badge.read','resultats.read')
+          WHERE name IN ('eleves.read','finances.read','personnel.read','badge.read','resultats.read')
           ON CONFLICT DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000008002',id FROM permissions
