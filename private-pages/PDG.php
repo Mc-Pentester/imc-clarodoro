@@ -490,6 +490,11 @@ imcRequirePageAccess('paies.read', 'PDG', $pdo ?? null);
         Année scolaire
     </button>
 
+    <button class="annees"
+        onclick="ouvrirPage('classes.html')">
+        Niveaux et classes
+    </button>
+
     <button class="vacances"
         onclick="ouvrirPage('vacances.html')">
         Vacances

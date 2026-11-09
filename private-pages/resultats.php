@@ -1161,11 +1161,9 @@ const lignes = [
 async function chargerClasses() {
     const select = document.getElementById("classe");
     if (!select) return;
-    const response = await fetch("/api/student-enrollment-options/index.php", {
-        method: "GET",
-        credentials: "same-origin",
-        headers: { "Accept": "application/json" },
-        cache: "no-store"
+    const response = await fetch("/api/academic-structure/index.php?resource=classes", {
+        method: "GET", credentials: "same-origin",
+        headers: { "Accept": "application/json" }, cache: "no-store"
     });
     const payload = await response.json();
     if (!response.ok || !payload.success || !Array.isArray(payload.classes)) {
@@ -1174,7 +1172,8 @@ async function chargerClasses() {
     select.replaceChildren(new Option("Toutes les classes", ""));
     payload.classes.forEach(function (item) {
         if (!item || !item.id || !item.name) return;
-        const option = new Option(String(item.name), String(item.id));
+        const suffix = item.status && item.status !== "ACTIVE" ? " (" + item.status + ")" : "";
+        const option = new Option(String(item.name) + suffix, String(item.id));
         option.dataset.classId = String(item.id);
         select.appendChild(option);
     });

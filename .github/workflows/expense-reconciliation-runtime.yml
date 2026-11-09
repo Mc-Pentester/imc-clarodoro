@@ -102,6 +102,26 @@ jobs:
             exit 1
           fi
 
+      - name: Validate academic structure management code
+        run: |
+          set -euo pipefail
+          php -l api/academic-structure/index.php
+          php -l private-pages/classes.php
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          page = Path("private-pages/classes.php").read_text(encoding="utf-8")
+          scripts = [s for s in re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", page, re.I | re.S) if s.strip()]
+          if not scripts:
+              raise SystemExit("No inline class-management JavaScript found")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/classes-{i}.js").write_text(script, encoding="utf-8")
+          PY
+          for file in /tmp/classes-*.js; do node --check "$file"; done
+          grep -q '/api/academic-structure/index.php' private-pages/resultats.php
+          grep -q 'classes.manage' secure-page.php
+          grep -q 'Niveaux et classes' private-pages/PDG.php
+
       - name: Start PHP API
         run: |
           set -euo pipefail

@@ -141,6 +141,7 @@
       badge: ["read", "create", "print"],
       paies: ["read", "create", "update", "reconcile"],
       depenses: ["read", "create", "delete", "reconcile"],
+      classes: ["manage"],
       presences: ["read", "create", "update"],
       vault: ["update"]
     },
