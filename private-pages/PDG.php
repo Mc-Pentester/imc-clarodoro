@@ -826,6 +826,11 @@ imcRequirePageAccess('paies.read', 'PDG', $pdo ?? null);
 
             </div>
 
+            <div class="champ actions-rapport-paie">
+                <button type="button" class="btn btn-bleu" onclick="genererRapportPaies()">Générer le rapport de paie</button>
+                <button type="button" class="btn btn-vert" onclick="exporterRapportPaiesCSV()">Exporter en CSV</button>
+            </div>
+
         </div>
 
 
@@ -1724,10 +1729,8 @@ async function chargerPaiesServeur(force = false) {
             return Array.isArray(payload.payroll) ? payload.payroll : [];
         };
 
-        let entries = await charger();
-        const parCle = new Map(entries.map(entry => [clePaieServeur(entry), entry]));
+        const entries = await charger();
         const avertissements = [];
-        entries = await charger();
         for (const entry of entries) {
             const key = clePaieServeur(entry);
             paiesServeurCache[key] = {
@@ -1935,6 +1938,11 @@ async function afficherPaie() {
     } catch (error) {
         const message = document.getElementById("messagePaie");
         if (message) message.textContent = "Lecture des paies indisponible : " + (error.message || "");
+        const tbody = document.getElementById("tableauPaie");
+        if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="aucun-personnel">Impossible de charger les paies depuis PostgreSQL. Vérifiez la connexion puis actualisez la page. Aucun montant estimé n’est présenté comme une paie enregistrée.</td></tr>';
+        const total = document.getElementById("totalPaieTableau");
+        if (total) total.textContent = "—";
+        return;
     }
 
     afficherNomMoisPaie();
@@ -2226,6 +2234,108 @@ async function afficherPaie() {
 
 }
 
+
+/* ============================================================
+   RAPPORT DE PAIE — période sélectionnée
+============================================================ */
+
+function lignesRapportPaies() {
+    const mois = obtenirMoisSelectionne();
+    const annee = String(anneeConnectee || "").replace(/\s/g, "");
+    const paies = obtenirPaies();
+    return obtenirPersonnel().map((personne, index) => {
+        const id = String(personne.id || personne.identifiant || index);
+        const cle = clePaie(anneeConnectee, id, mois);
+        const enregistree = Object.prototype.hasOwnProperty.call(paies, cle);
+        const paie = paies[cle] || {
+            base: nombreMontant(personne.salaire) || nombreMontant(personne.salaireMensuel) || 0,
+            primes: 0,
+            deductions: 0,
+            statut: "Non payé"
+        };
+        return {
+            numero: index + 1, nom: personne.nom || "", fonction: personne.fonction || "",
+            classe: personne.classe || "", base: nombreMontant(paie.base),
+            primes: nombreMontant(paie.primes), deductions: nombreMontant(paie.deductions),
+            net: calculerSalaireNet(paie), statut: paie.statut || "Non payé", enregistree
+        };
+    });
+}
+
+function echapperRapportPaie(value) {
+    return String(value ?? "").replace(/[&<>"']/g, character => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+    })[character]);
+}
+
+function donneesResumeRapportPaies(rows) {
+    return rows.reduce((summary, row) => {
+        summary.base += row.base;
+        summary.primes += row.primes;
+        summary.deductions += row.deductions;
+        summary.net += row.net;
+        summary[row.statut === "Payé" ? "paid" : row.statut === "Partiel" ? "partial" : "unpaid"] += 1;
+        return summary;
+    }, { base: 0, primes: 0, deductions: 0, net: 0, paid: 0, partial: 0, unpaid: 0 });
+}
+
+function genererRapportPaies() {
+    if (!anneeConnectee) {
+        alert("Sélectionnez d’abord une année académique.");
+        return;
+    }
+    const rows = lignesRapportPaies();
+    const summary = donneesResumeRapportPaies(rows);
+    const mois = moisNoms[obtenirMoisSelectionne()] || obtenirMoisSelectionne();
+    const popup = window.open("", "_blank");
+    if (!popup) {
+        alert("Le navigateur a bloqué le rapport. Autorisez les fenêtres contextuelles pour cette page.");
+        return;
+    }
+    const bodyRows = rows.map(row => "<tr><td>" + row.numero + "</td><td>" + echapperRapportPaie(row.nom) +
+        "</td><td>" + echapperRapportPaie(row.fonction) + "</td><td>" + echapperRapportPaie(row.classe) +
+        "</td><td>" + formatMontant(row.base) + "</td><td>" + formatMontant(row.primes) +
+        "</td><td>" + formatMontant(row.deductions) + "</td><td>" + formatMontant(row.net) +
+        "</td><td>" + (row.enregistree ? "Enregistrée" : "À enregistrer") +
+        "</td><td>" + echapperRapportPaie(row.statut) + "</td></tr>").join("");
+    popup.document.open();
+    popup.document.write("<!doctype html><html lang='fr'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Rapport de paie — " +
+        echapperRapportPaie(mois + " " + anneeConnectee) +
+        "</title><style>body{font:14px Arial,sans-serif;color:#172033;margin:24px}h1,h2{color:#12355b}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #cbd5e1;padding:7px;text-align:left}th{background:#eaf0f7}.totals{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}.totals div{padding:10px;border:1px solid #cbd5e1;border-radius:6px}.note{background:#fffbeb;padding:10px;border-left:4px solid #d97706;margin:16px 0}.actions{margin-bottom:18px}@media print{.actions{display:none}body{margin:10mm}table{font-size:9px}}</style></head><body><div class='actions'><button onclick='window.print()'>Imprimer / Enregistrer en PDF</button></div><h1>Institution Mixte Clarodaro</h1><h2>Rapport de paie — " +
+        echapperRapportPaie(mois + " " + anneeConnectee) +
+        "</h2><p>Généré le " + new Date().toLocaleString("fr-FR") + "</p><div class='totals'><div>Base : <strong>" + formatMontant(summary.base) +
+        "</strong></div><div>Primes : <strong>" + formatMontant(summary.primes) +
+        "</strong></div><div>Déductions : <strong>" + formatMontant(summary.deductions) +
+        "</strong></div><div>Net prévu : <strong>" + formatMontant(summary.net) +
+        "</strong></div><div>Payées : <strong>" + summary.paid + "</strong></div><div>Partielles : <strong>" + summary.partial +
+        "</strong></div><div>Non payées : <strong>" + summary.unpaid +
+        "</strong></div></div><div class='note'>Le total net représente la masse salariale nette prévue/déclarée pour la période. Le système actuel conserve le statut (payé, partiel ou non payé), mais ne suit pas encore le montant exact déjà versé pour une paie partielle.</div><table><thead><tr><th>#</th><th>Nom et prénom</th><th>Fonction</th><th>Classe</th><th>Base</th><th>Primes</th><th>Déductions</th><th>Net</th><th>Enregistrement</th><th>Statut</th></tr></thead><tbody>" +
+        (bodyRows || "<tr><td colspan='10'>Aucun membre du personnel trouvé.</td></tr>") +
+        "</tbody></table></body></html>");
+    popup.document.close();
+}
+
+function exporterRapportPaiesCSV() {
+    if (!anneeConnectee) {
+        alert("Sélectionnez d’abord une année académique.");
+        return;
+    }
+    const mois = obtenirMoisSelectionne();
+    const rows = lignesRapportPaies();
+    const headers = ["No", "Nom et prénom", "Fonction", "Classe", "Année scolaire", "Mois", "Salaire de base", "Primes", "Déductions", "Net prévu", "Enregistrement", "Statut"];
+    const values = rows.map(row => [row.numero, row.nom, row.fonction, row.classe, anneeConnectee, mois, row.base, row.primes, row.deductions, row.net, row.enregistree ? "Enregistrée" : "À enregistrer", row.statut]);
+    const csvCell = value => '"' + String(value ?? "").replace(/"/g, '""') + '"';
+    const csv = "\uFEFF" + [headers, ...values].map(line => line.map(csvCell).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "clarodaro-rapport-paies-" + anneeConnectee.replace(/[^0-9-]/g, "") + "-" + mois + ".csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
 
 /* ============================================================
    ENREGISTRER UNE PAIE

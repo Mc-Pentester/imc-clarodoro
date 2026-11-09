@@ -79,10 +79,26 @@ jobs:
       - name: PHP and UI JavaScript syntax
         run: |
           set -euo pipefail
+          php -l api/payroll/index.php
           php -l api/payroll/reconcile.php
           python3 - <<'PY'
           import re
           from pathlib import Path
+          pdg = Path("private-pages/PDG.php").read_text(encoding="utf-8")
+          required = [
+              "Générer le rapport de paie", "Exporter en CSV",
+              "function genererRapportPaies()", "function exporterRapportPaiesCSV()",
+              "Impossible de charger les paies depuis PostgreSQL",
+              "Le total net représente la masse salariale nette prévue/déclarée",
+          ]
+          missing = [item for item in required if item not in pdg]
+          if missing:
+              raise SystemExit("Payroll UI/report contract missing: " + ", ".join(missing))
+          scripts = [s for s in re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", pdg, re.I | re.S) if s.strip()]
+          if not scripts:
+              raise SystemExit("No inline JavaScript found in private-pages/PDG.php")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/pdg-payroll-{i}.js").write_text(script, encoding="utf-8")
           html = Path("private-pages/payroll-recovery.php").read_text(encoding="utf-8")
           scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
           if not scripts:
@@ -90,7 +106,7 @@ jobs:
           for i, script in enumerate(scripts):
               Path(f"/tmp/payroll-recovery-{i}.js").write_text(script, encoding="utf-8")
           PY
-          for file in /tmp/payroll-recovery-*.js; do node --check "$file"; done
+          for file in /tmp/pdg-payroll-*.js /tmp/payroll-recovery-*.js; do node --check "$file"; done
 
       - name: Start API
         run: |
