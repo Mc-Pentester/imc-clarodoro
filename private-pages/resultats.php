@@ -1211,12 +1211,16 @@ async function chargerDonnees() {
         throw new Error(payload.error || "Impossible de charger les résultats.");
     }
 
+    if (!Array.isArray(payload.subjects) || payload.subjects.some(subject => !Number.isFinite(Number(subject.max_points)) || Number(subject.max_points) <= 0)) {
+        throw new Error("Barème max_points absent ou invalide dans PostgreSQL. Aucun barème de remplacement ne sera appliqué.");
+    }
+
     matieres = (payload.subjects || []).map(function(subject) {
         return {
             id: subject.id,
             nom: subject.name,
             code: subject.code,
-            pointsMax: Number(subject.max_points || 100),
+            pointsMax: Number(subject.max_points),
             coefficient: subject.coefficient
         };
     });
@@ -2870,7 +2874,7 @@ async function enregistrerResultats() {
                 if (!matiere) continue;
 
                 const note = Number(notes[subjectId]);
-                const max = Number(matiere.pointsMax || 100);
+                const max = Number(matiere.pointsMax);
                 if (!Number.isFinite(note) || note < 0 || note > max) {
                     throw new Error("La note de " + matiere.nom + " doit être comprise entre 0 et " + max + ".");
                 }

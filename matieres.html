@@ -388,7 +388,8 @@ function afficherMatieres() {
     }
     liste.forEach((matiere, index) => {
         const realIndex = matieres.indexOf(matiere);
-        const max = Number(matiere.coefficient) || 10;
+        const max = Number(matiere.max_points);
+        if (!Number.isFinite(max) || max <= 0) throw new Error('Barème max_points invalide pour la matière ' + String(matiere.name || matiere.id) + '.');
         const tr = document.createElement("tr");
         [String(realIndex + 1), matiere.name, String(max), "0 – " + max, "0 – " + max, "0 – " + max].forEach(value => {
             const td = document.createElement("td");
@@ -431,7 +432,7 @@ document.getElementById("formMatiere").addEventListener("submit", async function
         if (indexModification === -1) {
             await apiJson("/api/subjects/index.php", {
                 method: "POST",
-                body: JSON.stringify({ name: nom, coefficient: pointsMax })
+                body: JSON.stringify({ name: nom, max_points: pointsMax })
             });
             afficherMessage("La matière a été ajoutée.");
         } else {
@@ -453,7 +454,7 @@ function modifierMatiere(index) {
     const matiere = matieres[index];
     if (!matiere) return;
     document.getElementById("nomMatiere").value = matiere.name || "";
-    document.getElementById("pointsMax").value = matiere.coefficient || "";
+    document.getElementById("pointsMax").value = matiere.max_points ?? "";
     indexModification = index;
     document.getElementById("titreFormulaire").textContent = "Modifier la matière";
     const bouton = document.getElementById("btnEnregistrer");

@@ -42,7 +42,8 @@ Name: "{app}\installer"
 Source: "..\*"; DestDir: "{app}"; Excludes: ".git\*,.github\*,.env,.env.*,backups\*,logs\*,tmp\*,cache\*,node_modules\*,vendor\*,dist\*,audit\*,docs\*,installer\payload\*,installer\*.iss,installer\*.ps1"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Bundled, checksum-verified PHP runtime (NTS x64) and PostgreSQL server binaries.
 Source: "payload\php\*"; DestDir: "{app}\runtime\php"; Flags: ignoreversion recursesubdirs createallsubdirs
-; Stage PostgreSQL inside the install directory; Configure-Windows-Services.ps1 copies and verifies it in ProgramData before service registration.\nSource: "payload\postgresql\*"; DestDir: "{app}\installer\postgresql-runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Stage PostgreSQL inside the install directory; Configure-Windows-Services.ps1 copies and verifies it in ProgramData before service registration.
+Source: "payload\postgresql\*"; DestDir: "{app}\installer\postgresql-runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "payload\runtime-manifest.json"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "payload\vc_redist.x64.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion

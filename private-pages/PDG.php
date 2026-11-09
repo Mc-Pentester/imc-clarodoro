@@ -1197,9 +1197,7 @@ document.addEventListener("DOMContentLoaded", function() {
       // Session PDG valide - afficher directement l'interface
       document.getElementById("zoneConnexion").classList.add("cache");
       document.getElementById("zonePDG").classList.remove("cache");
-      chargerAnnees();
-      initialiserMoisPaie();
-      chargerTableauDeBord();
+      chargerAnnees().then(async () => { initialiserMoisPaie(); await chargerTableauDeBord(); }).catch(error => { document.getElementById("messageDepense").textContent = error.message; });
     } else {
       // Session mais pas PDG - détruire et afficher login
       IMCAuth.logout();
@@ -1256,49 +1254,9 @@ async function sauvegarderMaintenant() {
    CONFIGURATION
 ============================================================ */
 
-const CLE_ELEVES =
-    "imc_students";
-
-const CLE_FINANCES =
-    "imc_finances";
-
-const CLE_TARIFS =
-    "imc_tarifs";
-
-const CLE_DEPENSES =
-    "imc_depenses";
-
-const CLE_ANNEE_ACTIVE =
-    "imc_active_year";
-
-/*
-   Nouvelle clé pour les paies.
-*/
-const CLE_PAIES_PERSONNEL =
-    "imc_paies_personnel";
-
-let paiesServeurCache = {};
-let paiesAnneesChargees = {};
-let chargementPaiesPromise = null;
-
-
-const classesDisponibles = [
-
-    "1ère Kind",
-    "2ème Kind",
-    "3ème Kind",
-    "1ère A.F.",
-    "2ème A.F.",
-    "3ème A.F.",
-    "4ème A.F.",
-    "5ème A.F.",
-    "6ème A.F.",
-    "7ème A.F.",
-    "8ème A.F.",
-    "9ème A.F."
-
-];
-
+let dashboardStudents = [];
+let dashboardInvoices = [];
+let dashboardTariffs = [];
 
 const moisNoms = {
 
@@ -1328,43 +1286,6 @@ let anneeConnectee = "";
 function ouvrirPage(page) {
 
     window.location.href = page;
-
-}
-
-
-/* ============================================================
-   LECTURE LOCALSTORAGE
-============================================================ */
-
-function lireJSON(cle, valeurParDefaut) {
-
-    try {
-
-        const valeur =
-            localStorage.getItem(cle);
-
-        if (!valeur) {
-
-            return valeurParDefaut;
-
-        }
-
-        const donnees =
-            JSON.parse(valeur);
-
-        return donnees ?? valeurParDefaut;
-
-    } catch (erreur) {
-
-        console.error(
-            "Erreur lecture localStorage :",
-            cle,
-            erreur
-        );
-
-        return valeurParDefaut;
-
-    }
 
 }
 
@@ -1455,57 +1376,23 @@ function nombreMontant(valeur) {
    ANNÉES ACADÉMIQUES
 ============================================================ */
 
-function chargerAnnees() {
-
-    const select =
-        document.getElementById(
-            "anneeAcademique"
-        );
-
+async function chargerAnnees() {
+    const select = document.getElementById("anneeAcademique");
+    if (!select) return;
+    const response = await fetch("/api/school-years/index.php", { credentials: "same-origin", headers: { "Accept": "application/json" }, cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok || !payload.success || !Array.isArray(payload.schoolYears)) throw new Error(payload.error || "Impossible de charger les années scolaires depuis PostgreSQL.");
+    const years = payload.schoolYears.filter(year => year && year.status !== "ARCHIVED");
     select.innerHTML = "";
-
-    for (
-        let annee = 2026;
-        annee <= 2040;
-        annee++
-    ) {
-
-        const valeur =
-            annee + "-" + (annee + 1);
-
-        const option =
-            document.createElement(
-                "option"
-            );
-
-        option.value =
-            valeur;
-
-        option.textContent =
-            valeur;
-
-        select.appendChild(
-            option
-        );
-
+    for (const year of years) {
+        const option = document.createElement("option");
+        option.value = year.label; option.textContent = year.label; option.dataset.yearId = year.id;
+        select.appendChild(option);
     }
-
-
-    const anneeActive =
-        localStorage.getItem(
-            CLE_ANNEE_ACTIVE
-        ) || "2026-2027";
-
-
-    select.value =
-        anneeActive;
-
-    anneeConnectee =
-        select.value;
-
+    if (!years.length) throw new Error("Aucune année scolaire n'est configurée dans PostgreSQL.");
+    const active = years.find(year => year.status === "ACTIVE") || years[0];
+    select.value = active.label; anneeConnectee = active.label;
 }
-
-
 /* ============================================================
    CONNEXION PDG
 ============================================================ */
@@ -1539,10 +1426,10 @@ async function connecterPDG() {
         document.getElementById("zonePDG").classList.remove("cache");
         document.getElementById("messageErreur").textContent = "";
 
-        chargerAnnees();
+        await chargerAnnees();
         initialiserMoisPaie();
         await chargerPersonnelServeur();
-        chargerTableauDeBord();
+        await chargerTableauDeBord();
     } catch (error) {
         document.getElementById("messageErreur").textContent =
             error && error.message ? error.message : "Identifiant ou mot de passe incorrect.";
@@ -1769,240 +1656,13 @@ function deconnecterPDG() {
    TARIF PAR CLASSE
 ============================================================ */
 
-function obtenirTarifClasse(
-    classe,
-    annee
-) {
-
-    const tarifs =
-        lireJSON(
-            CLE_TARIFS,
-            {}
-        );
-
-
-    const cle =
-        annee + "|" + classe;
-
-
-    const tarif =
-        tarifs[cle];
-
-
-    if (
-        !tarif ||
-        typeof tarif !== "object"
-    ) {
-
-        return 0;
-
-    }
-
-
-    if (
-        tarif.total !== undefined
-    ) {
-
-        return nombreMontant(
-            tarif.total
-        );
-
-    }
-
-
-    return (
-        nombreMontant(
-            tarif.montant1
-        ) +
-
-        nombreMontant(
-            tarif.montant2
-        ) +
-
-        nombreMontant(
-            tarif.montant3
-        )
-    );
-
-}
-
-
-/* ============================================================
-   FINANCE D'UN ÉLÈVE
-============================================================ */
-
-function obtenirFinanceEleve(
-    idEleve,
-    annee
-) {
-
-    const finances =
-        lireJSON(
-            CLE_FINANCES,
-            {}
-        );
-
-
-    const cle =
-        annee +
-        "|" +
-        String(idEleve);
-
-
-    const finance =
-        finances[cle];
-
-
-    if (
-        finance &&
-        typeof finance === "object"
-    ) {
-
-        if (
-            !Array.isArray(
-                finance.versements
-            )
-        ) {
-
-            finance.versements = [];
-
-        }
-
-        return finance;
-
-    }
-
-
-    return {
-
-        studentId:
-            idEleve,
-
-        annee:
-            annee,
-
-        tarifNormal:
-            0,
-
-        reduction:
-            0,
-
-        motifReduction:
-            "",
-
-        versements:
-            []
-
-    };
-
-}
-
-
-/* ============================================================
-   CALCUL FINANCIER
-============================================================ */
-
-function calculerFinanceEleve(
-    eleve,
-    annee
-) {
-
-    const finance =
-        obtenirFinanceEleve(
-            eleve.id,
-            annee
-        );
-
-
-    let tarifNormal =
-        nombreMontant(
-            finance.tarifNormal
-        );
-
-
-    if (
-        tarifNormal <= 0
-    ) {
-
-        tarifNormal =
-            obtenirTarifClasse(
-                eleve.classe,
-                annee
-            );
-
-    }
-
-
-    const reduction =
-        Math.min(
-            nombreMontant(
-                finance.reduction
-            ),
-            tarifNormal
-        );
-
-
-    const montantAPayer =
-        Math.max(
-            0,
-            tarifNormal -
-            reduction
-        );
-
-
-    let totalPaye = 0;
-
-
-    if (
-        Array.isArray(
-            finance.versements
-        )
-    ) {
-
-        finance.versements.forEach(
-            versement => {
-
-                totalPaye +=
-                    nombreMontant(
-                        versement.montant
-                    );
-
-            }
-        );
-
-    }
-
-
-    const reste =
-        Math.max(
-            0,
-            montantAPayer -
-            totalPaye
-        );
-
-
-    return {
-
-        finance:
-            finance,
-
-        tarifNormal:
-            tarifNormal,
-
-        reduction:
-            reduction,
-
-        montantAPayer:
-            montantAPayer,
-
-        totalPaye:
-            totalPaye,
-
-        reste:
-            reste
-
-    };
-
+function calculerFinanceEleve(eleve, annee) {
+    const invoices = dashboardInvoices.filter(invoice => String(invoice.student_id) === String(eleve.id));
+    const tariff = dashboardTariffs.find(item => String(item.class_id) === String(eleve.classId));
+    const billed = invoices.reduce((sum, invoice) => sum + Math.max(0, Number(invoice.amount) - Number(invoice.reduction || 0)), 0);
+    const paid = invoices.reduce((sum, invoice) => sum + Number(invoice.paid_amount || 0), 0);
+    const amountDue = invoices.length ? billed : Number(tariff ? tariff.amount : 0);
+    return { finance: null, tarifNormal: amountDue, reduction: invoices.reduce((sum, invoice) => sum + Number(invoice.reduction || 0), 0), montantAPayer: amountDue, totalPaye: paid, reste: Math.max(0, amountDue - paid) };
 }
 
 
@@ -2058,54 +1718,7 @@ async function chargerPaiesServeur(force = false) {
 
         let entries = await charger();
         const parCle = new Map(entries.map(entry => [clePaieServeur(entry), entry]));
-        const personnelIds = new Set(personnelServeur.map(p => String(p.id)));
-        const anciennesPaies = lireJSON(CLE_PAIES_PERSONNEL, {});
         const avertissements = [];
-
-        if (anciennesPaies && typeof anciennesPaies === "object" && !Array.isArray(anciennesPaies)
-            && IMCAuth.hasPermission("paies.create")) {
-            for (const [legacyKey, paie] of Object.entries(anciennesPaies)) {
-                if (!paie || typeof paie !== "object") continue;
-                const morceaux = String(legacyKey).split("|");
-                if (morceaux.length !== 3) continue;
-                const legacyYear = morceaux[0].replace(/\s/g, "");
-                const staffId = String(paie.personnelId ?? morceaux[1]);
-                const monthText = String(paie.mois ?? morceaux[2]).padStart(2, "0");
-                if (legacyYear !== anneeNormalisee || !/^(0[1-9]|1[0-2])$/.test(monthText)) continue;
-                if (!personnelIds.has(staffId)) {
-                    const warning = "Des paies historiques ne correspondent à aucun membre du personnel disponible sur le serveur; elles restent locales et n’ont pas été effacées.";
-                    if (!avertissements.includes(warning)) avertissements.push(warning);
-                    continue;
-                }
-                const key = clePaie(anneeNormalisee, staffId, monthText);
-                if (parCle.has(key)) continue;
-
-                try {
-                    const response = await fetch("/api/payroll/index.php", {
-                        method: "POST",
-                        credentials: "include",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            staff_id: staffId,
-                            school_year_label: anneeNormalisee,
-                            month: Number(monthText),
-                            base: paie.base ?? 0,
-                            bonuses: paie.primes ?? 0,
-                            deductions: paie.deductions ?? 0,
-                            status: paie.statut || "Non payé"
-                        })
-                    });
-                    const payload = await response.json();
-                    if (!response.ok || !payload.success) {
-                        throw new Error(payload.error || "Import de la paie historique refusé.");
-                    }
-                    parCle.set(key, payload.payroll);
-                } catch (error) {
-                    avertissements.push(String(error.message || error));
-                }
-            }
-        }
-
         entries = await charger();
         for (const entry of entries) {
             const key = clePaieServeur(entry);
@@ -2737,231 +2350,45 @@ let depensesServeur = [];
 let chargementDepensesEnCours = false;
 
 async function chargerDepensesServeur() {
-    if (chargementDepensesEnCours) return depensesServeur;
-    chargementDepensesEnCours = true;
-    try {
-        const legacy = lireJSON(CLE_DEPENSES, {});
-        const historiques = Array.isArray(legacy[anneeConnectee]) ? legacy[anneeConnectee] : [];
-        for (const item of historiques) {
-            if (!item || item.id === undefined || item.id === null) continue;
-            const response = await fetch('/api/expenses/index.php', {
-                method: 'POST', credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    school_year_label: anneeConnectee,
-                    description: String(item.description || ''),
-                    amount: nombreMontant(item.montant ?? item.amount),
-                    expense_date: String(item.date || item.expense_date || ''),
-                    legacy_id: String(item.id)
-                })
-            });
-            const payload = await response.json();
-            if (!response.ok || !payload.success) throw new Error(payload.error || 'Import des dépenses historiques impossible.');
-        }
-        const response = await fetch('/api/expenses/index.php?school_year_label=' + encodeURIComponent(anneeConnectee), {
-            credentials: 'include', headers: { 'Accept': 'application/json' }, cache: 'no-store'
-        });
-        const payload = await response.json();
-        if (!response.ok || !payload.success) throw new Error(payload.error || 'Chargement des dépenses impossible.');
-        depensesServeur = (Array.isArray(payload.expenses) ? payload.expenses : []).map(item => ({
-            id: String(item.id), legacy_id: item.legacy_id == null ? null : String(item.legacy_id),
-            description: item.description, montant: Number(item.amount),
-            date: String(item.expense_date || '').slice(0, 10)
-        }));
-        return depensesServeur;
-    } finally { chargementDepensesEnCours = false; }
+    const response = await fetch('/api/expenses/index.php?school_year_label=' + encodeURIComponent(anneeConnectee), { credentials: 'same-origin', headers: { 'Accept': 'application/json' }, cache: 'no-store' });
+    const payload = await response.json();
+    if (!response.ok || !payload.success || !Array.isArray(payload.expenses)) throw new Error(payload.error || 'Impossible de charger les dépenses depuis PostgreSQL.');
+    depensesServeur = payload.expenses.map(item => ({ id: String(item.id), legacy_id: item.legacy_id == null ? null : String(item.legacy_id), description: item.description, montant: Number(item.amount), date: String(item.expense_date || '').slice(0, 10) }));
+    return depensesServeur;
+
 }
 
 async function chargerTableauDeBord() {
-
-    const select =
-        document.getElementById(
-            "anneeAcademique"
-        );
-
-
-    if (!select) {
-
-        return;
-
-    }
-
-
-    anneeConnectee =
-        select.value;
-
-    if (!personnelServeur.length) {
-        try { await chargerPersonnelServeur(); } catch (_) {}
-    }
-    try { await chargerPaiesServeur(); } catch (_) {}
-
-    localStorage.setItem(
-        CLE_ANNEE_ACTIVE,
-        anneeConnectee
-    );
-
-
-    const eleves =
-        lireJSON(
-            CLE_ELEVES,
-            []
-        );
-
-
-    let depensesAnnee = [];
-    try {
-        depensesAnnee = await chargerDepensesServeur();
-        document.getElementById("messageDepense").textContent = "";
-    } catch (error) {
-        const locales = lireJSON(CLE_DEPENSES, {});
-        depensesAnnee = Array.isArray(locales[anneeConnectee]) ? locales[anneeConnectee] : [];
-        document.getElementById("messageDepense").textContent =
-            "Serveur indisponible : affichage local en lecture seule. " + (error.message || "");
-    }
-
-
-    let totalPrevu =
-        0;
-
-
-    let totalRecu =
-        0;
-
-
-    let totalDepenses =
-        0;
-
-
-    depensesAnnee.forEach(
-        depense => {
-
-            totalDepenses +=
-                nombreMontant(
-                    depense.montant
-                );
-
-        }
-    );
-
-
-    const elevesAnnee =
-        eleves.filter(
-            eleve => {
-
-                return (
-                    !eleve.annee ||
-                    String(
-                        eleve.annee
-                    ) ===
-                    String(
-                        anneeConnectee
-                    )
-                );
-
-            }
-        );
-
-
-    elevesAnnee.forEach(
-        eleve => {
-
-            const finance =
-                calculerFinanceEleve(
-                    eleve,
-                    anneeConnectee
-                );
-
-
-            totalPrevu +=
-                finance.montantAPayer;
-
-
-            totalRecu +=
-                finance.totalPaye;
-
-        }
-    );
-
-
-    const totalSalaires =
-        totalSalairesAnnee();
-
-
-    const soldeAnnuel =
-        totalRecu -
-        totalSalaires -
-        totalDepenses;
-
-
-    document.getElementById(
-        "totalPrevu"
-    ).textContent =
-        formatMontant(
-            totalPrevu
-        );
-
-
-    document.getElementById(
-        "totalRecu"
-    ).textContent =
-        formatMontant(
-            totalRecu
-        );
-
-
-    document.getElementById(
-        "totalSalaires"
-    ).textContent =
-        formatMontant(
-            totalSalaires
-        );
-
-
-    document.getElementById(
-        "totalDepenses"
-    ).textContent =
-        formatMontant(
-            totalDepenses
-        );
-
-
-    const elementSolde =
-        document.getElementById(
-            "soldeAnnuel"
-        );
-
-
-    elementSolde.textContent =
-        formatMontant(
-            soldeAnnuel
-        );
-
-
-    elementSolde.className =
-        soldeAnnuel >= 0
-            ? "solde-positif"
-            : "solde-negatif";
-
-
+    const select = document.getElementById("anneeAcademique");
+    if (!select || !select.selectedOptions.length) return;
+    const schoolYearId = select.selectedOptions[0].dataset.yearId;
+    if (!schoolYearId) throw new Error("Identifiant d'année scolaire absent de PostgreSQL.");
+    anneeConnectee = select.value;
+    await chargerPersonnelServeur();
+    await chargerPaiesServeur(true);
+    const financeResponse = await fetch("/api/finance/index.php?school_year_id=" + encodeURIComponent(schoolYearId), { credentials: "same-origin", headers: { "Accept": "application/json" }, cache: "no-store" });
+    const financePayload = await financeResponse.json();
+    if (!financeResponse.ok || !financePayload.success) throw new Error(financePayload.error || "Impossible de charger les données financières PostgreSQL.");
+    dashboardStudents = (financePayload.students || []).map(student => ({ id: String(student.id), nom: student.last_name, prenom: student.first_name, classe: student.class_name, classId: String(student.class_id), annee: anneeConnectee }));
+    dashboardInvoices = Array.isArray(financePayload.invoices) ? financePayload.invoices : [];
+    dashboardTariffs = Array.isArray(financePayload.tariffs) ? financePayload.tariffs : [];
+    const depensesAnnee = await chargerDepensesServeur();
+    const totalPrevu = dashboardStudents.reduce((sum, student) => sum + calculerFinanceEleve(student, anneeConnectee).montantAPayer, 0);
+    const totalRecu = dashboardStudents.reduce((sum, student) => sum + calculerFinanceEleve(student, anneeConnectee).totalPaye, 0);
+    const totalDepenses = depensesAnnee.reduce((sum, expense) => sum + Number(expense.montant || 0), 0);
+    const totalSalaires = totalSalairesAnnee();
+    const soldeAnnuel = totalRecu - totalSalaires - totalDepenses;
+    document.getElementById("totalPrevu").textContent = formatMontant(totalPrevu);
+    document.getElementById("totalRecu").textContent = formatMontant(totalRecu);
+    document.getElementById("totalSalaires").textContent = formatMontant(totalSalaires);
+    document.getElementById("totalDepenses").textContent = formatMontant(totalDepenses);
+    const elementSolde = document.getElementById("soldeAnnuel");
+    elementSolde.textContent = formatMontant(soldeAnnuel);
+    elementSolde.className = soldeAnnuel >= 0 ? "solde-positif" : "solde-negatif";
     await afficherPaie();
-
-
-    afficherDepenses(
-        depensesAnnee
-    );
-
-
-    afficherSituations(
-        eleves,
-        anneeConnectee
-    );
-
-
-    afficherResumeClasses(
-        eleves,
-        anneeConnectee
-    );
-
+    afficherDepenses(depensesAnnee);
+    afficherSituations(dashboardStudents, anneeConnectee);
+    afficherResumeClasses(dashboardStudents, anneeConnectee);
 }
 
 
@@ -2996,7 +2423,7 @@ async function ajouterDepense() {
         await chargerTableauDeBord();
     } catch (error) {
         document.getElementById("messageDepense").textContent =
-            "Dépense non enregistrée sur le serveur. Les données locales sont conservées. " + (error.message || "");
+            "Dépense non enregistrée dans PostgreSQL. " + (error.message || "");
     }
 }
 
@@ -3111,15 +2538,9 @@ async function supprimerDepense(id) {
         });
         const payload = await response.json();
         if (!response.ok || !payload.success) throw new Error(payload.error || 'Suppression impossible.');
-        if (expense.legacy_id !== null) {
-            const local = lireJSON(CLE_DEPENSES, {});
-            local[anneeConnectee] = (Array.isArray(local[anneeConnectee]) ? local[anneeConnectee] : [])
-                .filter(item => String(item.id) !== String(expense.legacy_id));
-            localStorage.setItem(CLE_DEPENSES, JSON.stringify(local));
-        }
         await chargerTableauDeBord();
     } catch (error) {
-        alert("Suppression non confirmée : " + (error.message || "erreur serveur") + ". Les données locales sont conservées.");
+        alert("Suppression non confirmée dans PostgreSQL : " + (error.message || "erreur serveur"));
     }
 }
 
@@ -3309,7 +2730,7 @@ function afficherResumeClasses(
     tbody.innerHTML = "";
 
 
-    classesDisponibles.forEach(
+    [...new Set(eleves.map(eleve => eleve.classe).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr")).forEach(
         classe => {
 
             const elevesClasse =
@@ -3506,33 +2927,7 @@ document
    ACTUALISATION AUTOMATIQUE SI personnel.html EST MODIFIÉ
 ============================================================ */
 
-window.addEventListener(
-    "storage",
-    function(event) {
 
-        if (
-            event.key ===
-            CLE_PAIES_PERSONNEL
-        ) {
-
-            chargerTableauDeBord();
-
-        }
-
-
-        if (
-            event.key ===
-            CLE_FINANCES ||
-            event.key ===
-            CLE_TARIFS
-        ) {
-
-            chargerTableauDeBord();
-
-        }
-
-    }
-);
 
 
 /* Restaure l'interface après authentification contrôlée par le serveur. */
