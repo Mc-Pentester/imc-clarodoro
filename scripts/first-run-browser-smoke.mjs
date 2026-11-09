@@ -113,6 +113,11 @@ try {
     if (!found) throw new Error("The newly enrolled student is missing from " + moduleName + ".");
   }
 
+  await studentsPage.goto(baseUrl + "/finances.html", { waitUntil: "domcontentloaded", timeout: 30000 });
+  await studentsPage.locator("#listeEleves").getByText(studentMarker).waitFor({ state: "visible", timeout: 30000 });
+  await studentsPage.goto(baseUrl + "/resultats.html", { waitUntil: "domcontentloaded", timeout: 30000 });
+  await studentsPage.locator("#listeEleves").getByText(studentMarker).waitFor({ state: "visible", timeout: 30000 });
+
   if (pageErrors.length) throw new Error("Browser error(s): " + pageErrors.join(" | "));
 
   console.log("BROWSER FIRST-RUN FORM: PASS");
@@ -122,7 +127,9 @@ try {
   console.log("STUDENT FORM SAVE: PASS");
   console.log("STUDENT LIST AFTER PAGE RELOAD: PASS");
   console.log("STUDENT TABLE COLUMN ALIGNMENT: PASS");
-  console.log("STUDENT VISIBLE IN FINANCE, RESULTS AND ATTENDANCE: PASS");
+  console.log("STUDENT VISIBLE IN FINANCE API AND PAGE: PASS");
+  console.log("STUDENT VISIBLE IN RESULTS API AND PAGE: PASS");
+  console.log("STUDENT VISIBLE IN ATTENDANCE API: PASS");
 } finally {
   await browser.close();
 }
