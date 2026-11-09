@@ -647,22 +647,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                         id="classe"
                         required>
 
-                        <option value="">
-                            -- Choisir une classe --
-                        </option>
-
-                        <option>1ère Kind</option>
-                        <option>2ème Kind</option>
-                        <option>3ème Kind</option>
-                        <option>1ère A.F.</option>
-                        <option>2ème A.F.</option>
-                        <option>3ème A.F.</option>
-                        <option>4ème A.F.</option>
-                        <option>5ème A.F.</option>
-                        <option>6ème A.F.</option>
-                        <option>7ème A.F.</option>
-                        <option>8ème A.F.</option>
-                        <option>9ème A.F.</option>
+                        <option value="">Chargement des classes…</option>
 
                     </select>
 
@@ -1009,7 +994,7 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             return;
         }
 
-            creerAnnees();
+            await chargerOptionsInscription();
 
             chargerEleves().then(function () {
                 afficherEleves();
@@ -1066,73 +1051,43 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
        ANNÉES
     ================================================== */
 
-    function creerAnnees() {
+    async function chargerOptionsInscription() {
+        const response = await fetch("api/student-enrollment-options/index.php", {
+            method: "GET", credentials: "same-origin",
+            headers: { "Accept": "application/json" }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || data.error || "Impossible de charger les références scolaires.");
 
-        const select =
-            document.getElementById(
-                "anneeScolaire"
-            );
+        const classSelect = document.getElementById("classe");
+        classSelect.innerHTML = '<option value="">-- Choisir une classe --</option>';
+        (Array.isArray(data.classes) ? data.classes : []).forEach(item => {
+            const option = document.createElement("option");
+            option.value = item.id; option.textContent = item.name;
+            classSelect.appendChild(option);
+        });
 
-        select.innerHTML = "";
-
-
-        const anneeSauvegardee =
-            localStorage.getItem(
-                ACTIVE_YEAR_KEY
-            );
-
-
-        for (
-            let annee = 2026;
-            annee <= 2040;
-            annee++
-        ) {
-
-            const valeur =
-                annee +
-                " - " +
-                (annee + 1);
-
-
-            const option =
-                document.createElement(
-                    "option"
-                );
-
-
-            option.value = valeur;
-
-            option.textContent = valeur;
-
-
-            if (
-                anneeSauvegardee === valeur ||
-                (
-                    !anneeSauvegardee &&
-                    annee === 2026
-                )
-            ) {
-
-                option.selected = true;
-
-            }
-
-
-            select.appendChild(option);
-
+        const yearSelect = document.getElementById("anneeScolaire");
+        yearSelect.innerHTML = '<option value="">-- Choisir une année scolaire --</option>';
+        const years = Array.isArray(data.schoolYears) ? data.schoolYears : [];
+        const savedYearId = localStorage.getItem(ACTIVE_YEAR_KEY);
+        years.forEach(item => {
+            const option = document.createElement("option");
+            option.value = item.id; option.textContent = item.label;
+            if (savedYearId === item.id || (!savedYearId && item.status === "ACTIVE")) option.selected = true;
+            yearSelect.appendChild(option);
+        });
+        if (!data.classes?.length || !years.length) {
+            afficherMessage("Configurez une classe active et une année scolaire active avant toute inscription.");
         }
-
     }
 
-
     function anneeActuelle() {
-
-        return document
-            .getElementById(
-                "anneeScolaire"
-            )
-            .value;
-
+        return document.getElementById("anneeScolaire").selectedOptions[0]?.textContent || "";
+    }
+    function anneeScolaireId() { return document.getElementById("anneeScolaire").value; }
+    function classeActuelle() {
+        return document.getElementById("classe").selectedOptions[0]?.textContent || "";
     }
 
 
@@ -1156,13 +1111,15 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             departement: profile.departement || "",
             commune: profile.commune || "",
             sectionCommunale: profile.sectionCommunale || "",
-            classe: profile.classe || student.class_name || "",
+            classe: student.class_name || profile.classe || "",
+            classId: student.class_id || "",
             nisu: profile.nisu || student.matricule || "",
             contact: profile.contact || student.phone || "",
             ninuParent: profile.ninuParent || "",
             documentInscription: profile.documentInscription || "",
             photo: profile.photo || student.photo || "",
-            anneeScolaire: profile.anneeScolaire || student.school_year_label || anneeActuelle(),
+            anneeScolaire: student.school_year_label || profile.anneeScolaire || anneeActuelle(),
+            schoolYearId: student.school_year_id || "",
             status: student.status || "ACTIVE"
         };
     }
@@ -1193,6 +1150,8 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             address: "",
             phone: eleve.contact || "",
             status: eleve.status || "ACTIVE",
+            class_id: eleve.classId,
+            school_year_id: eleve.schoolYearId,
             profile_data: {
                 lieuNaissance: eleve.lieuNaissance,
                 departement: eleve.departement,
@@ -1426,6 +1385,10 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             return;
         }
 
+        if (!document.getElementById("classe").value || !anneeScolaireId()) {
+            afficherMessage("Sélectionnez une classe et une année scolaire actives.");
+            return;
+        }
         const nisu = document.getElementById("nisu").value.trim();
         const existing = id ? students.find(function (student) { return student.id === id; }) : null;
 
@@ -1439,13 +1402,15 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             departement: document.getElementById("departement").value.trim(),
             commune: document.getElementById("commune").value.trim(),
             sectionCommunale: document.getElementById("sectionCommunale").value.trim(),
-            classe: document.getElementById("classe").value,
+            classe: classeActuelle(),
+            classId: document.getElementById("classe").value,
             nisu: nisu,
             contact: document.getElementById("contact").value.trim(),
             ninuParent: document.getElementById("ninuParent").value.trim(),
             documentInscription: document.getElementById("documentInscription").value,
             photo: photoActuelle,
             anneeScolaire: anneeActuelle(),
+            schoolYearId: anneeScolaireId(),
             status: "ACTIVE"
         };
 
@@ -1485,7 +1450,8 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
         document.getElementById("departement").value = student.departement || "";
         document.getElementById("commune").value = student.commune || "";
         document.getElementById("sectionCommunale").value = student.sectionCommunale || "";
-        document.getElementById("classe").value = student.classe || "";
+        document.getElementById("classe").value = student.classId || "";
+        document.getElementById("anneeScolaire").value = student.schoolYearId || "";
         document.getElementById("nisu").value = student.nisu || "";
         document.getElementById("contact").value = student.contact || "";
         document.getElementById("ninuParent").value = student.ninuParent || "";
