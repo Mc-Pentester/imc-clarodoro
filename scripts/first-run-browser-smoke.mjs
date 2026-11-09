@@ -66,6 +66,9 @@ try {
   await studentsPage.locator("#sexe").selectOption("M");
   await studentsPage.locator("#dateNaissance").fill("2015-01-15");
   await studentsPage.locator("#classe").selectOption({ label: "1ère Kind" });
+  if (!(await studentsPage.locator("#anneeScolaire").inputValue())) {
+    throw new Error("An active school year must be loaded from PostgreSQL.");
+  }
   await studentsPage.locator("#studentForm button[type='submit']").click();
 
   await studentsPage.locator("#message").getByText(/enregistrées avec succès/i).waitFor({ state: "visible", timeout: 30000 });
@@ -79,6 +82,39 @@ try {
   const cells = await row.locator("td").allTextContents();
   if (cells.length !== 10 || cells[0].trim() !== "1" || !cells[1].includes("—") || !cells[2].includes(studentMarker)) {
     throw new Error("The student list columns are not aligned with the table headings: " + JSON.stringify(cells));
+  }
+
+  const moduleLists = await studentsPage.evaluate(async () => {
+    const endpoints = [
+      ["finances", "/api/finance/index.php", "students"],
+      ["resultats", "/api/grades/index.php", "enrollments"],
+      ["presences", "/api/attendance/index.php", "enrollments"]
+    ];
+    const output = {};
+    for (const [name, url, key] of endpoints) {
+      const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
+      const body = await response.json();
+      if (!response.ok || !body.success || !Array.isArray(body[key])) {
+        throw new Error("Module " + name + " did not return its student list.");
+      }
+      output[name] = body[key];
+    }
+    return output;
+  });
+  for (const [moduleName, records] of Object.entries(moduleLists)) {
+    if (!records.some(record => record.student_id === (records[0]?.student_id || "") || record.id === (records[0]?.id || ""))) {
+      // The dedicated identity assertions below avoid assuming the first record's order.
+    }
+  }
+  const createdStudentId = await studentsPage.evaluate(async marker => {
+    const response = await fetch("/api/students/index.php", { credentials: "same-origin" });
+    const body = await response.json();
+    return body.students?.find(student => student.matricule === marker)?.id || null;
+  }, studentMarker);
+  if (!createdStudentId) throw new Error("New student identity is not available from the server.");
+  for (const [moduleName, records] of Object.entries(moduleLists)) {
+    const found = records.some(record => record.id === createdStudentId || record.student_id === createdStudentId);
+    if (!found) throw new Error("The newly enrolled student is missing from " + moduleName + ".");
   }
 
   if (pageErrors.length) throw new Error("Browser error(s): " + pageErrors.join(" | "));
