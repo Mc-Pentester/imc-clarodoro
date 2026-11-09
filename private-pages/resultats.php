@@ -1225,7 +1225,6 @@ async function chargerDonnees() {
             nom: enrollment.last_name,
             prenom: enrollment.first_name,
             classe: enrollment.class_name,
-            classId: String(enrollment.class_id || ""),
             sexe: "",
             schoolYearId: enrollment.school_year_id
         };
@@ -1517,7 +1516,11 @@ function afficherSaisieClasse() {
         button.disabled = true; progress.textContent = "Sélectionnez une classe et une matière pour commencer."; return;
     }
 
-    const list = eleves.filter(e => String(e.classId) === String(classId)).slice().sort((a,b) =>
+    const uniqueEnrollments = new Map();
+    eleves.filter(e => String(e.classId) === String(classId)).forEach(e => {
+        uniqueEnrollments.set(String(e.enrollmentId), e);
+    });
+    const list = Array.from(uniqueEnrollments.values()).sort((a,b) =>
         ((a.nom || "") + " " + (a.prenom || "")).localeCompare((b.nom || "") + " " + (b.prenom || ""), "fr")
     );
     if (!list.length) {
