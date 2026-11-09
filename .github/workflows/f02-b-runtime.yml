@@ -91,8 +91,14 @@ jobs:
           test -n "$CSRF"
           YEAR="$(curl -fsS -c /tmp/f02b.cookies -b /tmp/f02b.cookies -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"label":"2026-2027","start_date":"2026-09-01","end_date":"2027-07-15","status":"PLANNED"}' http://127.0.0.1:8090/api/school-years/index.php)"
           printf '%s' "$YEAR" | grep -q '"label":"2026-2027"'
-          SUBJECT="$(curl -fsS -c /tmp/f02b.cookies -b /tmp/f02b.cookies -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"name":"Mathématiques","coefficient":2}' http://127.0.0.1:8090/api/subjects/index.php)"
+          SUBJECT="$(curl -fsS -c /tmp/f02b.cookies -b /tmp/f02b.cookies -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"name":"Mathématiques","coefficient":2,"max_points":100}' http://127.0.0.1:8090/api/subjects/index.php)"
           printf '%s' "$SUBJECT" | grep -q '"name":"Mathématiques"'
+          printf '%s' "$SUBJECT" | php -r '$d=json_decode(stream_get_contents(STDIN),true); if ((float)($d["subject"]["max_points"]??0)!==100.0 || (float)($d["subject"]["coefficient"]??0)!==2.0) exit(1);'
+          SUBJECT_ID="$(printf '%s' "$SUBJECT" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["subject"]["id"]??"";')"
+          test -n "$SUBJECT_ID"
+          SUBJECT_UPDATED="$(curl -fsS -X PATCH -b /tmp/f02b.cookies -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"max_points":150}' "http://127.0.0.1:8090/api/subjects/index.php?id=$SUBJECT_ID")"
+          printf '%s' "$SUBJECT_UPDATED" | php -r '$d=json_decode(stream_get_contents(STDIN),true); if ((float)($d["subject"]["max_points"]??0)!==150.0 || (float)($d["subject"]["coefficient"]??0)!==2.0) exit(1);'
+          PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT max_points::text || '|' || coefficient::text FROM subjects WHERE id='$SUBJECT_ID';" | grep -qx '150.00|2.00'
           VAC="$(curl -fsS -c /tmp/f02b.cookies -b /tmp/f02b.cookies -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"name":"Vacances de Noël","start_date":"2026-12-21","end_date":"2027-01-04"}' http://127.0.0.1:8090/api/vacations/index.php)"
           printf '%s' "$VAC" | grep -q '"name":"Vacances de Noël"'
           VAC_ID="$(printf '%s' "$VAC" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["vacation"]["id"]??"";')"
