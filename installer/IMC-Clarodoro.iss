@@ -42,7 +42,7 @@ Name: "{app}\installer"
 Source: "..\*"; DestDir: "{app}"; Excludes: ".git\*,.github\*,.env,.env.*,backups\*,logs\*,tmp\*,cache\*,node_modules\*,vendor\*,dist\*,audit\*,docs\*,installer\payload\*,installer\*.iss,installer\*.ps1"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Bundled, checksum-verified PHP runtime (NTS x64) and PostgreSQL server binaries.
 Source: "payload\php\*"; DestDir: "{app}\runtime\php"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "payload\postgresql\*"; DestDir: "{commonappdata}\IMC-Clarodoro\runtime\postgresql"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "payload\postgresql\*"; DestDir: "{commonappdata}\IMC-Clarodaro\runtime\postgresql"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
 Source: "payload\runtime-manifest.json"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "payload\vc_redist.x64.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
