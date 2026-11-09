@@ -87,6 +87,15 @@ try {
         $insert->execute([':year'=>$targetYearId,':description'=>$description,':amount'=>$amount,':date'=>$date,':actor'=>$actor['id'],':legacy'=>$sourceHash]);
         $expenseId=(string)$insert->fetchColumn(); $created=true;
     }
+    $sourceAlreadyLinked = $pdo->prepare(
+        'SELECT source_key_hash FROM expense_reconciliation_audit
+         WHERE expense_id = :expense_id AND source_key_hash <> :source_hash LIMIT 1'
+    );
+    $sourceAlreadyLinked->execute([':expense_id'=>$expenseId, ':source_hash'=>$sourceHash]);
+    if ($sourceAlreadyLinked->fetchColumn() !== false) {
+        $pdo->rollBack();
+        expenseReconcileError(409, 'Cette dépense PostgreSQL est déjà liée à une autre source historique. Vérification manuelle requise.');
+    }
     $audit=$pdo->prepare("INSERT INTO expense_reconciliation_audit(source_key_hash,source_year_label,source_legacy_id,target_school_year_id,expense_id,payload_hash,actor_user_id,action) VALUES(:hash,:source_year,:legacy,:target_year,:expense,:payload,:actor,'IMPORTED')");
     $audit->execute([':hash'=>$sourceHash,':source_year'=>$sourceYear,':legacy'=>$legacyId,':target_year'=>$targetYearId,':expense'=>$expenseId,':payload'=>$payloadHash,':actor'=>$actor['id']]);
     $pdo->commit();
