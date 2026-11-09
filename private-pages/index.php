@@ -959,8 +959,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 <script src="auth.js"></script>
 <script>
 
-const ACTIVE_YEAR_KEY = "imc_active_year";
-
     let students = [];
     let photoActuelle = "";
     let cameraStream = null;
@@ -1018,11 +1016,6 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                     "change",
                     function () {
 
-                        localStorage.setItem(
-                            ACTIVE_YEAR_KEY,
-                            this.value
-                        );
-
                         afficherEleves();
 
                     }
@@ -1070,11 +1063,10 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
         const yearSelect = document.getElementById("anneeScolaire");
         yearSelect.innerHTML = '<option value="">-- Choisir une année scolaire --</option>';
         const years = Array.isArray(data.schoolYears) ? data.schoolYears : [];
-        const savedYearId = localStorage.getItem(ACTIVE_YEAR_KEY);
         years.forEach(item => {
             const option = document.createElement("option");
             option.value = item.id; option.textContent = item.label;
-            if (savedYearId === item.id || (!savedYearId && item.status === "ACTIVE")) option.selected = true;
+            if (item.status === "ACTIVE" && !yearSelect.value) option.selected = true;
             yearSelect.appendChild(option);
         });
         if (!data.classes?.length || !years.length) {

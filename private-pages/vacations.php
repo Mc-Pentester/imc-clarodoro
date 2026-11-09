@@ -591,7 +591,7 @@ tr:nth-child(even) {
     <h1>CALENDRIER SCOLAIRE</h1>
     <p>
         Année académique :
-        <strong id="anneeAffichee">2026-2027</strong>
+        <strong id="anneeAffichee"></strong>
     </p>
 </header>
 <header class="entete-ecole">
@@ -914,7 +914,7 @@ tr:nth-child(even) {
 
         <h2>
             Événements —
-            <span id="titreAnnee">2026-2027</span>
+            <span id="titreAnnee"></span>
         </h2>
 
         <div class="tableau-container">
@@ -958,9 +958,7 @@ tr:nth-child(even) {
 
         <h2>
             Calendrier mensuel —
-            <span id="anneeCalendrier">
-                2026-2027
-            </span>
+            <span id="anneeCalendrier"></span>
         </h2>
 
 
@@ -1116,7 +1114,7 @@ tr:nth-child(even) {
 ===================================================== */
 
 let donnees = {};
-let anneeSelectionnee = "2026-2027";
+let anneeSelectionnee = "";
 let indexModification = null;
 
 
@@ -1182,7 +1180,8 @@ async function chargerDonnees() {
         const years = await apiJson("/api/school-years/index.php");
         const listeAnnees = Array.isArray(years.schoolYears) ? years.schoolYears : [];
         const active = listeAnnees.find(a => a.status === "ACTIVE") || listeAnnees[0];
-        anneeSelectionnee = active ? active.label : "2026-2027";
+        if (!active) throw new Error("Aucune année scolaire n'est configurée dans PostgreSQL.");
+        anneeSelectionnee = active.label;
         window.__anneesServeur = listeAnnees;
 
         const payload = await apiJson("/api/vacations/index.php");
@@ -1272,7 +1271,7 @@ function afficherAnnee() {
 
 
 /* =====================================================
-   DONNÉES 2026-2027
+   DONNÉES DU CALENDRIER
 ===================================================== */
 
 function initialiserDonnees2026() {
