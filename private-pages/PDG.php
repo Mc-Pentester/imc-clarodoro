@@ -830,9 +830,7 @@ imcRequirePageAccess('paies.read', 'PDG', $pdo ?? null);
                 Année académique :
             </strong>
 
-            <span id="anneePaieAffichee">
-                2026-2027
-            </span>
+            <span id="anneePaieAffichee"></span>
 
             <br>
 

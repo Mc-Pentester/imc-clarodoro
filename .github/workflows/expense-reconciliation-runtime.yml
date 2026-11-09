@@ -66,6 +66,8 @@ jobs:
           ON CONFLICT DO NOTHING;
           INSERT INTO expenses(id,school_year_id,description,amount,expense_date,created_by,legacy_id)
           VALUES ('00000000-0000-4000-8000-000000008031','00000000-0000-4000-8000-000000008021','Dépense déjà importée',75.25,'2025-10-02','00000000-0000-4000-8000-000000008011','old-expense-002');
+          INSERT INTO expenses(id,school_year_id,description,amount,expense_date,created_by,legacy_id)
+          VALUES ('00000000-0000-4000-8000-000000008032','00000000-0000-4000-8000-000000008022','Dépense autre année',25.00,'2026-10-03','00000000-0000-4000-8000-000000008011','cross-year-expense');
           SQL
 
       - name: PHP and embedded JavaScript syntax
@@ -126,6 +128,9 @@ jobs:
           INVALID_DATE='{"source_year_label":"2025-2026","legacy_id":"local-expense-invalid","target_school_year_id":"00000000-0000-4000-8000-000000008021","description":"Date impossible","amount":10,"expense_date":"2025-02-30"}'
           INVALID_STATUS="$(curl -sS -o /tmp/expense-reconcile-invalid.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$INVALID_DATE" "$BASE/api/expenses/reconcile.php")"
           test "$INVALID_STATUS" = '422'
+          CROSS_YEAR='{"source_year_label":"2025-2026","legacy_id":"cross-year-expense","target_school_year_id":"00000000-0000-4000-8000-000000008021","description":"Dépense autre année","amount":25,"expense_date":"2026-10-03"}'
+          CROSS_YEAR_STATUS="$(curl -sS -o /tmp/expense-reconcile-cross-year.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$CROSS_YEAR" "$BASE/api/expenses/reconcile.php")"
+          test "$CROSS_YEAR_STATUS" = '409'
           LEGACY_ROW='{"source_year_label":"2025-2026","legacy_id":"old-expense-002","target_school_year_id":"00000000-0000-4000-8000-000000008021","description":"Dépense déjà importée","amount":75.25,"expense_date":"2025-10-02"}'
           LEGACY_STATUS="$(curl -sS -o /tmp/expense-reconcile-legacy.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$LEGACY_ROW" "$BASE/api/expenses/reconcile.php")"
           test "$LEGACY_STATUS" = '200'

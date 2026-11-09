@@ -73,10 +73,19 @@ try {
     if ($year->fetchColumn()===false) { $pdo->rollBack(); expenseReconcileError(422,'Année scolaire cible introuvable ou archivée'); }
 
     // Older versions may already have inserted a raw legacy ID without an audit row.
-    $old=$pdo->prepare('SELECT id,description,amount::text AS amount,expense_date::text AS expense_date FROM expenses WHERE school_year_id=:year AND legacy_id=:legacy FOR UPDATE');
-    $old->execute([':year'=>$targetYearId,':legacy'=>$legacyId]);
-    $oldRow=$old->fetch();
+    $old=$pdo->prepare('SELECT id,school_year_id,description,amount::text AS amount,expense_date::text AS expense_date FROM expenses WHERE legacy_id=:legacy ORDER BY created_at,id FOR UPDATE');
+    $old->execute([':legacy'=>$legacyId]);
+    $oldRows=$old->fetchAll();
+    if (count($oldRows)>1) {
+        $pdo->rollBack();
+        expenseReconcileError(409,'Plusieurs dépenses portent cet identifiant historique. Rapprochement manuel requis.');
+    }
+    $oldRow=$oldRows[0]??null;
     if ($oldRow) {
+        if ((string)$oldRow['school_year_id']!==$targetYearId) {
+            $pdo->rollBack();
+            expenseReconcileError(409,'Cette dépense existe déjà dans une autre année scolaire. Aucun doublon ne sera créé; vérifiez son affectation.');
+        }
         $same=(string)$oldRow['description']===$description
             && number_format((float)$oldRow['amount'],2,'.','')===$amount
             && (string)$oldRow['expense_date']===$date;
