@@ -70,6 +70,16 @@ jobs:
           VALUES ('00000000-0000-4000-8000-000000008032','00000000-0000-4000-8000-000000008022','Dépense autre année',25.00,'2026-10-03','00000000-0000-4000-8000-000000008011','cross-year-expense');
           SQL
 
+      - name: Reject hardcoded academic class catalogs in active pages
+        run: |
+          set -euo pipefail
+          if grep -nE '1ère Kind|2ème Kind|3ème Kind|1ère A\\.F\\.|classesParDefaut|const classes = \\[' private-pages/resultats.php private-pages/badge.php; then
+            echo 'FAIL: class catalog must come from PostgreSQL'
+            exit 1
+          fi
+          grep -q '/api/student-enrollment-options/index.php' private-pages/resultats.php
+          grep -q '/api/student-enrollment-options/index.php' private-pages/badge.php
+
       - name: PHP and embedded JavaScript syntax
         run: |
           set -euo pipefail

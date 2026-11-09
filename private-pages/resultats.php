@@ -635,59 +635,7 @@ body {
         </label>
 
         <select id="classe">
-
-            <option value="">
-                Toutes les classes
-            </option>
-
-            <option value="1ère Kind">
-                1ère Kind
-            </option>
-
-            <option value="2ème Kind">
-                2ème Kind
-            </option>
-
-            <option value="3ème Kind">
-                3ème Kind
-            </option>
-
-            <option value="1ère A.F.">
-                1ère A.F.
-            </option>
-
-            <option value="2ème A.F.">
-                2ème A.F.
-            </option>
-
-            <option value="3ème A.F.">
-                3ème A.F.
-            </option>
-
-            <option value="4ème A.F.">
-                4ème A.F.
-            </option>
-
-            <option value="5ème A.F.">
-                5ème A.F.
-            </option>
-
-            <option value="6ème A.F.">
-                6ème A.F.
-            </option>
-
-            <option value="7ème A.F.">
-                7ème A.F.
-            </option>
-
-            <option value="8ème A.F.">
-                8ème A.F.
-            </option>
-
-            <option value="9ème A.F.">
-                9ème A.F.
-            </option>
-
+            <option value="">Toutes les classes</option>
         </select>
 
 
@@ -1100,29 +1048,6 @@ let eleveSelectionne = null;
 
 
 /* =========================================================
-   CLASSES
-========================================================= */
-
-const classes = [
-
-    "1ère Kind",
-    "2ème Kind",
-    "3ème Kind",
-
-    "1ère A.F.",
-    "2ème A.F.",
-    "3ème A.F.",
-    "4ème A.F.",
-    "5ème A.F.",
-    "6ème A.F.",
-    "7ème A.F.",
-    "8ème A.F.",
-    "9ème A.F."
-
-];
-
-
-/* =========================================================
    MOIS
 ========================================================= */
 
@@ -1187,6 +1112,28 @@ const lignes = [
 /* =========================================================
    CHARGEMENT
 ========================================================= */
+
+async function chargerClasses() {
+    const select = document.getElementById("classe");
+    if (!select) return;
+    const response = await fetch("/api/student-enrollment-options/index.php", {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" },
+        cache: "no-store"
+    });
+    const payload = await response.json();
+    if (!response.ok || !payload.success || !Array.isArray(payload.classes)) {
+        throw new Error(payload.error || "Impossible de charger les classes depuis PostgreSQL.");
+    }
+    select.replaceChildren(new Option("Toutes les classes", ""));
+    payload.classes.forEach(function (item) {
+        if (!item || !item.id || !item.name) return;
+        const option = new Option(String(item.name), String(item.name));
+        option.dataset.classId = String(item.id);
+        select.appendChild(option);
+    });
+}
 
 async function chargerDonnees() {
 
@@ -3106,6 +3053,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         await chargerAnnees();
+        await chargerClasses();
         await chargerDonnees();
         afficherEleves();
 
