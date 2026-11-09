@@ -140,7 +140,7 @@
       vacances: ["read", "create", "update", "delete"],
       badge: ["read", "create", "print"],
       paies: ["read", "create", "update", "reconcile"],
-      depenses: ["read", "create", "delete"],
+      depenses: ["read", "create", "delete", "reconcile"],
       presences: ["read", "create", "update"],
       vault: ["update"]
     },

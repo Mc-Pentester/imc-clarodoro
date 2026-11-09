@@ -18,6 +18,7 @@ $pages = [
     'personnel.html' => ['public' => 'personnel.html', 'file' => 'personnel.php', 'permission' => 'personnel.read', 'role' => null],
     'badge.html' => ['public' => 'badge.html', 'file' => 'badge.php', 'permission' => 'badge.read', 'role' => null],
     'payroll-recovery.html' => ['public' => 'payroll-recovery.html', 'file' => 'payroll-recovery.php', 'permission' => 'paies.reconcile', 'role' => null],
+    'expense-recovery.html' => ['public' => 'expense-recovery.html', 'file' => 'expense-recovery.php', 'permission' => 'depenses.reconcile', 'role' => null],
     'resultats.html' => ['public' => 'resultats.html', 'file' => 'resultats.php', 'permission' => 'resultats.read', 'role' => null],
     'vacations.html' => ['public' => 'vacations.html', 'file' => 'vacations.php', 'permission' => 'vacances.read', 'role' => null],
 ];

@@ -122,6 +122,7 @@ try {
         'depenses.read',
         'depenses.create',
         'depenses.delete',
+        'depenses.reconcile',
         'presences.read',
         'presences.create',
         'presences.update',
