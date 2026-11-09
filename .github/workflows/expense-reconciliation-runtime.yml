@@ -111,7 +111,7 @@ jobs:
           import re
           from pathlib import Path
           page = Path("private-pages/classes.php").read_text(encoding="utf-8")
-          scripts = [s for s in re.findall(r"<script(?:\\s[^>]*)?>(.*?)</script>", page, re.I | re.S) if s.strip()]
+          scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", page, re.I | re.S) if s.strip()]
           if not scripts:
               raise SystemExit("No inline class-management JavaScript found")
           for i, script in enumerate(scripts):
@@ -131,6 +131,40 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove academic structure CRUD, CSRF and RBAC
+        run: |
+          set -Eeuo pipefail
+          BASE='http://127.0.0.1:8090'
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          COOKIE='/tmp/academic-structure.cookies'
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -d '{"username":"expense-reconcile-runtime","password":"Expense-Reconcile-2026!"}' "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+          NO_CSRF="$(curl -sS -o /tmp/academic-no-csrf.json -w '%{http_code}' -X POST -b "$COOKIE" -H 'Content-Type: application/json' -d '{"resource":"levels","code":"CI-NO-CSRF","name":"No CSRF"}' "$BASE/api/academic-structure/index.php?resource=levels")"
+          test "$NO_CSRF" = '403'
+          LEVEL_STATUS="$(curl -sS -o /tmp/academic-level.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"levels","code":"CI-LEVEL-01","name":"Niveau CI"}' "$BASE/api/academic-structure/index.php?resource=levels")"
+          test "$LEVEL_STATUS" = '201'
+          LEVEL_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/academic-level.json"),true); echo $d["level"]["id"]??"";')"
+          test -n "$LEVEL_ID"
+          CLASS_PAYLOAD="$(php -r 'echo json_encode(["resource"=>"classes","code"=>"CI-CLASS-01","name"=>"Classe CI","level_id"=>$argv[1],"status"=>"ACTIVE"]);' "$LEVEL_ID")"
+          CLASS_STATUS="$(curl -sS -o /tmp/academic-class.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$CLASS_PAYLOAD" "$BASE/api/academic-structure/index.php?resource=classes")"
+          test "$CLASS_STATUS" = '201'
+          CLASS_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/academic-class.json"),true); echo $d["class"]["id"]??"";')"
+          test -n "$CLASS_ID"
+          UPDATE_STATUS="$(curl -sS -o /tmp/academic-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X PATCH -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"classes","name":"Classe CI modifiée"}' "$BASE/api/academic-structure/index.php?resource=classes&id=$CLASS_ID")"
+          test "$UPDATE_STATUS" = '200'
+          LEVEL_UPDATE="$(curl -sS -o /tmp/academic-level-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X PATCH -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"levels","name":"Niveau CI modifié"}' "$BASE/api/academic-structure/index.php?resource=levels&id=$LEVEL_ID")"
+          test "$LEVEL_UPDATE" = '200'
+          ARCHIVE_STATUS="$(curl -sS -o /tmp/academic-archive.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X PATCH -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"classes","status":"ARCHIVED"}' "$BASE/api/academic-structure/index.php?resource=classes&id=$CLASS_ID")"
+          test "$ARCHIVE_STATUS" = '200'
+          test "$(psql "$DB" -Atqc "SELECT status FROM classes WHERE id='$CLASS_ID'")" = 'ARCHIVED'
+          test "$(psql "$DB" -Atqc "SELECT name FROM levels WHERE id='$LEVEL_ID'")" = 'Niveau CI modifié'
+          READ_COOKIE='/tmp/academic-readonly.cookies'
+          curl -fsS -c "$READ_COOKIE" -b "$READ_COOKIE" -H 'Content-Type: application/json' -d '{"username":"expense-reconcile-readonly","password":"Expense-Readonly-2026!"}' "$BASE/api/auth/login.php" >/dev/null
+          DENIED="$(curl -sS -o /tmp/academic-denied.json -w '%{http_code}' -b "$READ_COOKIE" "$BASE/api/academic-structure/index.php?resource=classes")"
+          test "$DENIED" = '403'
+          echo 'ACADEMIC STRUCTURE CRUD + ARCHIVE + CSRF + RBAC: PASS'
 
       - name: Prove import, idempotency, conflict protection, audit, CSRF and RBAC
         run: |

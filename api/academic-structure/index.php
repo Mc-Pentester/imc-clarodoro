@@ -30,7 +30,7 @@ try{
  if($resource==='levels'){
   foreach(['code'=>50,'name'=>150] as $f=>$max)if(array_key_exists($f,$data)){$sets[]="$f=:$f";$params[":$f"]=academicText($data,$f,$max);}
   if(array_key_exists('description',$data)){if(!is_string($data['description']))apiError(422,'description invalide.');$sets[]='description=:description';$params[':description']=trim($data['description']);}
-  if(!$sets)apiError(422,'Aucune modification fournie.');$sets[]='updated_at=NOW();';$s=$pdo->prepare('UPDATE levels SET '.implode(',',$sets).' WHERE id=:id RETURNING id,code,name,description');$s->execute($params);$row=$s->fetch();if(!$row)apiError(404,'Niveau introuvable.');echo json_encode(['success'=>true,'level'=>$row],JSON_UNESCAPED_UNICODE);exit;
+  if(!$sets)apiError(422,'Aucune modification fournie.');$sets[]='updated_at=NOW()';$s=$pdo->prepare('UPDATE levels SET '.implode(',',$sets).' WHERE id=:id RETURNING id,code,name,description');$s->execute($params);$row=$s->fetch();if(!$row)apiError(404,'Niveau introuvable.');echo json_encode(['success'=>true,'level'=>$row],JSON_UNESCAPED_UNICODE);exit;
  }
  foreach(['code'=>50,'name'=>150] as $f=>$max)if(array_key_exists($f,$data)){$sets[]="$f=:$f";$params[":$f"]=academicText($data,$f,$max);}
  if(array_key_exists('level_id',$data)){if(!is_string($data['level_id'])||!academicUuid($data['level_id']))apiError(422,'level_id invalide.');$sets[]='level_id=:level_id';$params[':level_id']=$data['level_id'];}
