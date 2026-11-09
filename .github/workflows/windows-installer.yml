@@ -94,7 +94,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Compilation Inno Setup échouée (code $LASTEXITCODE)."
           }
-          $artifact = 'dist\IMC-Clarodaro-Setup-1.1.0.exe'
+          $artifact = 'dist\IMC-Clarodoro-Setup-1.1.0.exe'
           if (-not (Test-Path -LiteralPath $artifact)) {
             throw "Installateur absent : $artifact"
           }
@@ -103,7 +103,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = (Resolve-Path 'dist\IMC-Clarodaro-Setup-1.1.0.exe').Path
+          $installer = (Resolve-Path 'dist\IMC-Clarodoro-Setup-1.1.0.exe').Path
           $installDir = Join-Path $env:ProgramFiles 'IMC-Clarodaro Test é'
           $dataDir = Join-Path $env:ProgramData 'IMC-Clarodaro\PostgreSQL\data'
           $configFile = Join-Path $env:ProgramData 'IMC-Clarodaro\config\.env'
@@ -597,6 +597,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: IMC-Clarodaro-Windows-Installer
-          path: dist/IMC-Clarodaro-Setup-1.1.0.exe
+          path: dist/IMC-Clarodoro-Setup-1.1.0.exe
           if-no-files-found: error
           retention-days: 14
