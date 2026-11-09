@@ -6,7 +6,6 @@ WITH matching_rows AS (
         s.id AS student_id,
         c.id AS class_id,
         sy.id AS school_year_id,
-        COUNT(DISTINCT c.id) OVER (PARTITION BY s.id, sy.id) AS matching_class_count,
         s.created_at::date AS enrollment_date
     FROM students s
     INNER JOIN classes c
@@ -26,8 +25,8 @@ unambiguous_matches AS (
         school_year_id,
         MIN(enrollment_date) AS enrollment_date
     FROM matching_rows
-    WHERE matching_class_count = 1
     GROUP BY student_id, school_year_id
+    HAVING COUNT(DISTINCT class_id) = 1
 )
 INSERT INTO enrollments (
     student_id,
