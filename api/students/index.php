@@ -52,7 +52,7 @@ if ($method === 'GET') {
                 FROM enrollments e
                 INNER JOIN classes c ON c.id = e.class_id
                 INNER JOIN school_years sy ON sy.id = e.school_year_id
-                WHERE e.student_id = s.id AND e.status = 'ACTIVE'
+                WHERE e.student_id = s.id AND e.status = \'ACTIVE\'
                 ORDER BY sy.start_date DESC, e.created_at DESC, e.id DESC
                 LIMIT 1
              ) active_enrollment ON TRUE
