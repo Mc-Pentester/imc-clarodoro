@@ -221,17 +221,11 @@ jobs:
 
             # Prepare real academic reference records for the browser enrollment test.
             $env:PGPASSWORD = $dbValues['DB_PASSWORD']
-            $academicFixture = @"
-            INSERT INTO levels (id, code, name)
-            VALUES ('00000000-0000-0000-0000-000000009001', 'CI-SMOKE-LEVEL', 'Niveau test')
-            ON CONFLICT (code) DO NOTHING;
-            INSERT INTO classes (id, code, name, level_id, status)
-            VALUES ('00000000-0000-0000-0000-000000009002', 'CI-SMOKE-CLASS', '1ère Kind', '00000000-0000-0000-0000-000000009001', 'ACTIVE')
-            ON CONFLICT (code) DO NOTHING;
-            INSERT INTO school_years (id, label, start_date, end_date, status)
-            VALUES ('00000000-0000-0000-0000-000000009003', '2026 - 2027', '2026-09-01', '2027-07-15', 'ACTIVE')
-            ON CONFLICT (label) DO NOTHING;
-            "@
+            $academicFixture = @(
+              "INSERT INTO levels (id, code, name) VALUES ('00000000-0000-0000-0000-000000009001', 'CI-SMOKE-LEVEL', 'Niveau test') ON CONFLICT (code) DO NOTHING;",
+              "INSERT INTO classes (id, code, name, level_id, status) VALUES ('00000000-0000-0000-0000-000000009002', 'CI-SMOKE-CLASS', '1ère Kind', '00000000-0000-0000-0000-000000009001', 'ACTIVE') ON CONFLICT (code) DO NOTHING;",
+              "INSERT INTO school_years (id, label, start_date, end_date, status) VALUES ('00000000-0000-0000-0000-000000009003', '2026 - 2027', '2026-09-01', '2027-07-15', 'ACTIVE') ON CONFLICT (label) DO NOTHING;"
+            ) -join [Environment]::NewLine
             $fixtureResult = $academicFixture | & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -v ON_ERROR_STOP=1 2>&1
             if ($LASTEXITCODE -ne 0) { throw "Impossible de préparer les références académiques du test : $fixtureResult" }
             Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
