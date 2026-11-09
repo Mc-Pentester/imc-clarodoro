@@ -99,6 +99,26 @@ body {
 #recherche {
     min-width: 220px;
 }
+.saisie-notes { width:98%; max-width:1500px; margin:16px auto; padding:18px; background:#fff; border:1px solid #d7dee8; border-radius:12px; box-shadow:0 3px 12px rgba(20,40,70,.05); }
+.saisie-notes h2 { margin:0 0 6px; color:#17365d; }
+.saisie-aide { margin:0 0 16px; color:#526174; }
+.saisie-filtres { display:grid; grid-template-columns:repeat(3,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+.saisie-filtres label { display:grid; gap:6px; font-weight:bold; }
+.saisie-filtres select,.saisie-filtres input { width:100%; min-height:42px; padding:8px 10px; border:1px solid #b8c4d3; border-radius:7px; background:#fff; font:inherit; }
+.saisie-filtres input[readonly] { background:#f6f8fb; }
+.saisie-table-wrap { overflow-x:auto; border:1px solid #e0e6ee; border-radius:8px; }
+#tableSaisie { width:100%; border-collapse:collapse; min-width:460px; }
+#tableSaisie th,#tableSaisie td { padding:10px 12px; border-bottom:1px solid #e7ecf2; text-align:left; }
+#tableSaisie th { background:#f2f6fb; color:#26384d; }
+#tableSaisie tbody tr:last-child td { border-bottom:0; }
+.note-saisie-input { width:110px; max-width:100%; min-height:40px; padding:7px 9px; border:1px solid #aebdce; border-radius:7px; font:inherit; text-align:center; }
+.note-saisie-input:focus { outline:2px solid #9bc5f4; border-color:#2876c7; }
+.saisie-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:14px; }
+.btn-saisie { min-height:42px; padding:9px 18px; border:0; border-radius:8px; background:#167447; color:#fff; font:inherit; font-weight:bold; cursor:pointer; }
+.btn-saisie:disabled { opacity:.55; cursor:not-allowed; }
+#saisieProgression { color:#526174; }
+.saisie-vide { padding:20px!important; text-align:center!important; color:#66758a; }
+@media(max-width:700px) { .saisie-filtres { grid-template-columns:1fr; } .saisie-notes { padding:13px; } #tableSaisie th,#tableSaisie td { padding:8px; } .note-saisie-input { width:88px; } }
 
 /* =========================================================
    LISTE DES ÉLÈVES
@@ -653,9 +673,34 @@ body {
 
 </section>
 
+<section class="saisie-notes no-print" aria-labelledby="titreSaisieNotes">
+    <h2 id="titreSaisieNotes">Saisir les notes des élèves</h2>
+    <p class="saisie-aide">Choisissez une classe, une matière et un contrôle. La liste des élèves et les notes déjà enregistrées s'affichent automatiquement.</p>
+    <div class="saisie-filtres">
+        <label for="saisieMatiere">Matière
+            <select id="saisieMatiere"><option value="">Choisir une matière</option></select>
+        </label>
+        <label for="saisieControle">Évaluation
+            <select id="saisieControle"><option value="1">1er contrôle</option><option value="2">2e contrôle</option><option value="3">3e contrôle</option></select>
+        </label>
+        <label for="saisieBareme">Barème de la matière
+            <input id="saisieBareme" type="text" readonly value="Sélectionnez une matière">
+        </label>
+    </div>
+    <div class="saisie-table-wrap">
+        <table id="tableSaisie">
+            <thead><tr><th style="width:52px">N°</th><th>Élève</th><th style="width:180px">Note obtenue</th><th style="width:150px">État</th></tr></thead>
+            <tbody id="corpsSaisie"><tr><td colspan="4" class="saisie-vide">Choisissez d'abord une classe et une matière.</td></tr></tbody>
+        </table>
+    </div>
+    <div class="saisie-actions">
+        <button type="button" id="btnEnregistrerSaisie" class="btn-saisie" onclick="enregistrerSaisieClasse()" disabled>Enregistrer les notes</button>
+        <span id="saisieProgression" aria-live="polite">Sélectionnez une classe et une matière pour commencer.</span>
+    </div>
+</section>
 
 <!-- =======================================================
-     LISTE DES ÉLÈVES
+     LISTE DES ÉLÈVES / CARNET INDIVIDUEL
 ======================================================= -->
 
 <section class="liste-eleves no-print">
@@ -1129,7 +1174,7 @@ async function chargerClasses() {
     select.replaceChildren(new Option("Toutes les classes", ""));
     payload.classes.forEach(function (item) {
         if (!item || !item.id || !item.name) return;
-        const option = new Option(String(item.name), String(item.name));
+        const option = new Option(String(item.name), String(item.id));
         option.dataset.classId = String(item.id);
         select.appendChild(option);
     });
@@ -1176,9 +1221,11 @@ async function chargerDonnees() {
         return {
             id: enrollment.student_id,
             enrollmentId: enrollment.enrollment_id,
+            classId: String(enrollment.class_id || ""),
             nom: enrollment.last_name,
             prenom: enrollment.first_name,
             classe: enrollment.class_name,
+            classId: String(enrollment.class_id || ""),
             sexe: "",
             schoolYearId: enrollment.school_year_id
         };
@@ -1213,6 +1260,9 @@ async function chargerDonnees() {
             enrollmentId: String(grade.enrollment_id)
         };
     });
+
+    remplirSelecteurMatieres();
+    afficherSaisieClasse();
 }
 
 
@@ -1279,12 +1329,12 @@ document
    CLASSE
 ========================================================= */
 
-document
-    .getElementById("classe")
-    .addEventListener(
-        "change",
-        afficherEleves
-    );
+document.getElementById("classe").addEventListener("change", function () {
+    afficherEleves();
+    afficherSaisieClasse();
+});
+document.getElementById("saisieMatiere").addEventListener("change", afficherSaisieClasse);
+document.getElementById("saisieControle").addEventListener("change", afficherSaisieClasse);
 
 
 /* =========================================================
@@ -1331,7 +1381,7 @@ function afficherEleves() {
 
             const classeOK =
                 !classeChoisie ||
-                eleve.classe === classeChoisie;
+                String(eleve.classId) === String(classeChoisie);
 
 
             const texte =
@@ -1429,6 +1479,147 @@ function afficherEleves() {
 
     });
 
+}
+
+
+/* =========================================================
+   SAISIE RAPIDE DES NOTES PAR CLASSE
+========================================================= */
+
+function remplirSelecteurMatieres() {
+    const select = document.getElementById("saisieMatiere");
+    if (!select) return;
+    const previous = select.value;
+    select.replaceChildren(new Option("Choisir une matière", ""));
+    matieres.forEach(function(matiere) {
+        select.appendChild(new Option(matiere.nom + " — /" + formatNombre(matiere.pointsMax), String(matiere.id)));
+    });
+    if (matieres.some(m => String(m.id) === previous)) select.value = previous;
+}
+
+function afficherSaisieClasse() {
+    const body = document.getElementById("corpsSaisie");
+    const button = document.getElementById("btnEnregistrerSaisie");
+    const progress = document.getElementById("saisieProgression");
+    const classId = document.getElementById("classe").value;
+    const subjectId = document.getElementById("saisieMatiere").value;
+    const control = Number(document.getElementById("saisieControle").value || 1);
+    const subject = matieres.find(m => String(m.id) === String(subjectId));
+    document.getElementById("saisieBareme").value = subject ? "Note maximale : " + formatNombre(subject.pointsMax) + " points" : "Sélectionnez une matière";
+    body.replaceChildren();
+
+    if (!anneeServeurId) {
+        body.innerHTML = '<tr><td colspan="4" class="saisie-vide">Aucune année scolaire sélectionnée.</td></tr>';
+        button.disabled = true; progress.textContent = "Choisissez une année scolaire."; return;
+    }
+    if (!classId || !subject) {
+        body.innerHTML = '<tr><td colspan="4" class="saisie-vide">Choisissez une classe et une matière pour afficher les élèves.</td></tr>';
+        button.disabled = true; progress.textContent = "Sélectionnez une classe et une matière pour commencer."; return;
+    }
+
+    const list = eleves.filter(e => String(e.classId) === String(classId)).slice().sort((a,b) =>
+        ((a.nom || "") + " " + (a.prenom || "")).localeCompare((b.nom || "") + " " + (b.prenom || ""), "fr")
+    );
+    if (!list.length) {
+        body.innerHTML = '<tr><td colspan="4" class="saisie-vide">Aucun élève inscrit dans cette classe pour cette année scolaire.</td></tr>';
+        button.disabled = true; progress.textContent = "Aucun élève à noter."; return;
+    }
+
+    const yearLabel = document.getElementById("annee").value;
+    list.forEach(function(eleve, index) {
+        const key = String(eleve.id) + "|" + anneeServeurId + "|" + control + "|" + String(subject.id);
+        const existing = gradeMeta[key];
+        const saved = resultats[String(eleve.id)] && resultats[String(eleve.id)][yearLabel] &&
+            resultats[String(eleve.id)][yearLabel]["controle" + control]
+            ? resultats[String(eleve.id)][yearLabel]["controle" + control][String(subject.id)] : "";
+        const tr = document.createElement("tr");
+        const number = document.createElement("td"); number.textContent = String(index + 1);
+        const name = document.createElement("td"); name.textContent = ((eleve.nom || "") + " " + (eleve.prenom || "")).trim();
+        const gradeCell = document.createElement("td");
+        const input = document.createElement("input");
+        input.type = "number"; input.min = "0"; input.max = String(subject.pointsMax); input.step = "0.01";
+        input.className = "note-saisie-input"; input.inputMode = "decimal";
+        input.setAttribute("aria-label", "Note de " + name.textContent + " sur " + subject.pointsMax);
+        input.value = saved === null || saved === undefined ? "" : String(saved);
+        input.dataset.studentId = String(eleve.id); input.dataset.enrollmentId = String(eleve.enrollmentId);
+        input.dataset.subjectId = String(subject.id); input.dataset.control = String(control);
+        input.dataset.gradeId = existing ? existing.id : ""; input.dataset.initialValue = input.value;
+        const state = document.createElement("td"); state.className = "etat-saisie";
+        state.textContent = existing ? "Enregistrée" : "À saisir";
+        input.addEventListener("input", function() {
+            const value = input.value.trim();
+            const valid = value === "" || (Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= Number(subject.pointsMax));
+            input.setCustomValidity(valid ? "" : "La note doit être comprise entre 0 et " + subject.pointsMax + ".");
+            input.classList.toggle("note-erreur", !valid);
+            state.textContent = value === input.dataset.initialValue ? (existing ? "Enregistrée" : "À saisir") : (value === "" ? "Non modifiée" : "À enregistrer");
+        });
+        gradeCell.appendChild(input); tr.append(number, name, gradeCell, state); body.appendChild(tr);
+    });
+    button.disabled = false;
+    progress.textContent = list.length + " élève(s) • " + subject.nom + " • " + document.getElementById("saisieControle").selectedOptions[0].textContent;
+}
+
+async function enregistrerSaisieClasse() {
+    const inputs = Array.from(document.querySelectorAll("#corpsSaisie .note-saisie-input"));
+    if (!inputs.length) return;
+    const button = document.getElementById("btnEnregistrerSaisie");
+    const progress = document.getElementById("saisieProgression");
+    const subject = matieres.find(m => String(m.id) === String(document.getElementById("saisieMatiere").value));
+    if (!subject) { afficherMessage("Sélectionnez une matière.", "erreur"); return; }
+
+    const changes = [];
+    for (const input of inputs) {
+        if (!input.checkValidity()) { input.reportValidity(); input.focus(); return; }
+        const value = input.value.trim();
+        if (value === "" || value === input.dataset.initialValue) continue;
+        const grade = Number(value);
+        if (!Number.isFinite(grade) || grade < 0 || grade > Number(subject.pointsMax)) {
+            input.focus(); afficherMessage("La note doit être comprise entre 0 et " + subject.pointsMax + ".", "erreur"); return;
+        }
+        changes.push({input, grade});
+    }
+    if (!changes.length) {
+        afficherMessage("Aucune nouvelle note à enregistrer. Les champs vides ne modifient pas les notes existantes.", "succes");
+        return;
+    }
+
+    button.disabled = true;
+    let savedCount = 0;
+    try {
+        for (const change of changes) {
+            const input = change.input;
+            const existingId = input.dataset.gradeId;
+            const method = existingId ? "PUT" : "POST";
+            const permission = existingId ? "resultats.update" : "resultats.create";
+            if (!IMCAuth.requirePermission(permission)) throw new Error("Permission refusée pour " + (existingId ? "modifier" : "créer") + " les notes.");
+            const url = "/api/grades/index.php" + (existingId ? "?id=" + encodeURIComponent(existingId) : "");
+            const response = await fetch(url, {
+                method, credentials: "same-origin",
+                headers: {"Content-Type":"application/json","Accept":"application/json"},
+                body: JSON.stringify({
+                    enrollment_id: input.dataset.enrollmentId,
+                    subject_id: input.dataset.subjectId,
+                    assessment_number: Number(input.dataset.control),
+                    grade: change.grade,
+                    grade_date: new Date().toISOString().slice(0,10)
+                })
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) throw new Error(payload.error || "Échec d'enregistrement de " + input.getAttribute("aria-label") + ".");
+            savedCount++;
+        }
+        await chargerDonnees();
+        afficherSaisieClasse();
+        progress.textContent = savedCount + " note(s) enregistrée(s) dans PostgreSQL.";
+        afficherMessage(savedCount + " note(s) enregistrée(s) avec succès.", "succes");
+    } catch (error) {
+        progress.textContent = savedCount + " note(s) enregistrée(s) avant l'erreur.";
+        afficherMessage(error.message || "Erreur pendant l'enregistrement.", "erreur");
+        await chargerDonnees();
+        afficherSaisieClasse();
+    } finally {
+        button.disabled = false;
+    }
 }
 
 
@@ -3056,6 +3247,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         await chargerClasses();
         await chargerDonnees();
         afficherEleves();
+        afficherSaisieClasse();
 
         const ancienneAfficherCarnet = afficherCarnet;
         window.afficherCarnet = async function (eleve) {
