@@ -1150,8 +1150,6 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             address: "",
             phone: eleve.contact || "",
             status: eleve.status || "ACTIVE",
-            class_id: eleve.classId,
-            school_year_id: eleve.schoolYearId,
             profile_data: {
                 lieuNaissance: eleve.lieuNaissance,
                 departement: eleve.departement,
@@ -1166,6 +1164,11 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                 anneeScolaire: eleve.anneeScolaire
             }
         };
+
+        if (!id) {
+            payload.class_id = eleve.classId;
+            payload.school_year_id = eleve.schoolYearId;
+        }
 
         const response = await fetch(
             id ? "api/students/index.php?id=" + encodeURIComponent(id) : "api/students/index.php",
@@ -1452,6 +1455,8 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
         document.getElementById("sectionCommunale").value = student.sectionCommunale || "";
         document.getElementById("classe").value = student.classId || "";
         document.getElementById("anneeScolaire").value = student.schoolYearId || "";
+        document.getElementById("classe").disabled = true;
+        document.getElementById("anneeScolaire").disabled = true;
         document.getElementById("nisu").value = student.nisu || "";
         document.getElementById("contact").value = student.contact || "";
         document.getElementById("ninuParent").value = student.ninuParent || "";
@@ -1541,6 +1546,8 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
     ================================================== */
 
     function annulerFormulaire() {
+        document.getElementById("classe").disabled = false;
+        document.getElementById("anneeScolaire").disabled = false;
 
         document
             .getElementById(
