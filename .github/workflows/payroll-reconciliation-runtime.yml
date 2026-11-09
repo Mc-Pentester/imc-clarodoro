@@ -43,12 +43,37 @@ jobs:
           set -euo pipefail
           DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
           psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
-          php database/migrate.php --apply
           psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles(id,name) VALUES
             ('00000000-0000-0000-0000-000000008001','PDG'),
             ('00000000-0000-0000-0000-000000008002','Autre')
           ON CONFLICT (id) DO NOTHING;
+          SQL
+          php database/migrate.php --apply
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $permissions$
+          DECLARE pdg_id UUID; other_id UUID;
+          BEGIN
+            SELECT id INTO pdg_id FROM roles WHERE name='PDG';
+            SELECT id INTO other_id FROM roles WHERE name='Autre';
+            IF (SELECT COUNT(*) FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                WHERE rp.role_id=pdg_id AND p.name IN ('paies.read','paies.create','paies.update')) <> 3
+              THEN RAISE EXCEPTION 'PDG must receive all three payroll permissions from migrations'; END IF;
+            IF EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                       WHERE rp.role_id=other_id AND p.name IN ('paies.read','paies.create','paies.update'))
+              THEN RAISE EXCEPTION 'Payroll permissions leaked to another role'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                           WHERE rp.role_id=pdg_id AND p.name='whatsapp.message.send')
+              THEN RAISE EXCEPTION 'PDG lacks WhatsApp send permission'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                           WHERE rp.role_id=pdg_id AND p.name='whatsapp.consent.read')
+              THEN RAISE EXCEPTION 'PDG lacks WhatsApp consent read permission'; END IF;
+            IF EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                       WHERE rp.role_id=pdg_id AND p.name='whatsapp.consent.manage')
+              THEN RAISE EXCEPTION 'PDG must not receive consent management permission'; END IF;
+          END $permissions$;
+          SQL
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO users(id,username,password_hash,role_id,status) VALUES
             ('00000000-0000-0000-0000-000000008011','reconcile-runtime',crypt('Reconcile-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000008001','ACTIVE'),
             ('00000000-0000-0000-0000-000000008012','reconcile-other',crypt('Reconcile-Other-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000008002','ACTIVE')
@@ -68,7 +93,7 @@ jobs:
           ON CONFLICT (name) DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000008001',id FROM permissions
-          WHERE name IN ('paies.read','paies.create','paies.update','paies.reconcile','eleves.read','finances.read','personnel.read','badge.read','resultats.read')
+          WHERE name IN ('paies.reconcile','eleves.read','finances.read','personnel.read','badge.read','resultats.read')
           ON CONFLICT DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000008002',id FROM permissions
@@ -82,6 +107,9 @@ jobs:
           php -l api/payroll/index.php
           php -l api/payroll/reconcile.php
           php -l private-pages/PDG.php
+          php -l secure-page.php
+          php -l router.php
+          node --check js/whatsapp-menu.js
           python3 - <<'PY'
           import re
           from pathlib import Path
@@ -92,6 +120,16 @@ jobs:
               "Impossible de charger les paies depuis PostgreSQL",
               "Le total net représente la masse salariale nette prévue/déclarée",
           ]
+          menu = Path("private-pages/PDG.php").read_text(encoding="utf-8")
+          whatsapp = Path("js/whatsapp-menu.js").read_text(encoding="utf-8")
+          secure = Path("secure-page.php").read_text(encoding="utf-8")
+          router = Path("router.php").read_text(encoding="utf-8")
+          if 'class="no-print menu-principal"' not in menu:
+              raise SystemExit("PDG navigation is not registered for the WhatsApp action")
+          if "Envoyer un message WhatsApp" not in whatsapp or '/whatsapp-send.html' not in whatsapp:
+              raise SystemExit("PDG WhatsApp send button contract missing")
+          if "'whatsapp-send.html'" not in secure or "'/whatsapp-send.html'" not in router:
+              raise SystemExit("WhatsApp page is not routed through server-side authorization")
           missing = [item for item in required if item not in pdg]
           if missing:
               raise SystemExit("Payroll UI/report contract missing: " + ", ".join(missing))
@@ -131,7 +169,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           BASE='http://127.0.0.1:8090'
-          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' )
+          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' 'whatsapp-send.html|<title>WhatsApp — message manuel | IMC-Clarodoro</title>' )
           for item in "${pages[@]}"; do
             page="${item%%|*}"
             marker="${item#*|}"
@@ -158,6 +196,7 @@ jobs:
           OTHER_COOKIE='/tmp/page-protection-other.cookies'
           curl -fsS -c "$OTHER_COOKIE" -b "$OTHER_COOKIE" -H 'Content-Type: application/json' -d '{"username":"reconcile-other","password":"Reconcile-Other-2026!"}' "$BASE/api/auth/login.php" >/tmp/page-protection-other-login.json
           test "$(curl -sS -o /tmp/page-protection-denied.html -w '%{http_code}' -b "$OTHER_COOKIE" "$BASE/PDG.html")" = '403'
+          test "$(curl -sS -o /tmp/whatsapp-protection-denied.html -w '%{http_code}' -b "$OTHER_COOKIE" "$BASE/whatsapp-send.html")" = '403'
 
           # Simule une session expirée dans le stockage de sessions PHP du serveur de test.
           SESSION_ID="$(awk '$6 == "IMC_SESSION" {print $7}' "$PDG_COOKIE" | tail -n 1)"

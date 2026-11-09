@@ -458,7 +458,7 @@ imcRequirePageAccess('paies.read', 'PDG', $pdo ?? null);
 </header>
 
 
-<nav class="no-print">
+<nav class="no-print menu-principal">
 
     <button class="eleves"
         onclick="ouvrirPage('index.html')">

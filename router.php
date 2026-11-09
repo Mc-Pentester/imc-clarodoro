@@ -27,6 +27,7 @@ $protected = [
     '/resultats.html' => 'resultats.html',
     '/vacations.html' => 'vacations.html',
     '/vacances.html' => 'vacations.html',
+    '/whatsapp-send.html' => 'whatsapp-send.html',
 ];
 
 if ($path === '/setup' || $path === '/setup/') {
@@ -46,10 +47,6 @@ if (isset($protected[$path]) || isset($protected[$lowerPath])) {
     exit;
 }
 
-if ($path === '/whatsapp-send.html') {
-    require __DIR__ . '/private-pages/whatsapp-send.php';
-    exit;
-}
 
 $blockedDirectories = [
     '/runtime', '/installer', '/database', '/scripts', '/config',

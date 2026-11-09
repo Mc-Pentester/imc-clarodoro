@@ -21,6 +21,7 @@ $pages = [
     'expense-recovery.html' => ['public' => 'expense-recovery.html', 'file' => 'expense-recovery.php', 'permission' => 'depenses.reconcile', 'role' => null],
     'resultats.html' => ['public' => 'resultats.html', 'file' => 'resultats.php', 'permission' => 'resultats.read', 'role' => null],
     'classes.html' => ['public' => 'classes.html', 'file' => 'classes.php', 'permission' => 'classes.manage', 'role' => 'PDG'],
+    'whatsapp-send.html' => ['public' => 'whatsapp-send.html', 'file' => 'whatsapp-send.php', 'permission' => 'whatsapp.message.send', 'role' => 'PDG'],
     'vacations.html' => ['public' => 'vacations.html', 'file' => 'vacations.php', 'permission' => 'vacances.read', 'role' => null],
 ];
 

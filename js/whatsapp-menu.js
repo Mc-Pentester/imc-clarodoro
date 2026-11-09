@@ -13,7 +13,8 @@
       var button = document.createElement("button");
       button.type = "button";
       button.dataset.imcWhatsappSend = "true";
-      button.textContent = "WhatsApp";
+      button.className = "pdg";
+      button.textContent = "Envoyer un message WhatsApp";
       button.setAttribute("aria-label", "Ouvrir l'interface d'envoi WhatsApp");
       button.addEventListener("click", function () {
         window.location.href = "/whatsapp-send.html";

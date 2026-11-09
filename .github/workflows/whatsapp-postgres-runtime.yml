@@ -71,7 +71,8 @@ jobs:
             database/migrations/20261025100000_assign_whatsapp_manual_permissions.sql \
             database/migrations/20261023103000_whatsapp_consent_audit.sql \
             database/migrations/20261023110000_whatsapp_message_log.sql \
-            database/migrations/20261025120000_whatsapp_manual_preparations.sql
+            database/migrations/20261025120000_whatsapp_manual_preparations.sql \
+            database/migrations/20261109170000_f02_l_pdg_payroll_whatsapp_permissions.sql
           do
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
@@ -97,6 +98,10 @@ jobs:
               SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
               WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.consent.manage'
             ) THEN RAISE EXCEPTION 'PDG unexpectedly has whatsapp.consent.manage'; END IF;
+            IF (
+              SELECT count(*) FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+              WHERE rp.role_id = pdg_role_id AND p.name IN ('paies.read','paies.create','paies.update')
+            ) <> 3 THEN RAISE EXCEPTION 'PDG payroll permissions missing'; END IF;
           END $pdg$;
           SQL
 
