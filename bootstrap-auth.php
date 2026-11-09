@@ -122,7 +122,11 @@ try {
         'depenses.read',
         'depenses.create',
         'depenses.delete',
+        'presences.read',
         'presences.create',
+        'presences.update',
+        'whatsapp.message.send',
+        'whatsapp.consent.read',
         'vault.update',
     ];
 
@@ -156,6 +160,9 @@ try {
             'vacances.read',
             'badge.read',
             'badge.print',
+            'presences.read',
+            'presences.create',
+            'presences.update',
         ],
 
         'Enseignant' => [
@@ -166,7 +173,9 @@ try {
             'resultats.create',
             'resultats.update',
             'vacances.read',
+            'presences.read',
             'presences.create',
+            'presences.update',
         ],
 
         'Secrétaire' => [
