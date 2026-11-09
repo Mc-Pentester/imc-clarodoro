@@ -128,19 +128,54 @@ $taskName = 'IMC-Clarodaro-PHP-Server'
 $postgresServiceAccount = 'NT AUTHORITY\NETWORK SERVICE'
 $phpTaskAccount = 'NT AUTHORITY\LOCAL SERVICE'
 $postgresRuntimeRoot = Join-Path $programDataRoot 'runtime\postgresql'
+$postgresRuntimeSource = Join-Path $AppRoot 'installer\postgresql-runtime'
 $pgBin = Join-Path $postgresRuntimeRoot 'bin'
 $pgCtl = Join-Path $pgBin 'pg_ctl.exe'
 $initdb = Join-Path $pgBin 'initdb.exe'
 $psql = Join-Path $pgBin 'psql.exe'
 $pgIsReady = Join-Path $pgBin 'pg_isready.exe'
+$postgres = Join-Path $pgBin 'postgres.exe'
 $php = Join-Path $AppRoot 'runtime\php\php.exe'
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Cette configuration doit être exécutée en administrateur.'
 }
-foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $php)) {
+
+# PostgreSQL est d'abord livré dans le dossier de staging de l'application.
+# Le déploiement vers ProgramData est explicite afin de ne pas dépendre du
+# traitement des destinations CommonAppData par Inno Setup.
+if (-not (Test-Path -LiteralPath $postgresRuntimeSource -PathType Container)) {
+    throw "Payload PostgreSQL absent de l'installation : $postgresRuntimeSource"
+}
+$runtimeSourceBin = Join-Path $postgresRuntimeSource 'bin'
+foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe')) {
+    $sourceFile = Join-Path $runtimeSourceBin $runtimeFile
+    if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
+        throw "Binaire PostgreSQL absent du payload embarqué : $sourceFile"
+    }
+}
+New-Item -ItemType Directory -Path $postgresRuntimeRoot -Force | Out-Null
+Write-Step "Déploiement du runtime PostgreSQL : $postgresRuntimeSource -> $postgresRuntimeRoot"
+$robocopyOutput = & robocopy.exe $postgresRuntimeSource $postgresRuntimeRoot /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP 2>&1
+$robocopyExitCode = $LASTEXITCODE
+if ($robocopyExitCode -ge 8) {
+    throw "Copie du runtime PostgreSQL vers ProgramData échouée (robocopy $robocopyExitCode) : $($robocopyOutput -join ' ')"
+}
+foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe')) {
+    $sourceFile = Join-Path $runtimeSourceBin $runtimeFile
+    $targetFile = Join-Path $pgBin $runtimeFile
+    if (-not (Test-Path -LiteralPath $targetFile -PathType Leaf)) {
+        throw "Binaire PostgreSQL non déployé dans ProgramData : $targetFile"
+    }
+    if ((Get-Sha256Hex -Path $sourceFile) -ne (Get-Sha256Hex -Path $targetFile)) {
+        throw "Vérification SHA-256 du runtime PostgreSQL échouée après déploiement : $targetFile"
+    }
+}
+Write-Step 'Runtime PostgreSQL déployé et vérifié (5 exécutables).'
+
+foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $postgres, $php)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "Runtime requis absent : $required"
+        throw "Runtime requis absent après déploiement : $required"
     }
 }
 if ($PostgreSqlPort -lt 1024 -or $PostgreSqlPort -gt 65535 -or $HttpPort -lt 1024 -or $HttpPort -gt 65535) {
