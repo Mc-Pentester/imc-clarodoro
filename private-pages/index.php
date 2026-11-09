@@ -1388,7 +1388,7 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             return;
         }
 
-        if (!document.getElementById("classe").value || !anneeScolaireId()) {
+        if (!id && (!document.getElementById("classe").value || !anneeScolaireId())) {
             afficherMessage("Sélectionnez une classe et une année scolaire actives.");
             return;
         }
@@ -1405,15 +1405,15 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
             departement: document.getElementById("departement").value.trim(),
             commune: document.getElementById("commune").value.trim(),
             sectionCommunale: document.getElementById("sectionCommunale").value.trim(),
-            classe: classeActuelle(),
-            classId: document.getElementById("classe").value,
+            classe: classeActuelle() || (existing && existing.classe) || "",
+            classId: document.getElementById("classe").value || (existing && existing.classId) || "",
             nisu: nisu,
             contact: document.getElementById("contact").value.trim(),
             ninuParent: document.getElementById("ninuParent").value.trim(),
             documentInscription: document.getElementById("documentInscription").value,
             photo: photoActuelle,
-            anneeScolaire: anneeActuelle(),
-            schoolYearId: anneeScolaireId(),
+            anneeScolaire: anneeActuelle() || (existing && existing.anneeScolaire) || "",
+            schoolYearId: anneeScolaireId() || (existing && existing.schoolYearId) || "",
             status: "ACTIVE"
         };
 
