@@ -564,10 +564,39 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
     }
 }
 elseif ($method === 'DELETE') {
-    header('Allow: GET, POST, PUT, PATCH');
-    apiError(405, 'Méthode HTTP non autorisée');
+    $pdo = getDatabaseConnection();
+    requirePermission($pdo, 'eleves.delete');
+    requireCsrfToken();
+
+    $id = $_GET['id'] ?? '';
+    if (!is_string($id) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $id)) {
+        apiError(400, 'Identifiant élève invalide');
+    }
+
+    // Ne jamais supprimer implicitement les inscriptions, notes ou historiques.
+    $enrollments = $pdo->prepare('SELECT 1 FROM enrollments WHERE student_id = :id LIMIT 1');
+    $enrollments->execute([':id' => $id]);
+    if ($enrollments->fetchColumn()) {
+        apiError(409, 'Suppression impossible : cet élève possède une ou plusieurs inscriptions. Archivez-le ou traitez ses données liées séparément.');
+    }
+
+    try {
+        $stmt = $pdo->prepare('DELETE FROM students WHERE id = :id RETURNING id');
+        $stmt->execute([':id' => $id]);
+        if (!$stmt->fetch()) {
+            apiError(404, 'Élève introuvable');
+        }
+
+        echo json_encode(['success' => true, 'deleted' => true, 'id' => $id], JSON_UNESCAPED_UNICODE);
+    } catch (PDOException $e) {
+        if ((string) $e->getCode() === '23503') {
+            apiError(409, 'Suppression impossible : des données liées existent pour cet élève.');
+        }
+        error_log('Student delete failed: ' . $e->getMessage());
+        apiError(500, 'Erreur interne lors de la suppression de l’élève');
+    }
 }
 else {
-    header('Allow: GET, POST, PUT, PATCH');
+    header('Allow: GET, POST, PUT, PATCH, DELETE');
     apiError(405, 'Méthode HTTP non autorisée');
 }

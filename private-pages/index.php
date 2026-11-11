@@ -1378,11 +1378,15 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
                 const actions = document.createElement("div");
                 actions.className = "actions";
 
-                [
+                const studentActions = [
                     ["Dossier", "btn-primary", voirDossier],
                     ["Modifier", "btn-warning", modifierEleve],
                     ["Archiver", "btn-danger", supprimerEleve]
-                ].forEach(function (action) {
+                ];
+                if (IMCAuth.requirePermission("eleves.delete")) {
+                    studentActions.push(["Supprimer", "btn-danger", supprimerDefinitivementEleve]);
+                }
+                studentActions.forEach(function (action) {
                     const button = document.createElement("button");
                     button.type = "button";
                     button.className = action[1];
@@ -1496,6 +1500,51 @@ const ACTIVE_YEAR_KEY = "imc_active_year";
 
         document.getElementById("formTitle").textContent = "Modifier l'élève";
         document.getElementById("studentFormCard").scrollIntoView({behavior: "smooth"});
+    }
+
+    /* ==================================================
+       SUPPRESSION DÉFINITIVE — réservée aux utilisateurs autorisés
+    ================================================== */
+
+    async function supprimerDefinitivementEleve(id) {
+        if (!IMCAuth.requirePermission("eleves.delete")) {
+            afficherMessage("Permission refusée.");
+            return;
+        }
+
+        const student = students.find(function (item) {
+            return item.id === id;
+        });
+        if (!student) return;
+
+        const nomComplet = [student.nom, student.prenom].filter(Boolean).join(" ");
+        if (!confirm("Supprimer définitivement l'élève « " + nomComplet + " » ? Cette action est irréversible. Si des inscriptions ou des données liées existent, la suppression sera refusée.")) {
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                "api/students/index.php?id=" + encodeURIComponent(id),
+                {
+                    method: "DELETE",
+                    credentials: "same-origin",
+                    headers: { "Accept": "application/json" }
+                }
+            );
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || data.message || "Échec de la suppression.");
+            }
+
+            students = students.filter(function (item) {
+                return item.id !== id;
+            });
+            afficherEleves();
+            afficherMessage("L'élève a été supprimé.");
+        } catch (error) {
+            console.error(error);
+            afficherMessage(error.message || "Échec de la suppression.");
+        }
     }
 
     /* ==================================================
