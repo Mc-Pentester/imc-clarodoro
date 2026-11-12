@@ -126,12 +126,28 @@ if ($method === 'GET') {
     );
     $enrollmentStmt->execute($enrollmentParams);
 
-    $subjectStmt = $pdo->query(
-        "SELECT id, code, name, coefficient, max_points
-         FROM subjects
-         WHERE status = 'ACTIVE'
-         ORDER BY name ASC, id ASC"
-    );
+    if (in_array($user['role_name'], ['PDG', 'Directeur'], true)) {
+        $subjectStmt = $pdo->query(
+            "SELECT id, code, name, coefficient, max_points
+             FROM subjects
+             WHERE status = 'ACTIVE'
+             ORDER BY name ASC, id ASC"
+        );
+    } else {
+        $subjectStmt = $pdo->prepare(
+            "SELECT DISTINCT s.id, s.code, s.name, s.coefficient, s.max_points
+             FROM subjects s
+             INNER JOIN teacher_class_subjects tcs
+                ON tcs.subject_id = s.id
+               AND tcs.status = 'ACTIVE'
+             INNER JOIN user_teachers ut
+                ON ut.teacher_id = tcs.teacher_id
+               AND ut.user_id = :user_id
+             WHERE s.status = 'ACTIVE'
+             ORDER BY s.name ASC, s.id ASC"
+        );
+        $subjectStmt->execute([':user_id' => $user['id']]);
+    }
 
     echo json_encode([
         'success' => true,

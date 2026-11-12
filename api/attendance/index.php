@@ -84,6 +84,17 @@ if ($method === 'GET') {
     $stmt->execute($params);
     $attendance = $stmt->fetchAll();
 
+    $enrollmentConditions = [
+        "e.status = 'ACTIVE'",
+        "s.status = 'ACTIVE'",
+        "c.status = 'ACTIVE'",
+    ];
+    $enrollmentParams = $scopeParams;
+    if (isset($_GET['school_year_id'])) {
+        $enrollmentConditions[] = 'e.school_year_id = :enrollment_school_year_id';
+        $enrollmentParams[':enrollment_school_year_id'] = $_GET['school_year_id'];
+    }
+
     $enrollmentStmt = $pdo->prepare(
         'SELECT
             e.id AS enrollment_id,
@@ -101,12 +112,10 @@ if ($method === 'GET') {
          INNER JOIN classes c ON c.id = e.class_id
          INNER JOIN school_years sy ON sy.id = e.school_year_id
          ' . $scopeSql . '
-         WHERE e.status = \'ACTIVE\'
-           AND s.status = \'ACTIVE\'
-           AND c.status = \'ACTIVE\'
+         WHERE ' . implode(' AND ', $enrollmentConditions) . '
          ORDER BY sy.start_date DESC, c.name ASC, s.last_name ASC, s.first_name ASC'
     );
-    $enrollmentStmt->execute($scopeParams);
+    $enrollmentStmt->execute($enrollmentParams);
     $enrollments = $enrollmentStmt->fetchAll();
 
     echo json_encode([

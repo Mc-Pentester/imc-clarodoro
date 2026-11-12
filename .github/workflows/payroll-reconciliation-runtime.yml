@@ -43,12 +43,37 @@ jobs:
           set -euo pipefail
           DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
           psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
-          php database/migrate.php --apply
           psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles(id,name) VALUES
             ('00000000-0000-0000-0000-000000008001','PDG'),
             ('00000000-0000-0000-0000-000000008002','Autre')
           ON CONFLICT (id) DO NOTHING;
+          SQL
+          php database/migrate.php --apply
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $permissions$
+          DECLARE pdg_id UUID; other_id UUID;
+          BEGIN
+            SELECT id INTO pdg_id FROM roles WHERE name='PDG';
+            SELECT id INTO other_id FROM roles WHERE name='Autre';
+            IF (SELECT COUNT(*) FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                WHERE rp.role_id=pdg_id AND p.name IN ('paies.read','paies.create','paies.update','paies.reconcile')) <> 4
+              THEN RAISE EXCEPTION 'PDG must receive read/create/update/reconcile payroll permissions from migrations'; END IF;
+            IF EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                       WHERE rp.role_id=other_id AND p.name IN ('paies.read','paies.create','paies.update','paies.reconcile'))
+              THEN RAISE EXCEPTION 'Payroll permissions leaked to another role'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                           WHERE rp.role_id=pdg_id AND p.name='whatsapp.message.send')
+              THEN RAISE EXCEPTION 'PDG lacks WhatsApp send permission'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
+                           WHERE rp.role_id=pdg_id AND p.name='whatsapp.consent.read')
+              THEN RAISE EXCEPTION 'PDG lacks WhatsApp consent read permission'; END IF;
+            IF (SELECT COUNT(*) FROM role_permissions rp WHERE rp.role_id=pdg_id) <>
+               (SELECT COUNT(*) FROM permissions)
+              THEN RAISE EXCEPTION 'PDG must have every permission registered in the application'; END IF;
+          END $permissions$;
+          SQL
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO users(id,username,password_hash,role_id,status) VALUES
             ('00000000-0000-0000-0000-000000008011','reconcile-runtime',crypt('Reconcile-Test-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000008001','ACTIVE'),
             ('00000000-0000-0000-0000-000000008012','reconcile-other',crypt('Reconcile-Other-2026!',gen_salt('bf')),'00000000-0000-0000-0000-000000008002','ACTIVE')
@@ -68,7 +93,7 @@ jobs:
           ON CONFLICT (name) DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000008001',id FROM permissions
-          WHERE name IN ('paies.read','paies.create','paies.update','paies.reconcile','eleves.read','finances.read','personnel.read','badge.read','resultats.read')
+          WHERE name IN ('eleves.read','finances.read','personnel.read','badge.read','resultats.read')
           ON CONFLICT DO NOTHING;
           INSERT INTO role_permissions(role_id,permission_id)
           SELECT '00000000-0000-0000-0000-000000008002',id FROM permissions
@@ -79,10 +104,41 @@ jobs:
       - name: PHP and UI JavaScript syntax
         run: |
           set -euo pipefail
+          php -l api/payroll/index.php
           php -l api/payroll/reconcile.php
+          php -l private-pages/PDG.php
+          php -l private-pages/payroll.php
+          php -l secure-page.php
+          php -l router.php
+          node --check js/whatsapp-menu.js
           python3 - <<'PY'
           import re
           from pathlib import Path
+          pdg = Path("private-pages/PDG.php").read_text(encoding="utf-8")
+          required = [
+              "Générer le rapport de paie", "Exporter en CSV",
+              "function genererRapportPaies()", "function exporterRapportPaiesCSV()",
+              "Impossible de charger les paies depuis PostgreSQL",
+              "Le total net représente la masse salariale nette prévue/déclarée",
+          ]
+          menu = Path("private-pages/PDG.php").read_text(encoding="utf-8")
+          whatsapp = Path("js/whatsapp-menu.js").read_text(encoding="utf-8")
+          secure = Path("secure-page.php").read_text(encoding="utf-8")
+          router = Path("router.php").read_text(encoding="utf-8")
+          if 'class="no-print menu-principal"' not in menu:
+              raise SystemExit("PDG navigation is not registered for the WhatsApp action")
+          if "Envoyer un message WhatsApp" not in whatsapp or '/whatsapp-send.html' not in whatsapp:
+              raise SystemExit("PDG WhatsApp send button contract missing")
+          if "'whatsapp-send.html'" not in secure or "'/whatsapp-send.html'" not in router:
+              raise SystemExit("WhatsApp page is not routed through server-side authorization")
+          missing = [item for item in required if item not in pdg]
+          if missing:
+              raise SystemExit("Payroll UI/report contract missing: " + ", ".join(missing))
+          scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", pdg, re.I | re.S) if s.strip()]
+          if not scripts:
+              raise SystemExit("No inline JavaScript found in private-pages/PDG.php")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/pdg-payroll-{i}.js").write_text(script, encoding="utf-8")
           html = Path("private-pages/payroll-recovery.php").read_text(encoding="utf-8")
           scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", html, re.I | re.S) if s.strip()]
           if not scripts:
@@ -90,7 +146,7 @@ jobs:
           for i, script in enumerate(scripts):
               Path(f"/tmp/payroll-recovery-{i}.js").write_text(script, encoding="utf-8")
           PY
-          for file in /tmp/payroll-recovery-*.js; do node --check "$file"; done
+          for file in /tmp/pdg-payroll-*.js /tmp/payroll-recovery-*.js; do node --check "$file"; done
 
       - name: Start API
         run: |
@@ -114,7 +170,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           BASE='http://127.0.0.1:8090'
-          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' )
+          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'payroll.html|<title>Gestion des paies — Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' 'whatsapp-send.html|<title>WhatsApp — message manuel | IMC-Clarodoro</title>' )
           for item in "${pages[@]}"; do
             page="${item%%|*}"
             marker="${item#*|}"
@@ -141,6 +197,7 @@ jobs:
           OTHER_COOKIE='/tmp/page-protection-other.cookies'
           curl -fsS -c "$OTHER_COOKIE" -b "$OTHER_COOKIE" -H 'Content-Type: application/json' -d '{"username":"reconcile-other","password":"Reconcile-Other-2026!"}' "$BASE/api/auth/login.php" >/tmp/page-protection-other-login.json
           test "$(curl -sS -o /tmp/page-protection-denied.html -w '%{http_code}' -b "$OTHER_COOKIE" "$BASE/PDG.html")" = '403'
+          test "$(curl -sS -o /tmp/whatsapp-protection-denied.html -w '%{http_code}' -b "$OTHER_COOKIE" "$BASE/whatsapp-send.html")" = '403'
 
           # Simule une session expirée dans le stockage de sessions PHP du serveur de test.
           SESSION_ID="$(awk '$6 == "IMC_SESSION" {print $7}' "$PDG_COOKIE" | tail -n 1)"
@@ -173,6 +230,32 @@ jobs:
           test -n "$PAYROLL_ID"
           test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$PAYROLL_ID'")" = '1050.00'
           test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM payroll_reconciliation_audit WHERE payroll_entry_id='$PAYROLL_ID'")" = '1'
+
+          PAYROLL_LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/payroll/index.php?school_year_label=2026-2027")"
+          printf '%s' "$PAYROLL_LIST" | php -r '$d=json_decode(stream_get_contents(STDIN),true); $p=array_values(array_filter($d["payroll"]??[],fn($x)=>($x["id"]??"")===$argv[1])); if(count($p)!==1 || (float)$p[0]["net_amount"]!==1050.0) exit(1);' "$PAYROLL_ID"
+          echo 'PAYROLL POSTGRESQL READ/DISPLAY API: PASS'
+
+          # Teste le flux de la page payroll.html : création puis mise à jour sans doublon.
+          ENTRY_PAYLOAD='{"staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"2026-2027","month":11,"base":1200,"bonuses":100,"deductions":50,"status":"PARTIAL"}'
+          ENTRY_CREATE_STATUS="$(curl -sS -o /tmp/payroll-entry-create.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$ENTRY_PAYLOAD" "$BASE/api/payroll/index.php")"
+          test "$ENTRY_CREATE_STATUS" = '201'
+          ENTRY_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-entry-create.json"),true); echo $d["payroll"]["id"]??"";')"
+          test -n "$ENTRY_ID"
+          test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$ENTRY_ID'")" = '1250.00'
+
+          ENTRY_UPDATE_PAYLOAD='{"staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"2026-2027","month":11,"base":1300,"bonuses":100,"deductions":50,"status":"PAID"}'
+          ENTRY_UPDATE_STATUS="$(curl -sS -o /tmp/payroll-entry-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$ENTRY_UPDATE_PAYLOAD" "$BASE/api/payroll/index.php")"
+          test "$ENTRY_UPDATE_STATUS" = '200'
+          test "$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-entry-update.json"),true); echo $d["payroll"]["id"]??"";')" = "$ENTRY_ID"
+          test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$ENTRY_ID'")" = '1350.00'
+
+          PAYROLL_OTHER_COOKIE='/tmp/payroll-other.cookies'
+          PAYROLL_OTHER_LOGIN="$(curl -fsS -c "$PAYROLL_OTHER_COOKIE" -b "$PAYROLL_OTHER_COOKIE" -H 'Content-Type: application/json' -d '{"username":"reconcile-other","password":"Reconcile-Other-2026!"}' "$BASE/api/auth/login.php")"
+          PAYROLL_OTHER_CSRF="$(printf '%s' "$PAYROLL_OTHER_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$PAYROLL_OTHER_CSRF"
+          OTHER_CREATE_STATUS="$(curl -sS -o /tmp/payroll-entry-denied.json -w '%{http_code}' -c "$PAYROLL_OTHER_COOKIE" -b "$PAYROLL_OTHER_COOKIE" -X POST -H "X-CSRF-Token: $PAYROLL_OTHER_CSRF" -H 'Content-Type: application/json' -d "$ENTRY_PAYLOAD" "$BASE/api/payroll/index.php")"
+          test "$OTHER_CREATE_STATUS" = '403'
+          echo 'PAYROLL CREATE/UPDATE AND ROLE AUTHORIZATION: PASS'
 
           REIMPORT_STATUS="$(curl -sS -o /tmp/reconcile-again.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/payroll/reconcile.php")"
           test "$REIMPORT_STATUS" = '200'

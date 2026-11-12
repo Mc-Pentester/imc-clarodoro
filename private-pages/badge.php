@@ -925,38 +925,31 @@ function normaliserClasse(classe){
 
 
 /* =========================
-   CLASSES PAR DÉFAUT
-========================= */
-
-const classesParDefaut = [
-
-    "1ère Kind",
-    "2ème Kind",
-    "3ème Kind",
-
-    "1ère A.F.",
-    "2ème A.F.",
-    "3ème A.F.",
-    "4ème A.F.",
-    "5ème A.F.",
-    "6ème A.F.",
-    "7ème A.F.",
-    "8ème A.F.",
-    "9ème A.F."
-
-];
-
-
-/* =========================
    AFFICHER LES CLASSES
 ========================= */
 
 async function afficherClasses(){
 
+    let classesReelles = [];
     try {
         await chargerEleves();
-    } catch (_) {
+        const response = await fetch("/api/student-enrollment-options/index.php", {
+            method: "GET",
+            credentials: "same-origin",
+            headers: { "Accept": "application/json" },
+            cache: "no-store"
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.success || !Array.isArray(payload.classes)) {
+            throw new Error(payload.error || "Impossible de charger les classes depuis PostgreSQL.");
+        }
+        classesReelles = payload.classes
+            .filter(item => item && item.id && item.name)
+            .map(item => String(item.name));
+    } catch (error) {
         document.getElementById("listeClasses").style.display = "block";
+        document.getElementById("boutonsClasses").textContent =
+            error.message || "Les classes PostgreSQL sont indisponibles.";
         return;
     }
 
@@ -993,22 +986,7 @@ async function afficherClasses(){
     }
 
 
-    const classesReelles =
-        eleves
-        .map(eleve =>
-            obtenirClasse(eleve)
-        )
-        .filter(classe =>
-            classe !== ""
-        );
-
-
-    const toutesLesClasses = [
-
-        ...classesParDefaut,
-        ...classesReelles
-
-    ];
+    const toutesLesClasses = classesReelles;
 
 
     const classesUniques = [];

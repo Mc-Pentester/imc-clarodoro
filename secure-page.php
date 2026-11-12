@@ -18,7 +18,11 @@ $pages = [
     'personnel.html' => ['public' => 'personnel.html', 'file' => 'personnel.php', 'permission' => 'personnel.read', 'role' => null],
     'badge.html' => ['public' => 'badge.html', 'file' => 'badge.php', 'permission' => 'badge.read', 'role' => null],
     'payroll-recovery.html' => ['public' => 'payroll-recovery.html', 'file' => 'payroll-recovery.php', 'permission' => 'paies.reconcile', 'role' => null],
+    'expense-recovery.html' => ['public' => 'expense-recovery.html', 'file' => 'expense-recovery.php', 'permission' => 'depenses.reconcile', 'role' => null],
     'resultats.html' => ['public' => 'resultats.html', 'file' => 'resultats.php', 'permission' => 'resultats.read', 'role' => null],
+    'classes.html' => ['public' => 'classes.html', 'file' => 'classes.php', 'permission' => 'classes.manage', 'role' => 'PDG'],
+    'payroll.html' => ['public' => 'payroll.html', 'file' => 'payroll.php', 'permission' => 'paies.read', 'role' => 'PDG'],
+    'whatsapp-send.html' => ['public' => 'whatsapp-send.html', 'file' => 'whatsapp-send.php', 'permission' => 'whatsapp.message.send', 'role' => 'PDG'],
     'vacations.html' => ['public' => 'vacations.html', 'file' => 'vacations.php', 'permission' => 'vacances.read', 'role' => null],
 ];
 
@@ -71,8 +75,19 @@ if (!is_file($privateFile)) {
 }
 
 ob_start();
-require $privateFile;
-$html = ob_get_clean();
+try {
+    require $privateFile;
+    $html = ob_get_clean();
+} catch (Throwable $error) {
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log('IMC protected page render failed [' . $requestedPage . ']: ' . $error);
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    exit('Erreur interne lors du chargement de la page. Consultez le journal serveur.');
+}
 
 // Ajoute l'accès WhatsApp après le rendu de toute page protégée sans modifier
 // les pages métier. Le script décide lui-même de l'afficher uniquement si

@@ -12,27 +12,51 @@ if ($method === 'GET') {
     $pdo = getDatabaseConnection();
     $user = requirePermission($pdo, 'eleves.read');
 
-    // F-03: le schéma V1 ne relie pas encore users aux enseignants/classes.
-    // Tant que ce périmètre serveur n'existe pas, une lecture globale par un
-    // utilisateur non-PDG serait une fuite inter-classe. On échoue fermement
-    // plutôt que de retourner tous les élèves.
-    if ($user['role_name'] === 'PDG') {
+    // Les rôles qui disposent d'un droit de création ou de modification
+    // des dossiers peuvent consulter la liste complète. Les comptes en
+    // lecture seule restent strictement limités aux classes qui leur sont
+    // affectées côté serveur.
+    $manageScope = $pdo->prepare(
+        "SELECT COUNT(*)
+         FROM role_permissions rp
+         INNER JOIN permissions p ON p.id = rp.permission_id
+         WHERE rp.role_id = :role_id
+           AND p.name IN ('eleves.create', 'eleves.update')"
+    );
+    $manageScope->execute([':role_id' => $user['role_id']]);
+    $canManageStudentRecords = $user['role_name'] === 'PDG'
+        || (int) $manageScope->fetchColumn() > 0;
+
+    if ($canManageStudentRecords) {
         $stmt = $pdo->prepare(
             'SELECT
-                id,
-                matricule,
-                last_name,
-                first_name,
-                date_of_birth,
-                sex,
-                address,
-                phone,
-                profile_data,
-                status,
-                created_at,
-                updated_at
-             FROM students
-             ORDER BY created_at DESC, id DESC'
+                s.id,
+                s.matricule,
+                s.last_name,
+                s.first_name,
+                s.date_of_birth,
+                s.sex,
+                s.address,
+                s.phone,
+                s.profile_data,
+                s.status,
+                s.created_at,
+                s.updated_at,
+                active_enrollment.class_id,
+                active_enrollment.school_year_id,
+                active_enrollment.class_name,
+                active_enrollment.school_year_label
+             FROM students s
+             LEFT JOIN LATERAL (
+                SELECT e.class_id, e.school_year_id, c.name AS class_name, sy.label AS school_year_label
+                FROM enrollments e
+                INNER JOIN classes c ON c.id = e.class_id
+                INNER JOIN school_years sy ON sy.id = e.school_year_id
+                WHERE e.student_id = s.id AND e.status = \'ACTIVE\'
+                ORDER BY sy.start_date DESC, e.created_at DESC, e.id DESC
+                LIMIT 1
+             ) active_enrollment ON TRUE
+             ORDER BY s.created_at DESC, s.id DESC'
         );
     } else {
         // F-03: le périmètre est déterminé exclusivement par la relation
@@ -49,7 +73,12 @@ if ($method === 'GET') {
                 s.sex,
                 s.address,
                 s.phone,
-                s.profile_data->>'classe' AS class_name,
+                s.profile_data,
+                s.profile_data->>'photo' AS photo,
+                e.class_id,
+                e.school_year_id,
+                c.name AS class_name,
+                sy.label AS school_year_label,
                 s.status,
                 s.created_at,
                 s.updated_at
@@ -57,6 +86,8 @@ if ($method === 'GET') {
              INNER JOIN enrollments e
                 ON e.student_id = s.id
                AND e.status = :enrollment_status
+             INNER JOIN classes c ON c.id = e.class_id
+             INNER JOIN school_years sy ON sy.id = e.school_year_id
              INNER JOIN teacher_class_subjects tcs
                 ON tcs.class_id = e.class_id
                AND tcs.status = :assignment_status
@@ -202,6 +233,15 @@ elseif ($method === 'POST') {
         $profileData = $data['profile_data'];
     }
 
+    $classId = isset($data['class_id']) && is_string($data['class_id']) ? trim($data['class_id']) : '';
+    $schoolYearId = isset($data['school_year_id']) && is_string($data['school_year_id']) ? trim($data['school_year_id']) : '';
+    if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $classId)) {
+        apiError(422, 'Une classe valide est requise');
+    }
+    if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $schoolYearId)) {
+        apiError(422, 'Une année scolaire valide est requise');
+    }
+
     // Refuser les champs générés par le serveur
     $forbiddenFields = ['id', 'created_at', 'updated_at'];
     foreach ($forbiddenFields as $field) {
@@ -211,15 +251,30 @@ elseif ($method === 'POST') {
     }
 
     // Refuser les champs inconnus
-    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data'];
+    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data', 'class_id', 'school_year_id'];
     foreach (array_keys($data) as $field) {
         if (!in_array($field, $allowedFields, true)) {
             apiError(422, "Champ inconnu: $field");
         }
     }
 
-    // Insertion
+    // Student and academic enrollment are committed atomically.
     try {
+        $pdo->beginTransaction();
+        $referenceStmt = $pdo->prepare(
+            "SELECT c.id AS class_id, c.name AS class_name, sy.id AS school_year_id, sy.label AS school_year_label
+             FROM classes c CROSS JOIN school_years sy
+             WHERE c.id = :class_id AND c.status = 'ACTIVE'
+               AND sy.id = :school_year_id AND sy.status = 'ACTIVE'
+             LIMIT 1"
+        );
+        $referenceStmt->execute([':class_id' => $classId, ':school_year_id' => $schoolYearId]);
+        $references = $referenceStmt->fetch();
+        if (!$references) {
+            $pdo->rollBack();
+            apiError(422, 'La classe ou l’année scolaire sélectionnée est indisponible ou inactive');
+        }
+
         $stmt = $pdo->prepare(
             'INSERT INTO students (
                 matricule,
@@ -269,6 +324,20 @@ elseif ($method === 'POST') {
         ]);
 
         $student = $stmt->fetch();
+        $enrollmentStmt = $pdo->prepare(
+            "INSERT INTO enrollments (student_id, class_id, school_year_id, status)
+             VALUES (:student_id, :class_id, :school_year_id, 'ACTIVE')"
+        );
+        $enrollmentStmt->execute([
+            ':student_id' => $student['id'],
+            ':class_id' => $classId,
+            ':school_year_id' => $schoolYearId,
+        ]);
+        $student['class_id'] = $references['class_id'];
+        $student['school_year_id'] = $references['school_year_id'];
+        $student['class_name'] = $references['class_name'];
+        $student['school_year_label'] = $references['school_year_label'];
+        $pdo->commit();
         if (isset($student['profile_data']) && is_string($student['profile_data'])) {
             $decoded = json_decode($student['profile_data'], true);
             $student['profile_data'] = is_array($decoded) ? $decoded : [];
@@ -281,8 +350,12 @@ elseif ($method === 'POST') {
             'student' => $student,
         ], JSON_UNESCAPED_UNICODE);
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         if (str_contains($e->getMessage(), 'students_matricule_unique')) {
             apiError(409, 'Matricule déjà utilisé');
+        }
+        if (str_contains($e->getMessage(), 'enrollments_one_active_per_student_year')) {
+            apiError(409, 'Cet élève possède déjà une inscription active pour cette année scolaire');
         }
         apiError(500, 'Erreur interne du serveur');
     }

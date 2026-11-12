@@ -140,7 +140,8 @@
       vacances: ["read", "create", "update", "delete"],
       badge: ["read", "create", "print"],
       paies: ["read", "create", "update", "reconcile"],
-      depenses: ["read", "create", "delete"],
+      depenses: ["read", "create", "delete", "reconcile"],
+      classes: ["manage"],
       presences: ["read", "create", "update"],
       vault: ["update"]
     },
@@ -164,6 +165,9 @@
   function hasPermission(permission) {
     const user = currentUser();
     if (!user) return false;
+    // Le PDG dispose de tous les droits fonctionnels de l'application.
+    // Les validations à double contrôle restent imposées par les API métier.
+    if (String(user.role).toUpperCase() === "PDG") return true;
     const parts = permission.split(".");
     if (parts.length !== 2) { console.warn("Format de permission invalide:", permission); return false; }
     const rolePermissions = PERMISSION_MATRIX[user.role];

@@ -128,19 +128,54 @@ $taskName = 'IMC-Clarodaro-PHP-Server'
 $postgresServiceAccount = 'NT AUTHORITY\NETWORK SERVICE'
 $phpTaskAccount = 'NT AUTHORITY\LOCAL SERVICE'
 $postgresRuntimeRoot = Join-Path $programDataRoot 'runtime\postgresql'
+$postgresRuntimeSource = Join-Path $AppRoot 'installer\postgresql-runtime'
 $pgBin = Join-Path $postgresRuntimeRoot 'bin'
 $pgCtl = Join-Path $pgBin 'pg_ctl.exe'
 $initdb = Join-Path $pgBin 'initdb.exe'
 $psql = Join-Path $pgBin 'psql.exe'
 $pgIsReady = Join-Path $pgBin 'pg_isready.exe'
+$postgres = Join-Path $pgBin 'postgres.exe'
 $php = Join-Path $AppRoot 'runtime\php\php.exe'
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Cette configuration doit être exécutée en administrateur.'
 }
-foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $php)) {
+
+# PostgreSQL est d'abord livré dans le dossier de staging de l'application.
+# Le déploiement vers ProgramData est explicite afin de ne pas dépendre du
+# traitement des destinations CommonAppData par Inno Setup.
+if (-not (Test-Path -LiteralPath $postgresRuntimeSource -PathType Container)) {
+    throw "Payload PostgreSQL absent de l'installation : $postgresRuntimeSource"
+}
+$runtimeSourceBin = Join-Path $postgresRuntimeSource 'bin'
+foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe')) {
+    $sourceFile = Join-Path $runtimeSourceBin $runtimeFile
+    if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
+        throw "Binaire PostgreSQL absent du payload embarqué : $sourceFile"
+    }
+}
+New-Item -ItemType Directory -Path $postgresRuntimeRoot -Force | Out-Null
+Write-Step "Déploiement du runtime PostgreSQL : $postgresRuntimeSource -> $postgresRuntimeRoot"
+$robocopyOutput = & robocopy.exe $postgresRuntimeSource $postgresRuntimeRoot /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP 2>&1
+$robocopyExitCode = $LASTEXITCODE
+if ($robocopyExitCode -ge 8) {
+    throw "Copie du runtime PostgreSQL vers ProgramData échouée (robocopy $robocopyExitCode) : $($robocopyOutput -join ' ')"
+}
+foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe')) {
+    $sourceFile = Join-Path $runtimeSourceBin $runtimeFile
+    $targetFile = Join-Path $pgBin $runtimeFile
+    if (-not (Test-Path -LiteralPath $targetFile -PathType Leaf)) {
+        throw "Binaire PostgreSQL non déployé dans ProgramData : $targetFile"
+    }
+    if ((Get-Sha256Hex -Path $sourceFile) -ne (Get-Sha256Hex -Path $targetFile)) {
+        throw "Vérification SHA-256 du runtime PostgreSQL échouée après déploiement : $targetFile"
+    }
+}
+Write-Step 'Runtime PostgreSQL déployé et vérifié (5 exécutables).'
+
+foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $postgres, $php)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "Runtime requis absent : $required"
+        throw "Runtime requis absent après déploiement : $required"
     }
 }
 if ($PostgreSqlPort -lt 1024 -or $PostgreSqlPort -gt 65535 -or $HttpPort -lt 1024 -or $HttpPort -gt 65535) {
@@ -640,10 +675,41 @@ if ($hasProtectedConfig) {
 $taskEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } else { '' }
 if ($task) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    $stopDeadline = (Get-Date).AddSeconds(20)
+
+    # Stopper uniquement un éventuel processus PHP orphelin appartenant à
+    # cette installation et à ce port. Ne jamais tuer un autre serveur PHP.
+    $expectedPhp = [System.IO.Path]::GetFullPath($php)
+    $expectedRoot = [System.IO.Path]::GetFullPath($AppRoot)
+    $ownedPhp = Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $executableMatches = $false
+            if (-not [string]::IsNullOrWhiteSpace([string]$_.ExecutablePath)) {
+                try {
+                    $candidate = [System.IO.Path]::GetFullPath([string]$_.ExecutablePath)
+                    $executableMatches = [string]::Equals($candidate, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
+                } catch { $executableMatches = $false }
+            }
+            $commandLine = [string]$_.CommandLine
+            if (-not $executableMatches -and -not [string]::IsNullOrWhiteSpace($commandLine)) {
+                $normalizedCommandLine = $commandLine.Replace('/', '\')
+                $normalizedExpectedPhp = $expectedPhp.Replace('/', '\')
+                $executableMatches = $normalizedCommandLine.IndexOf($normalizedExpectedPhp, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            }
+            $executableMatches -and
+                $commandLine -like "*-S 0.0.0.0:$HttpPort*" -and
+                $commandLine -like "*$expectedRoot*"
+        }
+    foreach ($process in $ownedPhp) {
+        Write-Step "Arrêt du processus PHP Clarodaro orphelin PID=$($process.ProcessId)."
+        Stop-Process -Id ([int]$process.ProcessId) -Force -ErrorAction Stop
+    }
+
+    $stopDeadline = (Get-Date).AddSeconds(30)
     while (-not (Test-PortAvailable $HttpPort) -and (Get-Date) -lt $stopDeadline) { Start-Sleep -Seconds 1 }
     if (-not (Test-PortAvailable $HttpPort)) {
-        throw "L'ancien serveur Clarodaro n'a pas libéré le port $HttpPort. Aucun nouveau serveur n'a été lancé."
+        $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue | Select-Object -First 1
+        $owner = if ($listener) { Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue } else { $null }
+        throw "Le port HTTP $HttpPort reste occupé après l'arrêt de la tâche. PID=$($listener.OwningProcess), processus=$($owner.Name), chemin=$($owner.ExecutablePath). Aucun processus tiers ne sera arrêté."
     }
 }
 
@@ -662,9 +728,25 @@ $principal = New-ScheduledTaskPrincipal -UserId $phpTaskAccount -LogonType Servi
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
-$httpDeadline = (Get-Date).AddSeconds(35)
-while ((Test-PortAvailable $HttpPort) -and (Get-Date) -lt $httpDeadline) { Start-Sleep -Seconds 1 }
-if (Test-PortAvailable $HttpPort) {
+
+# Attendre une réponse HTTP réelle de Clarodaro, pas seulement un port TCP
+# qui s'ouvre. Le serveur peut démarrer alors que la tâche est encore Running.
+$httpDeadline = (Get-Date).AddSeconds(60)
+$httpReady = $false
+$lastHttpError = ''
+do {
+    try {
+        Test-ClarodaroHttpEndpoint -Port $HttpPort -ExpectedPhpPath $php
+        $httpReady = $true
+        break
+    }
+    catch {
+        $lastHttpError = $_.Exception.Message
+        Start-Sleep -Seconds 2
+    }
+} while ((Get-Date) -lt $httpDeadline)
+
+if (-not $httpReady) {
     $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
     $taskState = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
     Write-Step "Échec démarrage PHP : état tâche=$($taskState.State), LastTaskResult=$($taskInfo.LastTaskResult), LastRunTime=$($taskInfo.LastRunTime)"
@@ -688,12 +770,11 @@ if (Test-PortAvailable $HttpPort) {
             Get-Content -LiteralPath $phpOutputLog -Tail 100 | ForEach-Object { Write-Step "PHP process: $_" }
         }
     }
-    throw "Le serveur PHP n'a pas démarré sur le port $HttpPort (LastTaskResult=$($taskInfo.LastTaskResult))."
+    throw "Le serveur PHP Clarodaro n'a pas fourni une réponse HTTP valide sur le port $HttpPort après 60 secondes (LastTaskResult=$($taskInfo.LastTaskResult)). Dernière erreur HTTP : $lastHttpError"
 }
 
-# Ne pas confondre un simple port TCP ouvert avec le serveur web Clarodaro.
-# EDB ou un autre service peut répondre sur 8080 sans servir l'application.
-Test-ClarodaroHttpEndpoint -Port $HttpPort -ExpectedPhpPath $php
+# La boucle précédente a déjà confirmé l'identité du processus et une réponse HTTP
+# Clarodaro. Aucun second contrôle ponctuel n'est nécessaire ici.
 
 try {
     if (-not (Get-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -ErrorAction SilentlyContinue)) {

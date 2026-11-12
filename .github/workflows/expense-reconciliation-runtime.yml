@@ -1,0 +1,213 @@
+name: Expense reconciliation and PostgreSQL schema contract
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  expense-reconciliation:
+    name: Controlled expense import, audit, RBAC and schema contract
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP PostgreSQL and client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Build final schema and seed isolated accounts
+        run: |
+          set -euo pipefail
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles(id,name) VALUES
+            ('00000000-0000-4000-8000-000000008001','PDG'),
+            ('00000000-0000-4000-8000-000000008002','Autre')
+          ON CONFLICT (name) DO NOTHING;
+          INSERT INTO users(id,username,password_hash,role_id,status) VALUES
+            ('00000000-0000-4000-8000-000000008011','expense-reconcile-runtime',crypt('Expense-Reconcile-2026!',gen_salt('bf')),'00000000-0000-4000-8000-000000008001','ACTIVE'),
+            ('00000000-0000-4000-8000-000000008012','expense-reconcile-readonly',crypt('Expense-Readonly-2026!',gen_salt('bf')),'00000000-0000-4000-8000-000000008002','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO school_years(id,label,start_date,end_date,status) VALUES
+            ('00000000-0000-4000-8000-000000008021','2025-2026','2025-09-01','2026-07-15','ACTIVE'),
+            ('00000000-0000-4000-8000-000000008022','2026-2027','2026-09-01','2027-07-15','PLANNED')
+          ON CONFLICT (id) DO NOTHING;
+          SQL
+          php database/migrate.php --apply
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema-contract.sql
+          psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO role_permissions(role_id,permission_id)
+          SELECT '00000000-0000-4000-8000-000000008001',id FROM permissions
+          WHERE name IN ('depenses.reconcile','annees.read')
+          ON CONFLICT DO NOTHING;
+          INSERT INTO expenses(id,school_year_id,description,amount,expense_date,created_by,legacy_id)
+          VALUES ('00000000-0000-4000-8000-000000008031','00000000-0000-4000-8000-000000008021','Dépense déjà importée',75.25,'2025-10-02','00000000-0000-4000-8000-000000008011','old-expense-002');
+          INSERT INTO expenses(id,school_year_id,description,amount,expense_date,created_by,legacy_id)
+          VALUES ('00000000-0000-4000-8000-000000008032','00000000-0000-4000-8000-000000008022','Dépense autre année',25.00,'2026-10-03','00000000-0000-4000-8000-000000008011','cross-year-expense');
+          SQL
+
+      - name: Reject hardcoded academic class catalogs in active pages
+        run: |
+          set -euo pipefail
+          if grep -nF -e '1ère Kind' -e '2ème Kind' -e '3ème Kind' -e '1ère A.F.' -e 'classesParDefaut' -e 'const classes = [' private-pages/resultats.php private-pages/badge.php; then
+            echo 'FAIL: class catalog must come from PostgreSQL'
+            exit 1
+          fi
+          grep -q '/api/academic-structure/index.php' private-pages/resultats.php
+          grep -q '/api/student-enrollment-options/index.php' private-pages/badge.php
+
+      - name: PHP and embedded JavaScript syntax
+        run: |
+          set -euo pipefail
+          php -l api/expenses/reconcile.php
+          php -l private-pages/expense-recovery.php
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          page = Path("private-pages/expense-recovery.php").read_text(encoding="utf-8")
+          scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", page, re.I | re.S) if s.strip()]
+          if not scripts:
+              raise SystemExit("No expense recovery JavaScript found")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/expense-recovery-{i}.js").write_text(script, encoding="utf-8")
+          print(f"Extracted {len(scripts)} inline scripts")
+          PY
+          for file in /tmp/expense-recovery-*.js; do node --check "$file"; done
+          if grep -nE 'localStorage\.(setItem|removeItem)' private-pages/expense-recovery.php; then
+            echo 'FAIL: expense recovery page must never modify local source'
+            exit 1
+          fi
+
+      - name: Validate academic structure management code
+        run: |
+          set -euo pipefail
+          php -l api/academic-structure/index.php
+          php -l private-pages/classes.php
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          page = Path("private-pages/classes.php").read_text(encoding="utf-8")
+          scripts = [s for s in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script>", page, re.I | re.S) if s.strip()]
+          if not scripts:
+              raise SystemExit("No inline class-management JavaScript found")
+          for i, script in enumerate(scripts):
+              Path(f"/tmp/classes-{i}.js").write_text(script, encoding="utf-8")
+          PY
+          for file in /tmp/classes-*.js; do node --check "$file"; done
+          grep -q '/api/academic-structure/index.php' private-pages/resultats.php
+          grep -q 'classes.manage' secure-page.php
+          grep -q 'Niveaux et classes' private-pages/PDG.php
+
+      - name: Start PHP API
+        run: |
+          set -euo pipefail
+          nohup php -S 127.0.0.1:8090 -t . >/tmp/expense-reconcile-api.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null 2>&1 && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8090/api/health.php >/dev/null
+
+      - name: Prove academic structure CRUD, CSRF and RBAC
+        run: |
+          set -Eeuo pipefail
+          BASE='http://127.0.0.1:8090'
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          COOKIE='/tmp/academic-structure.cookies'
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -d '{"username":"expense-reconcile-runtime","password":"Expense-Reconcile-2026!"}' "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+          NO_CSRF="$(curl -sS -o /tmp/academic-no-csrf.json -w '%{http_code}' -X POST -b "$COOKIE" -H 'Content-Type: application/json' -d '{"resource":"levels","code":"CI-NO-CSRF","name":"No CSRF"}' "$BASE/api/academic-structure/index.php?resource=levels")"
+          test "$NO_CSRF" = '403'
+          LEVEL_STATUS="$(curl -sS -o /tmp/academic-level.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"levels","code":"CI-LEVEL-01","name":"Niveau CI"}' "$BASE/api/academic-structure/index.php?resource=levels")"
+          test "$LEVEL_STATUS" = '201'
+          LEVEL_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/academic-level.json"),true); echo $d["level"]["id"]??"";')"
+          test -n "$LEVEL_ID"
+          CLASS_PAYLOAD="$(php -r 'echo json_encode(["resource"=>"classes","code"=>"CI-CLASS-01","name"=>"Classe CI","level_id"=>$argv[1],"status"=>"ACTIVE"]);' "$LEVEL_ID")"
+          CLASS_STATUS="$(curl -sS -o /tmp/academic-class.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$CLASS_PAYLOAD" "$BASE/api/academic-structure/index.php?resource=classes")"
+          test "$CLASS_STATUS" = '201'
+          CLASS_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/academic-class.json"),true); echo $d["class"]["id"]??"";')"
+          test -n "$CLASS_ID"
+          UPDATE_STATUS="$(curl -sS -o /tmp/academic-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X PATCH -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"classes","name":"Classe CI modifiée"}' "$BASE/api/academic-structure/index.php?resource=classes&id=$CLASS_ID")"
+          test "$UPDATE_STATUS" = '200'
+          LEVEL_UPDATE="$(curl -sS -o /tmp/academic-level-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X PATCH -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"levels","name":"Niveau CI modifié"}' "$BASE/api/academic-structure/index.php?resource=levels&id=$LEVEL_ID")"
+          test "$LEVEL_UPDATE" = '200'
+          ARCHIVE_STATUS="$(curl -sS -o /tmp/academic-archive.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X PATCH -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"classes","status":"ARCHIVED"}' "$BASE/api/academic-structure/index.php?resource=classes&id=$CLASS_ID")"
+          test "$ARCHIVE_STATUS" = '200'
+          test "$(psql "$DB" -Atqc "SELECT status FROM classes WHERE id='$CLASS_ID'")" = 'ARCHIVED'
+          test "$(psql "$DB" -Atqc "SELECT name FROM levels WHERE id='$LEVEL_ID'")" = 'Niveau CI modifié'
+          READ_COOKIE='/tmp/academic-readonly.cookies'
+          curl -fsS -c "$READ_COOKIE" -b "$READ_COOKIE" -H 'Content-Type: application/json' -d '{"username":"expense-reconcile-readonly","password":"Expense-Readonly-2026!"}' "$BASE/api/auth/login.php" >/dev/null
+          DENIED="$(curl -sS -o /tmp/academic-denied.json -w '%{http_code}' -b "$READ_COOKIE" "$BASE/api/academic-structure/index.php?resource=classes")"
+          test "$DENIED" = '403'
+          echo 'ACADEMIC STRUCTURE CRUD + ARCHIVE + CSRF + RBAC: PASS'
+
+      - name: Prove import, idempotency, conflict protection, audit, CSRF and RBAC
+        run: |
+          set -Eeuo pipefail
+          trap 'rc=$?; echo "::error::Expense reconciliation failed rc=$rc command=[$BASH_COMMAND]"; cat /tmp/expense-reconcile-api.log 2>/dev/null || true; exit $rc' ERR
+          BASE='http://127.0.0.1:8090'
+          DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+          COOKIE='/tmp/expense-reconcile.cookies'
+          LOGIN="$(curl -fsS -c "$COOKIE" -b "$COOKIE" -H 'Content-Type: application/json' -d '{"username":"expense-reconcile-runtime","password":"Expense-Reconcile-2026!"}' "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$CSRF"
+          PAYLOAD='{"source_year_label":"2025-2026","legacy_id":"local-expense-001","target_school_year_id":"00000000-0000-4000-8000-000000008021","description":"Fournitures scolaires","amount":1250.5,"expense_date":"2025-10-01"}'
+          NO_CSRF="$(curl -sS -o /tmp/expense-reconcile-no-csrf.json -w '%{http_code}' -X POST -b "$COOKIE" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/expenses/reconcile.php")"
+          test "$NO_CSRF" = '403'
+          CREATE_STATUS="$(curl -sS -o /tmp/expense-reconcile-create.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/expenses/reconcile.php")"
+          test "$CREATE_STATUS" = '201'
+          EXPENSE_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/expense-reconcile-create.json"),true); echo $d["expense_id"]??"";')"
+          test -n "$EXPENSE_ID"
+          REPEAT_STATUS="$(curl -sS -o /tmp/expense-reconcile-repeat.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/expenses/reconcile.php")"
+          test "$REPEAT_STATUS" = '200'
+          php -r '$d=json_decode(file_get_contents("/tmp/expense-reconcile-repeat.json"),true); if(empty($d["already_imported"]) || !empty($d["created"])) exit(1);'
+          CONFLICT_PAYLOAD='{"source_year_label":"2025-2026","legacy_id":"local-expense-001","target_school_year_id":"00000000-0000-4000-8000-000000008021","description":"Fournitures scolaires","amount":1251,"expense_date":"2025-10-01"}'
+          CONFLICT_STATUS="$(curl -sS -o /tmp/expense-reconcile-conflict.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$CONFLICT_PAYLOAD" "$BASE/api/expenses/reconcile.php")"
+          test "$CONFLICT_STATUS" = '409'
+          INVALID_DATE='{"source_year_label":"2025-2026","legacy_id":"local-expense-invalid","target_school_year_id":"00000000-0000-4000-8000-000000008021","description":"Date impossible","amount":10,"expense_date":"2025-02-30"}'
+          INVALID_STATUS="$(curl -sS -o /tmp/expense-reconcile-invalid.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$INVALID_DATE" "$BASE/api/expenses/reconcile.php")"
+          test "$INVALID_STATUS" = '422'
+          CROSS_YEAR='{"source_year_label":"2025-2026","legacy_id":"cross-year-expense","target_school_year_id":"00000000-0000-4000-8000-000000008021","description":"Dépense autre année","amount":25,"expense_date":"2026-10-03"}'
+          CROSS_YEAR_STATUS="$(curl -sS -o /tmp/expense-reconcile-cross-year.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$CROSS_YEAR" "$BASE/api/expenses/reconcile.php")"
+          test "$CROSS_YEAR_STATUS" = '409'
+          LEGACY_ROW='{"source_year_label":"2025-2026","legacy_id":"old-expense-002","target_school_year_id":"00000000-0000-4000-8000-000000008021","description":"Dépense déjà importée","amount":75.25,"expense_date":"2025-10-02"}'
+          LEGACY_STATUS="$(curl -sS -o /tmp/expense-reconcile-legacy.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$LEGACY_ROW" "$BASE/api/expenses/reconcile.php")"
+          test "$LEGACY_STATUS" = '200'
+          php -r '$d=json_decode(file_get_contents("/tmp/expense-reconcile-legacy.json"),true); if(!empty($d["created"]) || !empty($d["already_imported"])) exit(1);'
+          LIST="$(curl -fsS -b "$COOKIE" "$BASE/api/expenses/reconcile.php")"
+          printf '%s' "$LIST" | grep -q 'local-expense-001'
+          printf '%s' "$LIST" | grep -q 'old-expense-002'
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM expenses WHERE description='Fournitures scolaires'")" = '1'
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM expense_reconciliation_audit")" = '2'
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM expense_reconciliation_audit WHERE length(payload_hash)=64 AND length(source_key_hash)=64")" = '2'
+          test "$(psql "$DB" -Atqc "SELECT COUNT(*) FROM expenses WHERE id='$EXPENSE_ID' AND legacy_id ~ '^[0-9a-f]{64}$'")" = '1'
+          READ_COOKIE='/tmp/expense-reconcile-readonly.cookies'
+          curl -fsS -c "$READ_COOKIE" -b "$READ_COOKIE" -H 'Content-Type: application/json' -d '{"username":"expense-reconcile-readonly","password":"Expense-Readonly-2026!"}' "$BASE/api/auth/login.php" >/dev/null
+          DENIED="$(curl -sS -o /tmp/expense-reconcile-denied.json -w '%{http_code}' -b "$READ_COOKIE" "$BASE/api/expenses/reconcile.php")"
+          test "$DENIED" = '403'
+          echo 'EXPENSE RECONCILIATION + SCHEMA CONTRACT: PASS'

@@ -21,6 +21,8 @@ PAGES = {
     "badge.html": "private-pages/badge.php",
     "PDG.html": "private-pages/PDG.php",
     "payroll-recovery.html": "private-pages/payroll-recovery.php",
+    "classes.html": "private-pages/classes.php",
+    "payroll.html": "private-pages/payroll.php",
 }
 ASSET_EXTENSIONS = {
     ".css", ".js", ".mjs", ".png", ".jpg", ".jpeg", ".gif", ".svg",

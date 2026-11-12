@@ -411,7 +411,7 @@ th{
 
   <div class="annee-affichee">
     Année académique :
-    <span id="anneeAcademique">2026-2027</span>
+    <span id="anneeAcademique"></span>
   </div>
 </header>
 <header class="entete-ecole">
@@ -606,7 +606,7 @@ th{
 
     <div class="annee-affichee">
       Année académique :
-      <span id="anneeAcademiquePresence">2026-2027</span>
+      <span id="anneeAcademiquePresence"></span>
     </div>
 
     <br>
@@ -848,11 +848,8 @@ let personnelEnModification = null;
 let classePresenceSelectionnee = "";
 let elevePresenceSelectionne = null;
 
-const CLE_ELEVES = "imc_students";
-const CLE_PRESENCES = "imc_presences";
-const CLE_ANNEE = "imc_active_year";
-
-let anneeAcademique = "2026-2027";
+let anneeAcademique = "";
+let anneeAcademiqueId = "";
 
 
 /* =========================================================
@@ -872,6 +869,7 @@ document.addEventListener("DOMContentLoaded", async function(){
     };
     document.getElementById("sectionConnexion").classList.add("hidden");
     document.getElementById("interfacePersonnel").classList.remove("hidden");
+    await chargerAnneeAcademique();
     await chargerDonnees();
     afficherInformationsEnseignant();
     document.getElementById("anneeRapportMensuel").value = new Date().getFullYear();
@@ -888,6 +886,23 @@ document.addEventListener("DOMContentLoaded", async function(){
   }
 });
 
+
+async function chargerAnneeAcademique() {
+  const response = await fetch("/api/school-years/index.php", {
+    credentials: "same-origin", headers: { Accept: "application/json" }, cache: "no-store"
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.success || !Array.isArray(payload.schoolYears)) {
+    throw new Error(payload.error || "Impossible de charger les années scolaires depuis PostgreSQL.");
+  }
+  const years = payload.schoolYears.filter(year => year && year.status !== "ARCHIVED");
+  const active = years.find(year => year.status === "ACTIVE") || years[0];
+  if (!active) throw new Error("Aucune année scolaire n'est configurée dans PostgreSQL.");
+  anneeAcademique = String(active.label);
+  anneeAcademiqueId = String(active.id);
+  document.getElementById("anneeAcademique").textContent = anneeAcademique;
+  document.getElementById("anneeAcademiquePresence").textContent = anneeAcademique;
+}
 
 /* =========================================================
    VÉRIFICATION DU PERSONNEL
@@ -934,7 +949,7 @@ async function chargerDonnees(){
     afficherMessage("messagePersonnel", error.message || "Impossible de charger le personnel.", "erreur");
   }
   try {
-    const response = await fetch("/api/attendance/index.php", { method:"GET", credentials:"include", headers:{Accept:"application/json"} });
+    const response = await fetch("/api/attendance/index.php?school_year_id=" + encodeURIComponent(anneeAcademiqueId), { method:"GET", credentials:"same-origin", headers:{Accept:"application/json"}, cache:"no-store" });
     const payload = await response.json();
     if(!response.ok || !payload.success) throw new Error(payload.error || "Impossible de charger les présences.");
     attendanceEnrollments = Array.isArray(payload.enrollments) ? payload.enrollments : [];
