@@ -83,8 +83,8 @@ if ($task) {
             } catch { $pathMatches = $false }
         }
         if (-not $pathMatches -and -not [string]::IsNullOrWhiteSpace($processCommandLine)) {
-            $normalizedCommandLine = $processCommandLine.Replace('/', '\\')
-            $normalizedExpectedPhp = $expectedPhp.Replace('/', '\\')
+            $normalizedCommandLine = $processCommandLine.Replace('/', '\')
+            $normalizedExpectedPhp = $expectedPhp.Replace('/', '\')
             $pathMatches = $normalizedCommandLine.IndexOf($normalizedExpectedPhp, [StringComparison]::OrdinalIgnoreCase) -ge 0
         }
 
