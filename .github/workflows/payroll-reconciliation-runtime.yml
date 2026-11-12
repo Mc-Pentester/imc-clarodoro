@@ -235,6 +235,24 @@ jobs:
           printf '%s' "$PAYROLL_LIST" | php -r '$d=json_decode(stream_get_contents(STDIN),true); $p=array_values(array_filter($d["payroll"]??[],fn($x)=>($x["id"]??"")===$argv[1])); if(count($p)!==1 || (float)$p[0]["net_amount"]!==1050.0) exit(1);' "$PAYROLL_ID"
           echo 'PAYROLL POSTGRESQL READ/DISPLAY API: PASS'
 
+          # Teste le flux de la page payroll.html : création puis mise à jour sans doublon.
+          ENTRY_PAYLOAD='{"staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"2026-2027","month":11,"base":1200,"bonuses":100,"deductions":50,"status":"PARTIAL"}'
+          ENTRY_CREATE_STATUS="$(curl -sS -o /tmp/payroll-entry-create.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$ENTRY_PAYLOAD" "$BASE/api/payroll/index.php")"
+          test "$ENTRY_CREATE_STATUS" = '201'
+          ENTRY_ID="$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-entry-create.json"),true); echo $d["payroll"]["id"]??"";')"
+          test -n "$ENTRY_ID"
+          test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$ENTRY_ID'")" = '1250.00'
+
+          ENTRY_UPDATE_PAYLOAD='{"staff_id":"00000000-0000-4000-8000-000000008031","school_year_label":"2026-2027","month":11,"base":1300,"bonuses":100,"deductions":50,"status":"PAID"}'
+          ENTRY_UPDATE_STATUS="$(curl -sS -o /tmp/payroll-entry-update.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$ENTRY_UPDATE_PAYLOAD" "$BASE/api/payroll/index.php")"
+          test "$ENTRY_UPDATE_STATUS" = '200'
+          test "$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-entry-update.json"),true); echo $d["payroll"]["id"]??"";')" = "$ENTRY_ID"
+          test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$ENTRY_ID'")" = '1350.00'
+
+          OTHER_CREATE_STATUS="$(curl -sS -o /tmp/payroll-entry-denied.json -w '%{http_code}' -c /tmp/reconcile-other.cookies -b /tmp/reconcile-other.cookies -X POST -H "X-CSRF-Token: $OTHER_CSRF" -H 'Content-Type: application/json' -d "$ENTRY_PAYLOAD" "$BASE/api/payroll/index.php")"
+          test "$OTHER_CREATE_STATUS" = '403'
+          echo 'PAYROLL CREATE/UPDATE AND ROLE AUTHORIZATION: PASS'
+
           REIMPORT_STATUS="$(curl -sS -o /tmp/reconcile-again.json -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "$PAYLOAD" "$BASE/api/payroll/reconcile.php")"
           test "$REIMPORT_STATUS" = '200'
           grep -q '"created":false' /tmp/reconcile-again.json
