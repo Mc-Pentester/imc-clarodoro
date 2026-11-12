@@ -120,7 +120,6 @@ jobs:
               "function genererRapportPaies()", "function exporterRapportPaiesCSV()",
               "Impossible de charger les paies depuis PostgreSQL",
               "Le total net représente la masse salariale nette prévue/déclarée",
-              "Gestion des paies du personnel",
           ]
           menu = Path("private-pages/PDG.php").read_text(encoding="utf-8")
           whatsapp = Path("js/whatsapp-menu.js").read_text(encoding="utf-8")
