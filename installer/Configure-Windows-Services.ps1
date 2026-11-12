@@ -682,10 +682,22 @@ if ($task) {
     $expectedRoot = [System.IO.Path]::GetFullPath($AppRoot)
     $ownedPhp = Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
         Where-Object {
-            $_.ExecutablePath -and
-            [string]::Equals([System.IO.Path]::GetFullPath([string]$_.ExecutablePath), $expectedPhp, [StringComparison]::OrdinalIgnoreCase) -and
-            $_.CommandLine -like "*-S 0.0.0.0:$HttpPort*" -and
-            $_.CommandLine -like "*$expectedRoot*"
+            $executableMatches = $false
+            if (-not [string]::IsNullOrWhiteSpace([string]$_.ExecutablePath)) {
+                try {
+                    $candidate = [System.IO.Path]::GetFullPath([string]$_.ExecutablePath)
+                    $executableMatches = [string]::Equals($candidate, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
+                } catch { $executableMatches = $false }
+            }
+            $commandLine = [string]$_.CommandLine
+            if (-not $executableMatches -and -not [string]::IsNullOrWhiteSpace($commandLine)) {
+                $normalizedCommandLine = $commandLine.Replace('/', '\\')
+                $normalizedExpectedPhp = $expectedPhp.Replace('/', '\\')
+                $executableMatches = $normalizedCommandLine.IndexOf($normalizedExpectedPhp, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            }
+            $executableMatches -and
+                $commandLine -like "*-S 0.0.0.0:$HttpPort*" -and
+                $commandLine -like "*$expectedRoot*"
         }
     foreach ($process in $ownedPhp) {
         Write-Step "Arrêt du processus PHP Clarodaro orphelin PID=$($process.ProcessId)."
