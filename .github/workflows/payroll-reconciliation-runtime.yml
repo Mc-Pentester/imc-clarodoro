@@ -249,7 +249,11 @@ jobs:
           test "$(php -r '$d=json_decode(file_get_contents("/tmp/payroll-entry-update.json"),true); echo $d["payroll"]["id"]??"";')" = "$ENTRY_ID"
           test "$(psql "$DB" -Atqc "SELECT net_amount::text FROM payroll_entries WHERE id='$ENTRY_ID'")" = '1350.00'
 
-          OTHER_CREATE_STATUS="$(curl -sS -o /tmp/payroll-entry-denied.json -w '%{http_code}' -c /tmp/reconcile-other.cookies -b /tmp/reconcile-other.cookies -X POST -H "X-CSRF-Token: $OTHER_CSRF" -H 'Content-Type: application/json' -d "$ENTRY_PAYLOAD" "$BASE/api/payroll/index.php")"
+          PAYROLL_OTHER_COOKIE='/tmp/payroll-other.cookies'
+          PAYROLL_OTHER_LOGIN="$(curl -fsS -c "$PAYROLL_OTHER_COOKIE" -b "$PAYROLL_OTHER_COOKIE" -H 'Content-Type: application/json' -d '{"username":"reconcile-other","password":"Reconcile-Other-2026!"}' "$BASE/api/auth/login.php")"
+          PAYROLL_OTHER_CSRF="$(printf '%s' "$PAYROLL_OTHER_LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["csrfToken"]??"";')"
+          test -n "$PAYROLL_OTHER_CSRF"
+          OTHER_CREATE_STATUS="$(curl -sS -o /tmp/payroll-entry-denied.json -w '%{http_code}' -c "$PAYROLL_OTHER_COOKIE" -b "$PAYROLL_OTHER_COOKIE" -X POST -H "X-CSRF-Token: $PAYROLL_OTHER_CSRF" -H 'Content-Type: application/json' -d "$ENTRY_PAYLOAD" "$BASE/api/payroll/index.php")"
           test "$OTHER_CREATE_STATUS" = '403'
           echo 'PAYROLL CREATE/UPDATE AND ROLE AUTHORIZATION: PASS'
 
