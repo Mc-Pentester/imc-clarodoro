@@ -54,6 +54,13 @@ function imcPageAccess(PDO $pdo, string $permission, ?string $requiredRole = nul
         return ['allowed' => false, 'status' => 403, 'user' => $user];
     }
 
+    // Le PDG doit pouvoir ouvrir toutes les pages protégées de gestion.
+    // Les contrôles métier sensibles (approbations, réauthentification) restent distincts.
+    if (strcasecmp((string) $user['role_name'], 'PDG') === 0) {
+        $_SESSION['last_activity_at'] = $now;
+        return ['allowed' => true, 'status' => 200, 'user' => $user];
+    }
+
     $permissionStmt = $pdo->prepare(
         'SELECT 1
          FROM role_permissions rp
