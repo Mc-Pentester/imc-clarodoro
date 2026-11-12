@@ -68,9 +68,9 @@ jobs:
             IF NOT EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
                            WHERE rp.role_id=pdg_id AND p.name='whatsapp.consent.read')
               THEN RAISE EXCEPTION 'PDG lacks WhatsApp consent read permission'; END IF;
-            IF EXISTS (SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id
-                       WHERE rp.role_id=pdg_id AND p.name='whatsapp.consent.manage')
-              THEN RAISE EXCEPTION 'PDG must not receive consent management permission'; END IF;
+            IF (SELECT COUNT(*) FROM role_permissions rp WHERE rp.role_id=pdg_id) <>
+               (SELECT COUNT(*) FROM permissions)
+              THEN RAISE EXCEPTION 'PDG must have every permission registered in the application'; END IF;
           END $permissions$;
           SQL
           psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
@@ -107,6 +107,7 @@ jobs:
           php -l api/payroll/index.php
           php -l api/payroll/reconcile.php
           php -l private-pages/PDG.php
+          php -l private-pages/payroll.php
           php -l secure-page.php
           php -l router.php
           node --check js/whatsapp-menu.js
@@ -119,6 +120,7 @@ jobs:
               "function genererRapportPaies()", "function exporterRapportPaiesCSV()",
               "Impossible de charger les paies depuis PostgreSQL",
               "Le total net représente la masse salariale nette prévue/déclarée",
+              "Gestion des paies du personnel",
           ]
           menu = Path("private-pages/PDG.php").read_text(encoding="utf-8")
           whatsapp = Path("js/whatsapp-menu.js").read_text(encoding="utf-8")
@@ -169,7 +171,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           BASE='http://127.0.0.1:8090'
-          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' 'whatsapp-send.html|<title>WhatsApp — message manuel | IMC-Clarodoro</title>' )
+          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'payroll.html|<title>Gestion des paies — Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' 'whatsapp-send.html|<title>WhatsApp — message manuel | IMC-Clarodoro</title>' )
           for item in "${pages[@]}"; do
             page="${item%%|*}"
             marker="${item#*|}"
