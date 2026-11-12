@@ -691,8 +691,8 @@ if ($task) {
             }
             $commandLine = [string]$_.CommandLine
             if (-not $executableMatches -and -not [string]::IsNullOrWhiteSpace($commandLine)) {
-                $normalizedCommandLine = $commandLine.Replace('/', '\\')
-                $normalizedExpectedPhp = $expectedPhp.Replace('/', '\\')
+                $normalizedCommandLine = $commandLine.Replace('/', '\')
+                $normalizedExpectedPhp = $expectedPhp.Replace('/', '\')
                 $executableMatches = $normalizedCommandLine.IndexOf($normalizedExpectedPhp, [StringComparison]::OrdinalIgnoreCase) -ge 0
             }
             $executableMatches -and
