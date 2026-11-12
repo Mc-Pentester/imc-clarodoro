@@ -57,14 +57,46 @@ if ($task) {
         if (-not $listener) { Write-UpgradeLog 'Aucun écouteur sur le port HTTP ; arrêt PHP confirmé.'; break }
 
         $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
-        if (-not $listenerProcess -or -not $listenerProcess.ExecutablePath) {
-            throw "Impossible d'identifier le processus qui écoute sur le port HTTP $HttpPort (PID $($listener.OwningProcess)). Aucun fichier ne sera remplacé."
+        if (-not $listenerProcess) {
+            throw "Le PID $($listener.OwningProcess) qui écoute sur le port HTTP $HttpPort n'est pas visible via WMI/CIM. Aucun fichier ne sera remplacé."
         }
-        Write-UpgradeLog ('Écouteur HTTP : PID=' + $listener.OwningProcess + '; exécutable=' + $listenerProcess.ExecutablePath)
-        $actualExecutable = [System.IO.Path]::GetFullPath([string]$listenerProcess.ExecutablePath)
-        if (-not [string]::Equals($actualExecutable, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Le port HTTP $HttpPort est occupé par un autre programme : $actualExecutable. Aucun processus tiers ne sera arrêté."
+
+        # ExecutablePath peut être vide pour un processus lancé sous LOCAL SERVICE,
+        # même depuis une session d'installation élevée. Recouper alors le chemin
+        # exact dans CommandLine et, en dernier recours, Get-Process.Path.
+        $actualExecutable = [string]$listenerProcess.ExecutablePath
+        $processCommandLine = [string]$listenerProcess.CommandLine
+        if ([string]::IsNullOrWhiteSpace($actualExecutable)) {
+            try {
+                $processInfo = Get-Process -Id ([int]$listener.OwningProcess) -ErrorAction Stop
+                if ($processInfo.Path) { $actualExecutable = [string]$processInfo.Path }
+            } catch {
+                Write-UpgradeLog ('Chemin exécutable indisponible via Get-Process pour PID ' + $listener.OwningProcess + ' : ' + $_.Exception.Message)
+            }
         }
+
+        $pathMatches = $false
+        if (-not [string]::IsNullOrWhiteSpace($actualExecutable)) {
+            try {
+                $actualExecutable = [System.IO.Path]::GetFullPath($actualExecutable)
+                $pathMatches = [string]::Equals($actualExecutable, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
+            } catch { $pathMatches = $false }
+        }
+        if (-not $pathMatches -and -not [string]::IsNullOrWhiteSpace($processCommandLine)) {
+            $normalizedCommandLine = $processCommandLine.Replace('/', '\\')
+            $normalizedExpectedPhp = $expectedPhp.Replace('/', '\\')
+            $pathMatches = $normalizedCommandLine.IndexOf($normalizedExpectedPhp, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        }
+
+        Write-UpgradeLog ('Écouteur HTTP : PID=' + $listener.OwningProcess +
+            '; exécutable=' + $(if ($actualExecutable) { $actualExecutable } else { '<indisponible>' }) +
+            '; commande=' + $(if ($processCommandLine) { $processCommandLine } else { '<indisponible>' }))
+        if (-not $pathMatches) {
+            throw "Impossible de confirmer que le PID $($listener.OwningProcess) est le PHP de cette installation. Exécutable='$actualExecutable'; commande='$processCommandLine'. Aucun processus tiers ne sera arrêté et aucun fichier ne sera remplacé."
+        }
+
+        # Le chemin PHP exact correspond à cette installation : l'arrêt de la
+        # tâche a été demandé plus haut. Attendre la fermeture du listener.
         Start-Sleep -Seconds 1
     } while ((Get-Date) -lt $deadline)
 
