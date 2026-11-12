@@ -209,6 +209,13 @@ function requirePermission(PDO $pdo, string $permissionName): array
 {
     $user = requireAuthenticatedUser($pdo);
 
+    // Le PDG est le propriétaire fonctionnel de l'établissement : accès complet
+    // aux opérations de l'application. Les validations à double approbation
+    // restent appliquées par leurs workflows métier dédiés.
+    if (strcasecmp((string) $user['role_name'], 'PDG') === 0) {
+        return $user;
+    }
+
     $stmt = $pdo->prepare(
         'SELECT 1
          FROM role_permissions rp
