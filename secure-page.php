@@ -75,8 +75,19 @@ if (!is_file($privateFile)) {
 }
 
 ob_start();
-require $privateFile;
-$html = ob_get_clean();
+try {
+    require $privateFile;
+    $html = ob_get_clean();
+} catch (Throwable $error) {
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    error_log('IMC protected page render failed [' . $requestedPage . ']: ' . $error);
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store, private');
+    exit('Erreur interne lors du chargement de la page. Consultez le journal serveur.');
+}
 
 // Ajoute l'accès WhatsApp après le rendu de toute page protégée sans modifier
 // les pages métier. Le script décide lui-même de l'afficher uniquement si
