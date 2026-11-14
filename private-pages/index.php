@@ -1160,6 +1160,9 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
         if (!id) {
             payload.class_id = eleve.classId;
             payload.school_year_id = eleve.schoolYearId;
+        } else {
+            // La classe fait partie de l'inscription active et peut être corrigée.
+            payload.class_id = eleve.classId;
         }
 
         const response = await fetch(
@@ -1447,7 +1450,15 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
         document.getElementById("sectionCommunale").value = student.sectionCommunale || "";
         document.getElementById("classe").value = student.classId || "";
         document.getElementById("anneeScolaire").value = student.schoolYearId || "";
-        document.getElementById("classe").disabled = true;
+        const classSelect = document.getElementById("classe");
+        classSelect.disabled = false;
+        if (student.classId && !Array.from(classSelect.options).some(option => option.value === student.classId)) {
+            const currentOption = document.createElement("option");
+            currentOption.value = student.classId;
+            currentOption.textContent = student.classe || "Classe actuelle (indisponible)";
+            classSelect.appendChild(currentOption);
+        }
+        classSelect.value = student.classId || "";
         document.getElementById("anneeScolaire").disabled = true;
         document.getElementById("nisu").value = student.nisu || "";
         document.getElementById("contact").value = student.contact || "";
