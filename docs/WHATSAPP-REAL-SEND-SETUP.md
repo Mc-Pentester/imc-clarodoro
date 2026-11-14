@@ -1,6 +1,11 @@
 # WhatsApp réel — Meta WhatsApp Business Cloud API
 
-Clarodaro envoie désormais les messages via l’API officielle Meta WhatsApp Business Cloud API. La page `/whatsapp-send.html` appelle le serveur Clarodaro, qui transmet la demande à Meta. Elle ne lance pas `wa.me`, n’ouvre pas l’application WhatsApp du poste et ne renvoie jamais un succès simulé.
+Clarodaro propose deux modes complémentaires sur la page `/whatsapp-send.html` :
+
+- **Envoi manuel** : Clarodaro revérifie le consentement et journalise la préparation, puis ouvre `wa.me` avec le numéro et le texte préremplis. L’utilisateur vérifie le destinataire et appuie lui-même sur Envoyer dans WhatsApp. La préparation journalisée ne prouve pas que le message a été envoyé.
+- **Envoi réel via Meta** : le serveur Clarodaro transmet un modèle approuvé à l’API officielle Meta WhatsApp Business Cloud API. Ce mode ne dépend pas de l’application WhatsApp installée sur le poste et ne simule jamais un succès.
+
+Les deux modes sont présentés séparément dans la même page et exigent un consentement actif pour la finalité sélectionnée. Le mode manuel reste disponible même si la configuration Meta n’est pas terminée.
 
 ## 1. Prérequis Meta
 
@@ -48,7 +53,7 @@ Après modification du fichier, redémarrer le serveur PHP / la tâche planifié
 6. Saisir les paramètres du corps dans l’ordre défini par le modèle, un par ligne.
 7. Cliquer sur **Envoyer réellement via WhatsApp**.
 
-Le serveur vérifie la permission, le consentement actif et la finalité, applique une clé d’idempotence, journalise la demande, puis appelle l’endpoint Meta `/{PHONE_NUMBER_ID}/messages`. Aucun envoi n’est déclenché si la configuration est absente, si le modèle n’est pas autorisé ou si le consentement n’est pas actif.
+Pour le mode Meta, le serveur vérifie la permission, le consentement actif et la finalité, applique une clé d’idempotence, journalise la demande, puis appelle l’endpoint Meta `/{PHONE_NUMBER_ID}/messages`. Aucun envoi n’est déclenché si la configuration est absente, si le modèle n’est pas autorisé ou si le consentement n’est pas actif.
 
 ## 4. Fenêtre de conversation et modèles
 
