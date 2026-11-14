@@ -1,75 +1,69 @@
 param(
-    [string]$TaskName = 'IMC-Clarodoro PostgreSQL Backup',
-    [string]$BackupDirectory = (Join-Path $PSScriptRoot '..\backups'),
-    [string]$ScheduleTime = '14:30',
-    [string]$PgBin = 'C:\Program Files\PostgreSQL\18\bin',
-    [string]$CopyTaskName = 'IMC-Clarodoro Backup Copy to USB'
+    [Parameter(Mandatory = $true)][string]$AppRoot,
+    [Parameter(Mandatory = $true)][string]$EnvironmentFile,
+    [string]$BackupDirectory = '',
+    [string]$PgBin = '',
+    [string]$ScheduleTime = '02:30',
+    [string]$TaskName = 'IMC-Clarodaro PostgreSQL Backup',
+    [string]$CopyTaskName = 'IMC-Clarodaro Backup Copy to USB'
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-if (-not (Test-Path -LiteralPath "$PgBin\pg_dump.exe")) { throw "pg_dump introuvable dans $PgBin" }
-if (-not (Test-Path -LiteralPath "$PSScriptRoot\DB-BACKUP-RESTORE.ps1")) { throw 'Script de sauvegarde introuvable.' }
-
+$AppRoot = [IO.Path]::GetFullPath($AppRoot)
+$EnvironmentFile = [IO.Path]::GetFullPath($EnvironmentFile)
+if (-not (Test-Path -LiteralPath $EnvironmentFile -PathType Leaf)) {
+    throw "Configuration protégée introuvable : $EnvironmentFile"
+}
+if ([string]::IsNullOrWhiteSpace($BackupDirectory)) {
+    $BackupDirectory = Join-Path $AppRoot 'backups'
+}
+if ([string]::IsNullOrWhiteSpace($PgBin)) {
+    $PgBin = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin'
+}
+$PgBin = [IO.Path]::GetFullPath($PgBin)
 $backupFullPath = [IO.Path]::GetFullPath($BackupDirectory)
-New-Item -ItemType Directory -Path $backupFullPath -Force | Out-Null
-
-# Le mot de passe n'est jamais écrit dans le script ni dans les arguments de la tâche.
-# pg_dump lit le fichier pgpass de l'utilisateur qui exécute la tâche.
-$pgpass = Join-Path $env:APPDATA 'postgresql\pgpass.conf'
-$pgpassDir = Split-Path $pgpass -Parent
-New-Item -ItemType Directory -Path $pgpassDir -Force | Out-Null
-
-if (-not (Test-Path -LiteralPath $pgpass)) {
-    $secure = Read-Host 'Mot de passe PostgreSQL pour postgres' -AsSecureString
-    $password = [System.Net.NetworkCredential]::new('', $secure).Password
-    $line = "localhost:5432:imc_clarodoro:postgres:$password"
-    Set-Content -LiteralPath $pgpass -Value $line -Encoding ascii -NoNewline
-}
-
-# Restreint le fichier pgpass au compte courant avec l'outil Windows ACL.
-# Set-Acl peut échouer sur certaines configurations Windows en demandant
-# SeSecurityPrivilege. icacls modifie la DACL sans demander ce privilège.
-$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-& "$env:SystemRoot\System32\icacls.exe" $pgpass /inheritance:r /grant:r "$($identity):(F)" | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    throw "Impossible de restreindre les droits de $pgpass (icacls code $LASTEXITCODE). Aucun planificateur n'a été enregistré."
-}
-
 $runner = Join-Path $PSScriptRoot 'RUN-DB-BACKUP.ps1'
-$runnerContent = @"
-`$ErrorActionPreference = 'Stop'
-Set-Location -LiteralPath '$((Split-Path $PSScriptRoot -Parent))'
-`$env:DB_HOST = 'localhost'
-`$env:DB_PORT = '5432'
-`$env:DB_NAME = 'imc_clarodoro'
-`$env:DB_USER = 'postgres'
-`$env:PGPASSFILE = '$pgpass'
-`$env:Path = '$PgBin;' + [Environment]::GetEnvironmentVariable('Path','Machine')
-& '$PSScriptRoot\DB-BACKUP-RESTORE.ps1' -Mode Backup
-if (`$LASTEXITCODE -ne 0) { exit `$LASTEXITCODE }
-"@
-Set-Content -LiteralPath $runner -Value $runnerContent -Encoding utf8
+$copyScript = Join-Path $PSScriptRoot 'COPY-DB-BACKUPS-TO-EXTERNAL.ps1'
 
-$action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runner`""
-$trigger = New-ScheduledTaskTrigger -Daily -At ([datetime]::ParseExact($ScheduleTime, 'HH:mm', $null))
-$principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
+foreach ($required in @("$PgBin\pg_dump.exe", "$PgBin\pg_restore.exe", "$PgBin\psql.exe", (Join-Path $PSScriptRoot 'DB-BACKUP-RESTORE.ps1'), $runner, $copyScript)) {
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+        throw "Fichier requis pour la sauvegarde absent : $required"
+    }
+}
+if ($ScheduleTime -notmatch '^([01]\d|2[0-3]):[0-5]\d$') {
+    throw 'ScheduleTime doit être au format HH:mm.'
+}
+
+New-Item -ItemType Directory -Path $backupFullPath -Force | Out-Null
+# Le dossier de sauvegarde est accessible en modification uniquement au service PHP
+# (LOCAL SERVICE), aux administrateurs et à SYSTEM.
+& icacls.exe $backupFullPath /grant '*S-1-5-19:(OI)(CI)M' '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Impossible de configurer les droits du dossier de sauvegarde : $backupFullPath" }
+
+$identity = 'NT AUTHORITY\LOCAL SERVICE'
+$principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType ServiceAccount -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
+$arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$runner`" -AppRoot `"$AppRoot`" -EnvironmentFile `"$EnvironmentFile`" -PgBin `"$PgBin`" -BackupDirectory `"$backupFullPath`""
+$action = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument $arguments -WorkingDirectory $AppRoot
+$trigger = New-ScheduledTaskTrigger -Daily -At ([datetime]::ParseExact($ScheduleTime, 'HH:mm', $null))
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 
-# Copie périodique des sauvegardes vérifiées vers un support USB identifié par son étiquette.
-$copyScript = Join-Path $PSScriptRoot 'COPY-DB-BACKUPS-TO-EXTERNAL.ps1'
-if (-not (Test-Path -LiteralPath $copyScript)) { throw 'Script de copie externe introuvable.' }
-$copyAction = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$copyScript`""
+$copyArguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$copyScript`" -SourceDirectory `"$backupFullPath`""
+$copyAction = New-ScheduledTaskAction -Execute 'PowerShell.exe' -Argument $copyArguments -WorkingDirectory $AppRoot
 $copyTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5) -RepetitionInterval (New-TimeSpan -Hours 6) -RepetitionDuration (New-TimeSpan -Days 3650)
 $copySettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $CopyTaskName -Action $copyAction -Trigger $copyTrigger -Principal $principal -Settings $copySettings -Force | Out-Null
 
-Write-Host '[OK] Tâche de sauvegarde quotidienne installée.'
-Write-Host "Nom : $TaskName"
-Write-Host "Heure : $ScheduleTime chaque jour"
+# Vérifie que les tâches sont réellement enregistrées sous le compte de service attendu.
+foreach ($name in @($TaskName, $CopyTaskName)) {
+    $registered = Get-ScheduledTask -TaskName $name -ErrorAction Stop
+    if ([string]$registered.Principal.UserId -notmatch 'LOCAL SERVICE|S-1-5-19') {
+        throw "La tâche $name n'est pas enregistrée sous LOCAL SERVICE."
+    }
+}
+Write-Host '[OK] Planification des sauvegardes installée.'
+Write-Host "Sauvegarde quotidienne : $ScheduleTime"
 Write-Host "Dossier : $backupFullPath"
 Write-Host "Compte : $identity"
-Write-Host "Copie externe : support USB portant l’étiquette IMC_BACKUPS (toutes les 6 heures)"
-Write-Host "Tâche de copie : $CopyTaskName"
-Write-Host "Exécutez ensuite : Get-ScheduledTask -TaskName '$TaskName' | Get-ScheduledTaskInfo"
+Write-Host "Copie externe : toutes les 6 heures vers le support portant l'étiquette IMC_BACKUPS"
