@@ -14,11 +14,20 @@ if($method==='GET'){
  $levels=$manager?$pdo->query('SELECT id,code,name,description FROM levels ORDER BY name,code,id')->fetchAll():[];
  echo json_encode(['success'=>true,'classes'=>$classes,'levels'=>$levels,'managed'=>$manager],JSON_UNESCAPED_UNICODE);exit;
 }
-if(!in_array($method,['POST','PATCH'],true)){header('Allow: GET, POST, PATCH');apiError(405,'Méthode HTTP non autorisée.');}
+if(!in_array($method,['POST','PATCH','DELETE'],true)){header('Allow: GET, POST, PATCH, DELETE');apiError(405,'Méthode HTTP non autorisée.');}
 requirePermission($pdo,'classes.manage');requireCsrfToken();$data=readJsonBody();
 foreach(array_keys($data) as $f)if(!in_array($f,['resource','code','name','description','level_id','status'],true))apiError(422,'Champ inconnu : '.$f);
-if(($data['resource']??'')!==$resource||!in_array($resource,['levels','classes'],true))apiError(422,'Ressource invalide.');
+if(($data['resource']??$resource)!==$resource||!in_array($resource,['levels','classes'],true))apiError(422,'Ressource invalide.');
 try{
+ if($method==='DELETE'){
+  $id=$_GET['id']??'';
+  if(!is_string($id)||!academicUuid($id))apiError(400,'UUID invalide.');
+  $table=$resource==='levels'?'levels':'classes';
+  $s=$pdo->prepare("DELETE FROM {$table} WHERE id=:id RETURNING id");
+  $s->execute([':id'=>$id]);
+  if(!$s->fetchColumn())apiError(404,$resource==='levels'?'Niveau introuvable.':'Classe introuvable.');
+  echo json_encode(['success'=>true,'deleted'=>true,'resource'=>$resource],JSON_UNESCAPED_UNICODE);exit;
+ }
  if($method==='POST'){
   $code=academicText($data,'code',50);$name=academicText($data,'name',150);
   if($resource==='levels'){$desc=isset($data['description'])&&is_string($data['description'])?trim($data['description']):null;$s=$pdo->prepare('INSERT INTO levels(code,name,description) VALUES(:c,:n,:d) RETURNING id,code,name,description');$s->execute([':c'=>$code,':n'=>$name,':d'=>$desc]);http_response_code(201);echo json_encode(['success'=>true,'level'=>$s->fetch()],JSON_UNESCAPED_UNICODE);exit;}
@@ -36,4 +45,4 @@ try{
  if(array_key_exists('level_id',$data)){if(!is_string($data['level_id'])||!academicUuid($data['level_id']))apiError(422,'level_id invalide.');$sets[]='level_id=:level_id';$params[':level_id']=$data['level_id'];}
  if(array_key_exists('status',$data)){if(!is_string($data['status'])||!in_array($data['status'],['ACTIVE','INACTIVE','ARCHIVED'],true))apiError(422,'Statut invalide.');$sets[]='status=:status';$params[':status']=$data['status'];}
  if(!$sets)apiError(422,'Aucune modification fournie.');$sets[]='updated_at=NOW()';$s=$pdo->prepare('UPDATE classes SET '.implode(',',$sets).' WHERE id=:id RETURNING id,code,name,level_id,status');$s->execute($params);$row=$s->fetch();if(!$row)apiError(404,'Classe introuvable.');echo json_encode(['success'=>true,'class'=>$row],JSON_UNESCAPED_UNICODE);
-}catch(PDOException $e){error_log('Academic structure write failed: '.$e->getMessage());if($e->getCode()==='23505')apiError(409,'Ce code existe déjà.');if($e->getCode()==='23503')apiError(409,'Le niveau est invalide ou référencé ; aucune donnée liée n’a été supprimée.');apiError(500,'Erreur interne lors de l’enregistrement.');}
+}catch(PDOException $e){error_log('Academic structure write failed: '.$e->getMessage());if($e->getCode()==='23505')apiError(409,'Ce code existe déjà.');if($e->getCode()==='23503')apiError(409,$resource==='levels'?'Suppression impossible : ce niveau est encore associé à une ou plusieurs classes. Modifiez ou supprimez d’abord les classes concernées. Aucune donnée liée n’a été supprimée.':'Suppression impossible : cette classe est déjà utilisée par des inscriptions, des notes, des affectations ou des tarifs. Archivez-la plutôt. Aucune donnée liée n’a été supprimée.');apiError(500,'Erreur interne lors de l’enregistrement.');}
