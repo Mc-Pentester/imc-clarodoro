@@ -7,13 +7,45 @@ require_once __DIR__ . '/../../config/auth.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
-    header('Allow: POST');
+$method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if (!in_array($method, ['GET', 'POST'], true)) {
+    header('Allow: GET, POST');
     apiError(405, 'Méthode HTTP non autorisée');
 }
 
 $pdo = getDatabaseConnection();
 $user = requirePermission($pdo, 'whatsapp.message.send');
+
+$enabled = getenv('WHATSAPP_SEND_ENABLED') === 'true';
+$token = getenv('WHATSAPP_ACCESS_TOKEN');
+$phoneNumberId = getenv('WHATSAPP_PHONE_NUMBER_ID');
+$apiVersion = getenv('WHATSAPP_API_VERSION');
+$allowedTemplatesRaw = getenv('WHATSAPP_ALLOWED_TEMPLATES');
+$allowedTemplates = is_string($allowedTemplatesRaw)
+    ? array_values(array_filter(array_map('trim', explode(',', $allowedTemplatesRaw))))
+    : [];
+$configured = $enabled
+    && is_string($token) && $token !== ''
+    && is_string($phoneNumberId) && preg_match('/^[0-9]+$/', $phoneNumberId)
+    && is_string($apiVersion) && preg_match('/^v[0-9]+\\.[0-9]+$/', $apiVersion)
+    && $allowedTemplates !== []
+    && function_exists('curl_init');
+
+if ($method === 'GET') {
+    echo json_encode([
+        'success' => true,
+        'mode' => 'live',
+        'configured' => $configured,
+        'enabled' => $enabled,
+        'curl_available' => function_exists('curl_init'),
+        'templates' => $allowedTemplates,
+        'message' => $configured
+            ? 'Configuration WhatsApp Cloud API prête.'
+            : 'Configuration réelle incomplète. Aucun message ne sera simulé.',
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 requireCsrfToken();
 $data = readJsonBody();
 
@@ -68,27 +100,9 @@ if (!$consent || $consent['status'] !== 'OPTED_IN') {
     apiError(403, 'Aucun consentement WhatsApp actif pour ce parent et cette finalité');
 }
 
-$enabled = getenv('WHATSAPP_SEND_ENABLED') === 'true';
-$token = getenv('WHATSAPP_ACCESS_TOKEN');
-$phoneNumberId = getenv('WHATSAPP_PHONE_NUMBER_ID');
-$apiVersion = getenv('WHATSAPP_API_VERSION');
-$allowedTemplatesRaw = getenv('WHATSAPP_ALLOWED_TEMPLATES');
-$allowedTemplates = is_string($allowedTemplatesRaw)
-    ? array_filter(array_map('trim', explode(',', $allowedTemplatesRaw)))
-    : [];
-
-if ($enabled) {
-    if (!is_string($token) || $token === '' ||
-        !is_string($phoneNumberId) || !preg_match('/^[0-9]+$/', $phoneNumberId) ||
-        !is_string($apiVersion) || !preg_match('/^v[0-9]+\.[0-9]+$/', $apiVersion) ||
-        !in_array($templateName, $allowedTemplates, true)) {
-        // Configuration is checked after acquiring the consent row lock; release it
-        // explicitly before terminating the request.
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-        apiError(503, 'Envoi réel non configuré ou modèle non autorisé');
-    }
+if (!$configured || !in_array($templateName, $allowedTemplates, true)) {
+    $pdo->rollBack();
+    apiError(503, 'Envoi réel non configuré ou modèle non autorisé. Aucun message n’a été envoyé.');
 }
 
 $payload = [
@@ -136,28 +150,6 @@ try {
         $pdo->rollBack();
     }
     apiError(503, 'Journal WhatsApp indisponible; aucun envoi lancé');
-}
-
-if (!$enabled) {
-    $update = $pdo->prepare(
-        "UPDATE whatsapp_message_log SET status = 'SIMULATED', updated_at = NOW() WHERE id = :id"
-    );
-    $update->execute([':id' => $logId]);
-    $pdo->commit();
-    echo json_encode([
-        'success' => true,
-        'mode' => 'simulation',
-        'message_log_id' => $logId,
-        'message' => 'Aucun appel réseau WhatsApp effectué.',
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-if (!function_exists('curl_init')) {
-    $pdo->prepare("UPDATE whatsapp_message_log SET status = 'FAILED', provider_error_code = 'CURL_UNAVAILABLE', updated_at = NOW() WHERE id = :id")
-        ->execute([':id' => $logId]);
-    $pdo->commit();
-    apiError(503, 'Extension cURL indisponible');
 }
 
 $url = 'https://graph.facebook.com/' . $apiVersion . '/' . $phoneNumberId . '/messages';

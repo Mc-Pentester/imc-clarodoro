@@ -1,43 +1,83 @@
-# WhatsApp : parcours manuel et API Meta Cloud
+# WhatsApp réel — Meta WhatsApp Business Cloud API
 
-IMC-Clarodoro dispose de deux parcours distincts. Ils ne doivent pas être confondus.
+Clarodaro propose deux modes complémentaires sur la page `/whatsapp-send.html` :
 
-## A. Préparation manuelle via WhatsApp (interface actuelle)
+- **Envoi manuel** : Clarodaro revérifie le consentement et journalise la préparation, puis ouvre `wa.me` avec le numéro et le texte préremplis. L’utilisateur vérifie le destinataire et appuie lui-même sur Envoyer dans WhatsApp. La préparation journalisée ne prouve pas que le message a été envoyé.
+- **Envoi réel via Meta** : le serveur Clarodaro transmet un modèle approuvé à l’API officielle Meta WhatsApp Business Cloud API. Ce mode ne dépend pas de l’application WhatsApp installée sur le poste et ne simule jamais un succès.
 
-La page `/whatsapp-send.html` :
-- exige la permission `whatsapp.message.send` ;
-- vérifie le consentement `OPTED_IN` pour la finalité choisie ;
-- revérifie le consentement côté serveur au clic final ;
-- journalise la préparation dans `whatsapp_manual_preparations` avec l’utilisateur, le parent, le consentement, la finalité et des empreintes SHA-256 du numéro et du texte ;
-- n’enregistre pas le texte complet ni le numéro en clair dans cette table ;
-- ouvre `wa.me` avec le numéro et le message préremplis.
+Les deux modes sont présentés séparément dans la même page et exigent un consentement actif pour la finalité sélectionnée. Le mode manuel reste disponible même si la configuration Meta n’est pas terminée.
 
-L’utilisateur doit vérifier le destinataire et appuyer lui-même sur **Envoyer** dans WhatsApp. La journalisation prouve qu’une préparation a été autorisée, pas que WhatsApp a été ouvert, ni que le message a été envoyé ou livré.
+## 1. Prérequis Meta
 
-Le texte prérempli fait partie de l’URL `wa.me`. Ne pas y inclure de résultats détaillés, de données médicales, disciplinaires ou financières, ni d’autres informations scolaires sensibles. L’application efface le champ après la préparation; elle ne conserve pas le texte dans `localStorage`.
+Avant de configurer Clarodaro, l’établissement doit disposer de :
 
-Migrations requises pour ce parcours :
-- `20261023100000_whatsapp_consent_foundation.sql`
-- `20261025100000_assign_whatsapp_manual_permissions.sql`
-- `20261023103000_whatsapp_consent_audit.sql`
-- `20261023110000_whatsapp_message_log.sql`
-- `20261025120000_whatsapp_manual_preparations.sql`
+- un portefeuille Meta Business et une application Meta ;
+- un compte WhatsApp Business (WABA) associé à l’application ;
+- un numéro professionnel enregistré et activé pour WhatsApp Business Platform ;
+- le **Phone Number ID** du numéro d’envoi (ce n’est pas le numéro de téléphone visible) ;
+- un jeton d’accès permanent ou de longue durée avec les autorisations WhatsApp Business requises, notamment `whatsapp_business_messaging` ;
+- au moins un modèle de message approuvé par Meta, avec sa langue exacte ;
+- le consentement WhatsApp explicite du parent pour la finalité concernée.
 
-Appliquer les migrations selon l’ordre chronologique et vérifier leur statut dans l’environnement de l’établissement.
+La configuration doit être réalisée dans Meta for Developers / WhatsApp > API Setup et dans WhatsApp Manager. Les noms et statuts des modèles doivent correspondre exactement à ceux approuvés par Meta.
 
-## B. API Meta Cloud API (endpoint séparé)
+## 2. Configuration sécurisée sous Windows
 
-L’endpoint `POST /api/whatsapp/send.php` est un parcours serveur distinct. **La variable `WHATSAPP_SEND_ENABLED=true` n’active pas l’envoi depuis la page manuelle `/whatsapp-send.html`**. Elle concerne uniquement cet endpoint API direct.
+Sur une installation Windows Clarodaro, le serveur charge la configuration depuis :
 
-Pour utiliser l’API Meta, configurer sur le serveur PHP uniquement :
-- `WHATSAPP_SEND_ENABLED=true`
-- `WHATSAPP_ACCESS_TOKEN=<jeton Meta WhatsApp Business>`
-- `WHATSAPP_PHONE_NUMBER_ID=<Phone Number ID Meta>`
-- `WHATSAPP_API_VERSION=vX.Y`
-- `WHATSAPP_ALLOWED_TEMPLATES=<modele1,modele2>`
+`C:\ProgramData\IMC-Clarodaro\config\.env`
 
-Ne jamais placer le jeton dans Git, JavaScript, HTML ou le navigateur.
+Ce fichier est situé dans ProgramData, en dehors du dépôt et du répertoire d’installation. Il est protégé par les ACL installateur. Ne placez jamais le jeton dans Git, dans un fichier JavaScript, dans une page HTML ou dans un formulaire du navigateur.
 
-Avant activation, vérifier le compte Meta Business et le numéro d’envoi, l’approbation des modèles, le consentement actif du parent pour la finalité, la permission `whatsapp.message.send`, ainsi que le journal `whatsapp_message_log`. Tester d’abord avec un numéro autorisé.
+Ajouter ou mettre à jour les variables suivantes dans ce fichier :
 
-L’activation se fait exclusivement par configuration serveur. GitHub ne contient pas et ne doit pas contenir les secrets Meta. L’acceptation par Meta ne garantit pas à elle seule la livraison du message.
+```dotenv
+WHATSAPP_SEND_ENABLED=true
+WHATSAPP_ACCESS_TOKEN=COLLER_ICI_LE_JETON_META
+WHATSAPP_PHONE_NUMBER_ID=IDENTIFIANT_NUMERIQUE_META
+WHATSAPP_API_VERSION=vXX.X
+WHATSAPP_ALLOWED_TEMPLATES=nom_modele_presence,nom_modele_information
+```
+
+Remplacer `vXX.X` par une version Graph API actuellement prise en charge par Meta, et les noms d’exemple par les noms exacts des modèles approuvés. Ne pas ajouter de guillemets autour des valeurs sauf nécessité particulière.
+
+Après modification du fichier, redémarrer le serveur PHP / la tâche planifiée Clarodaro afin que les nouvelles variables soient chargées. Conserver le fichier dans ProgramData lors des mises à jour de l’application.
+
+## 3. Utilisation dans Clarodaro
+
+1. Ouvrir **WhatsApp — envoi réel** avec un compte autorisé.
+2. Vérifier que l’état de configuration affiche « Configuration prête ».
+3. Saisir l’UUID du parent enregistré dans Clarodaro.
+4. Choisir la finalité correspondant au consentement actif du parent.
+5. Choisir un modèle approuvé et sa langue exacte.
+6. Saisir les paramètres du corps dans l’ordre défini par le modèle, un par ligne.
+7. Cliquer sur **Envoyer réellement via WhatsApp**.
+
+Pour le mode Meta, le serveur vérifie la permission, le consentement actif et la finalité, applique une clé d’idempotence, journalise la demande, puis appelle l’endpoint Meta `/{PHONE_NUMBER_ID}/messages`. Aucun envoi n’est déclenché si la configuration est absente, si le modèle n’est pas autorisé ou si le consentement n’est pas actif.
+
+## 4. Fenêtre de conversation et modèles
+
+Pour les messages initiés par l’établissement en dehors de la fenêtre de service client autorisée par Meta, il faut utiliser un modèle approuvé. Clarodaro n’envoie pas de texte libre arbitraire à la place d’un modèle. Les paramètres fournis doivent correspondre exactement aux variables déclarées dans le modèle Meta.
+
+Les finalités de consentement prises en charge actuellement sont : `ATTENDANCE`, `RESULTS_AVAILABLE`, `PAYMENT_REMINDER` et `GENERAL`. Le consentement est vérifié côté serveur à chaque envoi.
+
+## 5. Résultat et limites de confirmation
+
+- **Demande acceptée par Meta** : Meta a accepté la requête et renvoyé un identifiant de message.
+- **Livraison** : elle n’est pas garantie par la réponse d’acceptation. Elle doit être confirmée par les statuts du compte WhatsApp Business / Meta.
+- **Échec** : Clarodaro journalise l’échec et affiche le code d’erreur fournisseur disponible.
+- **Configuration absente** : la page bloque l’envoi et l’API retourne une erreur. Aucun mode simulation n’est utilisé.
+
+Le journal `whatsapp_message_log` conserve l’identifiant de message fournisseur, le statut d’acceptation/échec, la finalité, le modèle, l’empreinte du contenu et l’utilisateur initiateur. Le jeton Meta et le texte complet ne sont pas enregistrés dans ce journal.
+
+## 6. Test initial obligatoire
+
+Commencer par un numéro de test autorisé et un modèle simple approuvé. Vérifier :
+
+- l’acceptation par Meta et la présence du `wamid` ;
+- la réception sur le téléphone destinataire ;
+- les erreurs de modèle, de langue, de numéro et de jeton ;
+- le refus lorsque le consentement est absent ou révoqué ;
+- l’absence de nouvel envoi lorsqu’une même clé d’idempotence est rejouée.
+
+L’intégration ne doit être considérée comme validée en production qu’après un test réel de réception sur un téléphone. Les contrôles CI ne peuvent pas remplacer ce test, car ils ne disposent pas des identifiants Meta de l’établissement.

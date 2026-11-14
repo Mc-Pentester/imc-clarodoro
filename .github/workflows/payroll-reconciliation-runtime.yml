@@ -170,12 +170,16 @@ jobs:
         run: |
           set -Eeuo pipefail
           BASE='http://127.0.0.1:8090'
-          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'payroll.html|<title>Gestion des paies — Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' 'whatsapp-send.html|<title>WhatsApp — message manuel | IMC-Clarodoro</title>' )
+          pages=( 'index.html|<title>IMC-Clarodaro</title>' 'PDG.html|<title>PDG - IMC Clarodaro</title>' 'finances.html|<title>Finances - IMC Clarodaro</title>' 'personnel.html|<title>Gestion du Personnel - IMC Clarodaro</title>' 'badge.html|<title>Badge élève - IMC Clarodaro</title>' 'payroll-recovery.html|<title>Reprise des paies historiques — IMC-Clarodaro</title>' 'payroll.html|<title>Gestion des paies — Clarodaro</title>' 'resultats.html|<title>Résultats - IMC Clarodaro</title>' 'whatsapp-send.html|<title>WhatsApp | Clarodaro</title>' )
           for item in "${pages[@]}"; do
             page="${item%%|*}"
             marker="${item#*|}"
             status="$(curl -sS -o /tmp/page-protected.html -w '%{http_code}' "$BASE/$page")"
-            test "$status" = '401'
+            if [[ "$status" != '401' ]]; then
+              echo "::error::Expected unauthenticated $page to return 401, got $status"
+              head -c 500 /tmp/page-protected.html || true
+              exit 1
+            fi
             if grep -Fq "$marker" /tmp/page-protected.html; then
               echo "::error::Unauthenticated response leaked protected HTML for $page"
               exit 1
@@ -190,8 +194,16 @@ jobs:
             page="${item%%|*}"
             marker="${item#*|}"
             status="$(curl -sS -o /tmp/page-protected.html -w '%{http_code}' -b "$PDG_COOKIE" "$BASE/$page")"
-            test "$status" = '200'
-            grep -Fq "$marker" /tmp/page-protected.html
+            if [[ "$status" != '200' ]]; then
+              echo "::error::Expected authorized PDG page $page to return 200, got $status"
+              head -c 500 /tmp/page-protected.html || true
+              exit 1
+            fi
+            if ! grep -Fq "$marker" /tmp/page-protected.html; then
+              echo "::error::Authorized PDG page $page did not contain expected marker: $marker"
+              grep -Eo '<title>[^<]*</title>' /tmp/page-protected.html | head -n 3 || true
+              exit 1
+            fi
           done
 
           OTHER_COOKIE='/tmp/page-protection-other.cookies'
