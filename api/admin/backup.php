@@ -26,13 +26,24 @@ if (PHP_OS_FAMILY !== 'Windows' || !function_exists('proc_open')) {
 $projectRoot = dirname(__DIR__, 2);
 $runner = $projectRoot . DIRECTORY_SEPARATOR . 'Scripts' . DIRECTORY_SEPARATOR . 'RUN-DB-BACKUP.ps1';
 $backupDirectory = $projectRoot . DIRECTORY_SEPARATOR . 'backups';
-if (!is_file($runner)) {
-    apiError(503, 'Le lanceur de sauvegarde n’est pas installé. Réexécutez le script d’installation de la tâche de sauvegarde.');
+$programData = getenv('ProgramData') ?: 'C:\\ProgramData';
+$protectedEnvironment = $programData . DIRECTORY_SEPARATOR . 'IMC-Clarodaro' . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . '.env';
+$legacyEnvironment = $projectRoot . DIRECTORY_SEPARATOR . '.env';
+$environmentFile = is_file($protectedEnvironment) ? $protectedEnvironment : $legacyEnvironment;
+$bundledPgBin = $programData . DIRECTORY_SEPARATOR . 'IMC-Clarodaro' . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR . 'postgresql' . DIRECTORY_SEPARATOR . 'bin';
+$legacyPgBin = $projectRoot . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR . 'postgresql' . DIRECTORY_SEPARATOR . 'bin';
+$pgBin = is_file($bundledPgBin . DIRECTORY_SEPARATOR . 'pg_dump.exe') ? $bundledPgBin : $legacyPgBin;
+if (!is_file($runner) || !is_file($environmentFile) || !is_file($pgBin . DIRECTORY_SEPARATOR . 'pg_dump.exe')) {
+    apiError(503, 'La configuration de sauvegarde est incomplète. Vérifiez le lanceur, le fichier de configuration protégé et les outils PostgreSQL embarqués.');
 }
 
 $startedAt = time();
 $command = 'powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
-    . escapeshellarg($runner);
+    . escapeshellarg($runner)
+    . ' -AppRoot ' . escapeshellarg($projectRoot)
+    . ' -EnvironmentFile ' . escapeshellarg($environmentFile)
+    . ' -PgBin ' . escapeshellarg($pgBin)
+    . ' -BackupDirectory ' . escapeshellarg($backupDirectory);
 $descriptors = [
     0 => ['pipe', 'r'],
     1 => ['pipe', 'w'],
