@@ -23,7 +23,7 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <section class="card">
 <h2>Destinataire et autorisation</h2>
 <div class="grid">
-<div class="wide"><label for="parent_id">Identifiant UUID du parent</label><input id="parent_id" autocomplete="off" placeholder="UUID du parent dans Clarodaro" required></div>
+<div class="wide"><label for="parentSearch">Rechercher un parent par nom ou numéro de téléphone</label><input id="parentSearch" type="search" autocomplete="off" placeholder="Nom, prénom ou numéro de téléphone…" aria-describedby="parentSearchHint"><p id="parentSearchHint" class="hint">Saisissez au moins 2 caractères. Seuls les parents ayant un consentement actif pour la finalité choisie apparaissent.</p><div id="parentResults" class="result" hidden role="listbox" aria-label="Résultats de recherche des parents"></div><div id="selectedParent" class="result" hidden aria-live="polite"></div><input id="parent_id" type="hidden" required></div>
 <div><label for="purpose">Finalité / consentement</label><select id="purpose"><option value="ATTENDANCE">Présence / absence</option><option value="RESULTS_AVAILABLE">Résultats disponibles</option><option value="PAYMENT_REMINDER">Rappel de paiement</option><option value="GENERAL">Message général</option></select></div>
 </div>
 <p class="hint">Les deux modes sont actuellement destinés aux parents disposant d’un consentement actif pour la finalité choisie.</p>
@@ -57,7 +57,40 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 const csrf=document.querySelector('meta[name="csrf-token"]').content,$=id=>document.getElementById(id);
 let configReady=false;
 function show(node,text,error=false){node.hidden=false;node.textContent=text;node.classList.toggle('error',error)}
-function validParent(){const value=$('parent_id').value.trim();if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error('Identifiant UUID du parent invalide.');return value}
+function validParent(){const value=$('parent_id').value.trim();if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error('Recherchez puis sélectionnez un parent dans la liste.');return value}
+let parentSearchTimer=null,parentSearchController=null;
+function clearSelectedParent(){ $('parent_id').value=''; $('selectedParent').hidden=true; $('selectedParent').textContent=''; }
+async function searchParents(){
+  const q=$('parentSearch').value.trim(),results=$('parentResults');
+  clearSelectedParent();
+  if(q.length<2){results.hidden=true;results.textContent='';return}
+  if(parentSearchController)parentSearchController.abort();
+  parentSearchController=new AbortController();
+  show(results,'Recherche des parents…');
+  try{
+    const url='/api/whatsapp/parents-search.php?purpose='+encodeURIComponent($('purpose').value)+'&q='+encodeURIComponent(q);
+    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:parentSearchController.signal});
+    const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+    if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
+    results.replaceChildren();
+    if(!Array.isArray(data.parents)||data.parents.length===0){show(results,'Aucun parent avec consentement actif trouvé pour cette recherche et cette finalité.');return}
+    for(const parent of data.parents){
+      const option=document.createElement('button');option.type='button';option.style.cssText='display:block;width:100%;text-align:left;margin:5px 0;background:#f0f7f4;color:#173b32;border:1px solid #c9ded5';
+      const fullName=[parent.first_name,parent.last_name].filter(Boolean).join(' ');
+      option.textContent=fullName+' — '+parent.phone_e164;
+      option.setAttribute('role','option');
+      option.addEventListener('click',()=>{
+        $('parent_id').value=parent.id;
+        $('selectedParent').textContent='Destinataire sélectionné : '+fullName+' · '+parent.phone_e164;
+        $('selectedParent').hidden=false;results.hidden=true;results.replaceChildren();
+      });
+      results.appendChild(option);
+    }
+    results.hidden=false;
+  }catch(error){if(error.name!=='AbortError')show(results,'Recherche impossible : '+error.message,true)}
+}
+$('parentSearch').addEventListener('input',()=>{clearTimeout(parentSearchTimer);parentSearchTimer=setTimeout(searchParents,250)});
+$('purpose').addEventListener('change',()=>{if($('parentSearch').value.trim().length>=2)searchParents();else clearSelectedParent()});
 async function loadConfig(){
   const status=$('configStatus');
   try{
