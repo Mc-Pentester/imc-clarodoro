@@ -773,8 +773,33 @@ if (-not $httpReady) {
     throw "Le serveur PHP Clarodaro n'a pas fourni une réponse HTTP valide sur le port $HttpPort après 60 secondes (LastTaskResult=$($taskInfo.LastTaskResult)). Dernière erreur HTTP : $lastHttpError"
 }
 
-# La boucle précédente a déjà confirmé l'identité du processus et une réponse HTTP
-# Clarodaro. Aucun second contrôle ponctuel n'est nécessaire ici.
+# Installer les tâches de sauvegarde après validation du serveur et de la configuration DB.
+# Le runner lit le fichier protégé ProgramData et s'exécute sous LOCAL SERVICE,
+# comme le serveur PHP : aucun mot de passe n'est stocké dans les arguments de tâche.
+$backupEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } elseif (Test-Path -LiteralPath $legacyEnvironmentFile -PathType Leaf) { $legacyEnvironmentFile } else { '' }
+$backupInstaller = Join-Path $AppRoot 'Scripts\INSTALL-DB-BACKUP-TASK.ps1'
+if (-not $backupEnvironmentFile) {
+    Write-Warning 'Sauvegarde automatique non configurée : fichier de connexion DB introuvable.'
+}
+elseif (-not (Test-Path -LiteralPath $backupInstaller -PathType Leaf)) {
+    Write-Warning "Sauvegarde automatique non configurée : script absent ($backupInstaller)."
+}
+else {
+    try {
+        & $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $backupInstaller -AppRoot $AppRoot -EnvironmentFile $backupEnvironmentFile -PgBin $pgBin -BackupDirectory (Join-Path $AppRoot 'backups')
+        if ($LASTEXITCODE -ne 0) {
+            throw "Installation des tâches de sauvegarde échouée (code $LASTEXITCODE)."
+        }
+        Write-Step 'Tâches de sauvegarde installées et vérifiées.'
+    }
+    catch {
+        Write-Warning ("Le serveur Clarodaro est opérationnel, mais la sauvegarde automatique reste à configurer : " + $_.Exception.Message)
+        Write-Step 'Consulter installer-services.log pour le diagnostic de la sauvegarde.'
+    }
+}
+
+# La boucle précédente a déjà confirmé l'identité du processus et une réponse HTTP.
+# Aucun second contrôle ponctuel n'est nécessaire ici.
 
 try {
     if (-not (Get-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -ErrorAction SilentlyContinue)) {
