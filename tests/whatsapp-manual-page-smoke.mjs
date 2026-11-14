@@ -12,7 +12,7 @@ new vm.Script(script, { filename: pagePath });
 const ids = [...page.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Duplicate DOM IDs detected');
 for (const match of script.matchAll(/\$\('([^']+)'\)/g)) {
-  assert.ok(ids.includes(match[1]), \`Missing DOM element referenced by script: \${match[1]}\`);
+  assert.ok(ids.includes(match[1]), 'Missing DOM element referenced by script: ' + match[1]);
 }
 assert.ok(page.includes('Meta WhatsApp Business Cloud API'), 'Official Meta Cloud API branding missing');
 assert.ok(script.includes("fetch('/api/whatsapp/send.php'"), 'Configuration status endpoint missing');
