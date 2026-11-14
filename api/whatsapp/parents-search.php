@@ -39,19 +39,23 @@ try {
           AND c.purpose = :purpose
           AND c.status = 'OPTED_IN'
          WHERE
-           p.first_name ILIKE :name_search
-           OR p.last_name ILIKE :name_search
-           OR (p.first_name || ' ' || p.last_name) ILIKE :name_search
-           OR (:digits <> '' AND regexp_replace(COALESCE(p.phone, ''), '[^0-9]', '', 'g') LIKE :phone_search)
-           OR (:digits <> '' AND regexp_replace(c.phone_e164, '[^0-9]', '', 'g') LIKE :phone_search)
+           p.first_name ILIKE :first_name_search
+           OR p.last_name ILIKE :last_name_search
+           OR (p.first_name || ' ' || p.last_name) ILIKE :full_name_search
+           OR (:parent_digits <> '' AND regexp_replace(COALESCE(p.phone, ''), '[^0-9]', '', 'g') LIKE :parent_phone_search)
+           OR (:consent_digits <> '' AND regexp_replace(c.phone_e164, '[^0-9]', '', 'g') LIKE :consent_phone_search)
          ORDER BY p.last_name, p.first_name
          LIMIT 20"
     );
     $stmt->execute([
         ':purpose' => $purpose,
-        ':name_search' => $nameSearch,
-        ':digits' => $digits,
-        ':phone_search' => $phoneSearch,
+        ':first_name_search' => $nameSearch,
+        ':last_name_search' => $nameSearch,
+        ':full_name_search' => $nameSearch,
+        ':parent_digits' => $digits,
+        ':consent_digits' => $digits,
+        ':parent_phone_search' => $phoneSearch,
+        ':consent_phone_search' => $phoneSearch,
     ]);
     $parents = array_map(static function (array $row): array {
         return [
