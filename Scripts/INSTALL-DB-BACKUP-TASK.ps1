@@ -62,6 +62,40 @@ foreach ($name in @($TaskName, $CopyTaskName)) {
         throw "La tâche $name n'est pas enregistrée sous LOCAL SERVICE."
     }
 }
+
+# Exécuter une première sauvegarde sous le même compte que la tâche quotidienne.
+# Cela valide réellement l'accès au fichier .env, au runtime PostgreSQL et au dossier.
+$before = Get-ChildItem -LiteralPath $backupFullPath -Filter '*.backup' -File -ErrorAction SilentlyContinue |
+    Measure-Object -Property LastWriteTimeUtc -Maximum
+$beforeTime = if ($before.Count -gt 0) { [datetime]$before.Maximum } else { [datetime]::MinValue }
+Start-ScheduledTask -TaskName $TaskName
+$deadline = (Get-Date).AddMinutes(5)
+$verifiedBackup = $null
+do {
+    Start-Sleep -Seconds 3
+    $candidate = Get-ChildItem -LiteralPath $backupFullPath -Filter '*.backup' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.LastWriteTimeUtc -gt $beforeTime } |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+    if ($candidate -and (Test-Path -LiteralPath ($candidate.FullName + '.manifest.json') -PathType Leaf)) {
+        $manifest = Get-Content -LiteralPath ($candidate.FullName + '.manifest.json') -Raw | ConvertFrom-Json
+        $hash = (Get-FileHash -LiteralPath $candidate.FullName -Algorithm SHA256).Hash
+        if ($manifest.sha256 -eq $hash -and [long]$manifest.sizeBytes -eq [long]$candidate.Length) {
+            $verifiedBackup = $candidate
+            break
+        }
+    }
+    $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($taskInfo -and $taskInfo.LastRunTime -gt (Get-Date).AddMinutes(-5) -and $taskInfo.LastTaskResult -ne 0 -and (Get-ScheduledTask -TaskName $TaskName).State -ne 'Running') {
+        throw "La première sauvegarde a échoué (LastTaskResult=$($taskInfo.LastTaskResult)). Vérifiez l'accès PostgreSQL et le journal des tâches."
+    }
+} while ((Get-Date) -lt $deadline)
+
+if (-not $verifiedBackup) {
+    $taskInfo = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction SilentlyContinue
+    throw "La tâche est installée mais aucune sauvegarde récente avec manifeste SHA-256 valide n'a été produite en 5 minutes (LastTaskResult=$($taskInfo.LastTaskResult))."
+}
+Write-Host "[OK] Première sauvegarde vérifiée : $($verifiedBackup.Name)"
 Write-Host '[OK] Planification des sauvegardes installée.'
 Write-Host "Sauvegarde quotidienne : $ScheduleTime"
 Write-Host "Dossier : $backupFullPath"
