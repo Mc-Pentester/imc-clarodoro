@@ -408,7 +408,7 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
     }
 
     // Refuser les champs inconnus
-    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data'];
+    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data', 'class_id'];
     foreach (array_keys($data) as $field) {
         if (!in_array($field, $allowedFields, true)) {
             apiError(422, "Champ inconnu: $field");
@@ -440,6 +440,15 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
         if ($firstName === '') {
             apiError(422, 'first_name est requis pour PUT');
         }
+    }
+
+    // La classe est modifiée sur l'inscription active, jamais directement sur students.
+    $newClassId = null;
+    if (array_key_exists('class_id', $data)) {
+        if (!is_string($data['class_id']) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', trim($data['class_id']))) {
+            apiError(422, 'Une classe valide est requise');
+        }
+        $newClassId = trim($data['class_id']);
     }
 
     // Validate provided fields
@@ -538,7 +547,7 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
     }
 
     // PATCH requires at least one field to update
-    if ($method === 'PATCH' && count($updateFields) === 0) {
+    if ($method === 'PATCH' && count($updateFields) === 0 && $newClassId === null) {
         apiError(422, 'Aucun champ à modifier pour PATCH');
     }
 
@@ -595,44 +604,108 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
         }
     }
 
-    // Build UPDATE query
-    $updateFields[] = 'updated_at = NOW()';
-    $setClause = implode(', ', $updateFields);
-
+    // Les changements de dossier et d'inscription sont atomiques.
     try {
-        $stmt = $pdo->prepare(
-            "UPDATE students
-             SET $setClause
-             WHERE id = :id
-             RETURNING
-                id,
-                matricule,
-                last_name,
-                first_name,
-                date_of_birth,
-                sex,
-                address,
-                phone,
-                profile_data,
-                status,
-                created_at,
-                updated_at"
-        );
+        $pdo->beginTransaction();
 
-        $stmt->execute($params);
-        $student = $stmt->fetch();
+        if ($newClassId !== null) {
+            $classStmt = $pdo->prepare("SELECT id FROM classes WHERE id = :class_id AND status = 'ACTIVE' LIMIT 1");
+            $classStmt->execute([':class_id' => $newClassId]);
+            if (!$classStmt->fetch()) {
+                $pdo->rollBack();
+                apiError(422, 'La classe sélectionnée est indisponible ou inactive');
+            }
+
+            if ($user['role_name'] !== 'PDG') {
+                $assignmentStmt = $pdo->prepare(
+                    "SELECT 1 FROM teacher_class_subjects tcs
+                     INNER JOIN user_teachers ut ON ut.teacher_id = tcs.teacher_id
+                     WHERE tcs.class_id = :class_id AND tcs.status = 'ACTIVE' AND ut.user_id = :user_id
+                     LIMIT 1"
+                );
+                $assignmentStmt->execute([':class_id' => $newClassId, ':user_id' => $user['id']]);
+                if (!$assignmentStmt->fetch()) {
+                    $pdo->rollBack();
+                    apiError(403, 'Vous ne pouvez pas inscrire cet élève dans cette classe');
+                }
+            }
+
+            $enrollmentStmt = $pdo->prepare(
+                "SELECT id, class_id, school_year_id FROM enrollments
+                 WHERE student_id = :student_id AND status = 'ACTIVE'
+                 ORDER BY created_at DESC, id DESC LIMIT 1 FOR UPDATE"
+            );
+            $enrollmentStmt->execute([':student_id' => $id]);
+            $activeEnrollment = $enrollmentStmt->fetch();
+            if (!$activeEnrollment) {
+                $pdo->rollBack();
+                apiError(409, 'Aucune inscription active à corriger pour cet élève');
+            }
+
+            if ($activeEnrollment['class_id'] !== $newClassId) {
+                // L'ancienne inscription est conservée : notes et présences restent liées
+                // à son enrollment_id historique et ne sont jamais déplacées.
+                $cancelStmt = $pdo->prepare("UPDATE enrollments SET status = 'CANCELLED', updated_at = NOW() WHERE id = :id");
+                $cancelStmt->execute([':id' => $activeEnrollment['id']]);
+                $insertEnrollment = $pdo->prepare(
+                    "INSERT INTO enrollments (student_id, class_id, school_year_id, status)
+                     VALUES (:student_id, :class_id, :school_year_id, 'ACTIVE')"
+                );
+                $insertEnrollment->execute([
+                    ':student_id' => $id,
+                    ':class_id' => $newClassId,
+                    ':school_year_id' => $activeEnrollment['school_year_id'],
+                ]);
+            }
+        }
+
+        if ($updateFields !== []) {
+            $updateFields[] = 'updated_at = NOW()';
+            $setClause = implode(', ', $updateFields);
+            $stmt = $pdo->prepare(
+                "UPDATE students SET $setClause WHERE id = :id
+                 RETURNING id, matricule, last_name, first_name, date_of_birth, sex,
+                           address, phone, profile_data, status, created_at, updated_at"
+            );
+            $stmt->execute($params);
+            $student = $stmt->fetch();
+        } else {
+            $studentStmt = $pdo->prepare(
+                'SELECT id, matricule, last_name, first_name, date_of_birth, sex,
+                        address, phone, profile_data, status, created_at, updated_at
+                 FROM students WHERE id = :id'
+            );
+            $studentStmt->execute([':id' => $id]);
+            $student = $studentStmt->fetch();
+        }
+
+        $pdo->commit();
+
+        $enrollmentInfo = $pdo->prepare(
+            "SELECT e.class_id, e.school_year_id, c.name AS class_name, sy.label AS school_year_label
+             FROM enrollments e
+             INNER JOIN classes c ON c.id = e.class_id
+             INNER JOIN school_years sy ON sy.id = e.school_year_id
+             WHERE e.student_id = :student_id AND e.status = 'ACTIVE'
+             ORDER BY sy.start_date DESC, e.created_at DESC, e.id DESC LIMIT 1"
+        );
+        $enrollmentInfo->execute([':student_id' => $id]);
+        $activeInfo = $enrollmentInfo->fetch();
+        if ($activeInfo) $student = array_merge($student, $activeInfo);
+
         if (isset($student['profile_data']) && is_string($student['profile_data'])) {
             $decoded = json_decode($student['profile_data'], true);
             $student['profile_data'] = is_array($decoded) ? $decoded : [];
         }
 
         http_response_code(200);
-
-        echo json_encode([
-            'success' => true,
-            'student' => $student,
-        ], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['success' => true, 'student' => $student], JSON_UNESCAPED_UNICODE);
     } catch (PDOException $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        if (str_contains($e->getMessage(), 'enrollments_one_active_per_student_year')) {
+            apiError(409, 'Une inscription active existe déjà pour cet élève et cette année scolaire');
+        }
+        error_log('Student update failed: ' . $e->getMessage());
         apiError(500, 'Erreur interne du serveur');
     }
 }
