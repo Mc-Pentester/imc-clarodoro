@@ -50,21 +50,85 @@ if ($task) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction Stop
     Write-UpgradeLog 'Demande Stop-ScheduledTask acceptée.'
     $expectedPhp = [System.IO.Path]::GetFullPath((Join-Path $AppRoot 'runtime\\php\\php.exe'))
+    $expectedRouter = [System.IO.Path]::GetFullPath((Join-Path $AppRoot 'router.php'))
     $deadline = (Get-Date).AddSeconds(45)
+    $graceDeadline = (Get-Date).AddSeconds(5)
+    $forcedStopAttempted = $false
+
     do {
         $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
             Select-Object -First 1
-        if (-not $listener) { Write-UpgradeLog 'Aucun écouteur sur le port HTTP ; arrêt PHP confirmé.'; break }
+        if (-not $listener) {
+            Write-UpgradeLog 'Aucun écouteur sur le port HTTP ; arrêt PHP confirmé.'
+            break
+        }
 
-        $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
-        if (-not $listenerProcess -or -not $listenerProcess.ExecutablePath) {
-            throw "Impossible d'identifier le processus qui écoute sur le port HTTP $HttpPort (PID $($listener.OwningProcess)). Aucun fichier ne sera remplacé."
+        $listenerPid = [int]$listener.OwningProcess
+        $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
+        if (-not $listenerProcess) {
+            throw "Impossible d'identifier le processus qui écoute sur le port HTTP $HttpPort (PID $listenerPid). Aucun fichier ne sera remplacé."
         }
-        Write-UpgradeLog ('Écouteur HTTP : PID=' + $listener.OwningProcess + '; exécutable=' + $listenerProcess.ExecutablePath)
-        $actualExecutable = [System.IO.Path]::GetFullPath([string]$listenerProcess.ExecutablePath)
-        if (-not [string]::Equals($actualExecutable, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Le port HTTP $HttpPort est occupé par un autre programme : $actualExecutable. Aucun processus tiers ne sera arrêté."
+
+        $executablePath = [string]$listenerProcess.ExecutablePath
+        if ([string]::IsNullOrWhiteSpace($executablePath)) {
+            # CIM can omit ExecutablePath even for an accessible process. Get-Process
+            # provides a second read path; never infer identity from the PID alone.
+            $processInfo = Get-Process -Id $listenerPid -ErrorAction SilentlyContinue
+            if ($processInfo) { $executablePath = [string]$processInfo.Path }
         }
+        $commandLine = [string]$listenerProcess.CommandLine
+        if ([string]::IsNullOrWhiteSpace($executablePath) -or [string]::IsNullOrWhiteSpace($commandLine)) {
+            throw "Impossible de confirmer l'identité complète du processus HTTP (PID $listenerPid). Aucun fichier ne sera remplacé."
+        }
+
+        $actualExecutable = [System.IO.Path]::GetFullPath($executablePath)
+        $isExpectedExecutable = [string]::Equals($actualExecutable, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
+        $hasExpectedRouter = $commandLine.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasExpectedAppRoot = $commandLine.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
+        $hasExpectedPort = $commandLine -match ('(?i)(?:^|\\s)-S\\s+["'']?0\\.0\\.0\\.0:' + $HttpPort + '["'']?(?:\\s|$)')
+
+        Write-UpgradeLog ('Écouteur HTTP : PID=' + $listenerPid + '; exécutable=' + $actualExecutable + '; commande=' + $commandLine)
+        if (-not $isExpectedExecutable -or -not $hasExpectedRouter -or -not $hasExpectedAppRoot -or -not $hasExpectedPort) {
+            throw "Le port HTTP $HttpPort est occupé par un processus qui ne peut pas être authentifié comme le serveur Clarodaro attendu (PID $listenerPid). Aucun processus tiers ne sera arrêté."
+        }
+
+        if (-not $forcedStopAttempted -and (Get-Date) -ge $graceDeadline) {
+            # Re-read the listener and process immediately before termination to
+            # prevent killing a recycled PID or a process that took over the port.
+            $currentListener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            if ($currentListener -and [int]$currentListener.OwningProcess -eq $listenerPid) {
+                $currentProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
+                $currentPath = if ($currentProcess) { [string]$currentProcess.ExecutablePath } else { '' }
+                if ([string]::IsNullOrWhiteSpace($currentPath)) {
+                    $currentProcessInfo = Get-Process -Id $listenerPid -ErrorAction SilentlyContinue
+                    if ($currentProcessInfo) { $currentPath = [string]$currentProcessInfo.Path }
+                }
+                $currentCommand = if ($currentProcess) { [string]$currentProcess.CommandLine } else { '' }
+                $currentExecutableMatches = $false
+                if (-not [string]::IsNullOrWhiteSpace($currentPath)) {
+                    $currentExecutableMatches = [string]::Equals([System.IO.Path]::GetFullPath($currentPath), $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
+                }
+                $currentIdentityMatches = $currentExecutableMatches -and
+                    $currentCommand.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                    $currentCommand.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                    ($currentCommand -match ('(?i)(?:^|\\s)-S\\s+["'']?0\\.0\\.0\\.0:' + $HttpPort + '["'']?(?:\\s|$)'))
+                if (-not $currentIdentityMatches) {
+                    throw "L'identité du processus HTTP (PID $listenerPid) a changé avant son arrêt. Aucun processus ne sera arrêté."
+                }
+
+                Write-UpgradeLog ("Arrêt forcé du processus PHP Clarodaro authentifié : PID=$listenerPid.")
+                try {
+                    Stop-Process -Id $listenerPid -Force -ErrorAction Stop
+                    Wait-Process -Id $listenerPid -Timeout 15 -ErrorAction SilentlyContinue
+                    Write-UpgradeLog ("Commande d'arrêt envoyée au processus PHP PID=$listenerPid.")
+                } catch {
+                    throw "Impossible d'arrêter le processus PHP Clarodaro authentifié (PID $listenerPid). Vérifiez les droits administrateur. Détail : $($_.Exception.Message)"
+                }
+                $forcedStopAttempted = $true
+            }
+        }
+
         Start-Sleep -Seconds 1
     } while ((Get-Date) -lt $deadline)
 
@@ -72,7 +136,7 @@ if ($task) {
         Select-Object -First 1
     if ($listener) {
         Write-UpgradeLog ('Échec arrêt HTTP : PID=' + $listener.OwningProcess)
-        throw "Le serveur PHP Clarodaro (PID $($listener.OwningProcess)) ne s'est pas arrêté sur le port $HttpPort. Mise à jour interrompue avant remplacement des fichiers."
+        throw "Le serveur PHP Clarodaro (PID $($listener.OwningProcess)) écoute toujours sur le port $HttpPort. Mise à jour interrompue avant remplacement des fichiers."
     }
 }
 
