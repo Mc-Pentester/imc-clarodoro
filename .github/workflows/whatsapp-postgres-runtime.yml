@@ -42,6 +42,8 @@ jobs:
       DB_USER: postgres
       DB_PASSWORD: postgres
       WHATSAPP_SEND_ENABLED: "false"
+      WHATSAPP_APP_SECRET: "whatsapp-ci-app-secret"
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "whatsapp-ci-verify-token"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -189,9 +191,9 @@ jobs:
           WHERE u.username='whatsapp-ci-user'
             AND c.phone_e164 IN ('+50937000101','+50937000102','+50937000111','+50937000121','+50937000122');
           INSERT INTO whatsapp_recipient_message_log
-            (consent_id,idempotency_key,purpose,status,template_name,payload_sha256,initiated_by)
+            (consent_id,idempotency_key,purpose,status,template_name,payload_sha256,provider_message_id,initiated_by)
           SELECT c.id,'whatsapp-recipient-ci-key-000001','GENERAL','PROCESSING',
-                 'ci_template',repeat('c',64),u.id
+                 'ci_template',repeat('c',64),'wamid.whatsapp-ci-test',u.id
           FROM whatsapp_recipient_consents c CROSS JOIN users u
           WHERE c.recipient_type='STUDENT' AND c.student_id='00000000-0000-4000-8000-000000009111'
             AND u.username='whatsapp-ci-user';
@@ -206,9 +208,9 @@ jobs:
               THEN RAISE EXCEPTION 'Multi-recipient consent types missing'; END IF;
             BEGIN
               INSERT INTO whatsapp_recipient_message_log
-                (consent_id,idempotency_key,purpose,status,template_name,payload_sha256,initiated_by)
+                (consent_id,idempotency_key,purpose,status,template_name,payload_sha256,provider_message_id,initiated_by)
               SELECT c.id,'whatsapp-recipient-ci-key-000001','GENERAL','PROCESSING',
-                     'ci_template',repeat('d',64),u.id
+                     'ci_template',repeat('d',64),'wamid.whatsapp-ci-test',u.id
               FROM whatsapp_recipient_consents c CROSS JOIN users u
               WHERE c.recipient_type='STUDENT' AND c.student_id='00000000-0000-4000-8000-000000009111'
                 AND u.username='whatsapp-ci-user';
@@ -302,6 +304,8 @@ jobs:
           php -l api/whatsapp/recipient-consents.php
           php -l api/whatsapp/recipient-search.php
           php -l api/whatsapp/send-multi.php
+          php -l api/whatsapp/webhook.php
+          php -l api/whatsapp/recipient-message-history.php
           php -l private-pages/whatsapp-send.php
 
       - name: Verify unauthenticated HTTP requests are rejected
@@ -347,6 +351,10 @@ jobs:
 
       - name: Smoke-test manual WhatsApp page
         run: node tests/whatsapp-manual-page-smoke.mjs
+
+      - name: Verify Meta webhook signature, idempotency and delivery lifecycle
+        shell: bash
+        run: bash tests/whatsapp-webhook-http.sh
 
       - name: Verify authenticated WhatsApp HTTP lifecycle
         shell: bash
