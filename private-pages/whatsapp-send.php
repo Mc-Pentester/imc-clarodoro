@@ -73,7 +73,6 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 const csrf=document.querySelector('meta[name="csrf-token"]').content,$=id=>document.getElementById(id);
 let configReady=false;
 function show(node,text,error=false){node.hidden=false;node.textContent=text;node.classList.toggle('error',error)}
-function validParent(){const value=$('parent_id').value.trim();if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error('Recherchez puis sélectionnez un parent dans la liste.');return value}
 let recipientSearchTimer=null,recipientSearchController=null;
 function clearSelectedRecipient(){
   $('recipient_id').value='';$('parent_id').value='';
@@ -141,7 +140,7 @@ $('consentSearch').addEventListener('input',()=>{
         b.addEventListener('click',()=>{
           $('consentRecipientId').value=person.id;
           $('consentSelected').textContent='Personne sélectionnée : '+name;$('consentSelected').hidden=false;
-          if(person.phone&&/^\\+[1-9][0-9]{7,14}$/.test(person.phone))$('consentPhone').value=person.phone;
+          if(person.phone&&/^\+[1-9][0-9]{7,14}$/.test(person.phone))$('consentPhone').value=person.phone;
           box.hidden=true;box.replaceChildren();
         });
         box.appendChild(b);
