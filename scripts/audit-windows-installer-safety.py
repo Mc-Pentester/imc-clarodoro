@@ -71,6 +71,18 @@ require("pdgCountBeforeSetup" in workflow and "setupSession" in workflow
         "Windows smoke test must prove no PDG is created during install and create it through post-install HTTP")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
+prepare_upgrade = read("installer/Prepare-Upgrade.ps1")
+require("Stop-Process -Id $listenerPid -Force -ErrorAction Stop" in prepare_upgrade
+        and "Wait-Process -Id $listenerPid -Timeout 15" in prepare_upgrade,
+        "upgrade must explicitly stop and wait for the exact verified PHP listener PID")
+require("CommandLine" in prepare_upgrade and "$expectedRouter" in prepare_upgrade
+        and "$hasExpectedPort" in prepare_upgrade and "$currentIdentityMatches" in prepare_upgrade,
+        "PHP process termination must verify executable, app router, app root and HTTP port twice")
+require("Get-Process -Id $listenerPid" in prepare_upgrade,
+        "PHP executable-path fallback is missing when CIM omits ExecutablePath")
+require("Stop-Process -Name" not in prepare_upgrade,
+        "upgrade must never stop PHP processes by process name")
+
 require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
         "uninstall cleanup hook missing")
 require("Configure-Windows-Services.ps1" in iss and "AfterInstall: ConfigureAfterFiles" in iss and "procedure ConfigureAfterFiles" in iss,
