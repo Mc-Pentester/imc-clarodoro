@@ -135,6 +135,7 @@ jobs:
           INSERT INTO roles (name, description) VALUES ('WhatsApp CI', 'Isolated runtime test');
           INSERT INTO users (username, password_hash, role_id)
           SELECT 'whatsapp-ci-user', 'not-a-real-login', id FROM roles WHERE name = 'WhatsApp CI';
+          INSERT INTO parents (last_name, first_name) VALUES ('Runtime', 'Fixture');
           INSERT INTO parents (id,last_name,first_name,phone) VALUES
             ('00000000-0000-4000-8000-000000009101','Parent','One','+50937000101'),
             ('00000000-0000-4000-8000-000000009102','Parent','Two','+50937000102'),
