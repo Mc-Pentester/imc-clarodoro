@@ -155,7 +155,7 @@ $('saveConsentButton').addEventListener('click',async()=>{
   const out=$('consentResult');out.hidden=true;
   const recipientId=$('consentRecipientId').value.trim(),phone=$('consentPhone').value.trim(),status=$('consentStatus').value;
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipientId)){show(out,'Sélectionnez une personne.',true);return}
-  if(!/^\\+[1-9][0-9]{7,14}$/.test(phone)){show(out,'Saisissez un numéro international valide, par exemple +509XXXXXXXX.',true);return}
+  if(!/^\+[1-9][0-9]{7,14}$/.test(phone)){show(out,'Saisissez un numéro international valide, par exemple +509XXXXXXXX.',true);return}
   if(status==='OPTED_IN'&&!$('consentSource').value.trim()){show(out,'La source du consentement est obligatoire.',true);return}
   $('saveConsentButton').disabled=true;
   try{
