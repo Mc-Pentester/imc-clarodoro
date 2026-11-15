@@ -33,18 +33,18 @@ try {
                 ORDER BY last_name, first_name LIMIT 30";
     } elseif ($type === 'STUDENT') {
         $sql = "SELECT id, first_name, last_name, phone FROM students
-                WHERE status = 'ACTIVE' AND (first_name ILIKE :q OR last_name ILIKE :q
-                   OR (first_name || ' ' || last_name) ILIKE :q OR matricule ILIKE :q)
+                WHERE status = 'ACTIVE' AND (first_name ILIKE :q1 OR last_name ILIKE :q2
+                   OR (first_name || ' ' || last_name) ILIKE :q3 OR matricule ILIKE :q4)
                 ORDER BY last_name, first_name LIMIT 30";
     } elseif ($type === 'STAFF') {
         $sql = "SELECT id, first_name, last_name, phone FROM staff
-                WHERE status = 'ACTIVE' AND (first_name ILIKE :q OR last_name ILIKE :q
-                   OR (first_name || ' ' || last_name) ILIKE :q)
+                WHERE status = 'ACTIVE' AND (first_name ILIKE :q1 OR last_name ILIKE :q2
+                   OR (first_name || ' ' || last_name) ILIKE :q3)
                 ORDER BY last_name, first_name LIMIT 30";
     } else {
         $sql = "SELECT id, first_name, last_name, phone FROM teachers
-                WHERE status = 'ACTIVE' AND (first_name ILIKE :q OR last_name ILIKE :q
-                   OR (first_name || ' ' || last_name) ILIKE :q)
+                WHERE status = 'ACTIVE' AND (first_name ILIKE :q1 OR last_name ILIKE :q2
+                   OR (first_name || ' ' || last_name) ILIKE :q3)
                 ORDER BY last_name, first_name LIMIT 30";
     }
     $stmt = $pdo->prepare($sql);
