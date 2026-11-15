@@ -140,8 +140,21 @@ foreach ($consentTargets as $target) {
     }
 }
 
+if ($accepted === 0) {
+    http_response_code(502);
+    echo json_encode([
+        'success' => false,
+        'error' => 'Aucun destinataire n’a reçu une acceptation de Meta. Consultez les résultats individuels avant toute nouvelle tentative.',
+        'accepted_by_meta' => 0,
+        'total_eligible' => count($consentTargets),
+        'results' => $results,
+        'message' => 'Une erreur réseau peut avoir une issue incertaine; aucun nouvel envoi automatique n’est lancé.',
+    ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    exit;
+}
+
 echo json_encode([
-    'success' => $accepted > 0,
+    'success' => true,
     'accepted_by_meta' => $accepted,
     'total_eligible' => count($consentTargets),
     'results' => $results,
