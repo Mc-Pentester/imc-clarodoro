@@ -90,6 +90,11 @@ call_api send_after_opt_out 403 "$ALLOWED_SID" POST /api/whatsapp/send.php "$SEN
 call_api generic_parent_consent_read 200 "$ALLOWED_SID" GET "/api/whatsapp/recipient-consents.php?recipient_type=PARENT&recipient_id=$PARENT_ID" '' ''
 php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-generic_parent_consent_read.json"),true); if (($d["success"]??false)!==true || count($d["consents"]??[])!==1 || ($d["consents"][0]["status"]??"")!=="OPTED_OUT") exit(1);'
 
+PARENT_NEW_CONSENT="{\\"recipient_type\\":\\"PARENT\\",\\"recipient_id\\":\\"$PARENT_ID\\",\\"purpose\\":\\"ATTENDANCE\\",\\"phone_e164\\":\\"+50937000000\\",\\"status\\":\\"OPTED_IN\\",\\"consent_source\\":\\"New generic consent API CI\\"}"
+call_api parent_generic_opt_in 200 "$ALLOWED_SID" POST /api/whatsapp/recipient-consents.php "$PARENT_NEW_CONSENT" whatsapp-ci-csrf-token
+call_api parent_legacy_read_after_generic 200 "$ALLOWED_SID" GET "/api/whatsapp/consents.php?parent_id=$PARENT_ID" '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-parent_legacy_read_after_generic.json"),true); $found=false; foreach (($d["consents"]??[]) as $x) { if (($x["purpose"]??"")==="ATTENDANCE" && ($x["status"]??"")==="OPTED_IN") $found=true; } if (!$found) exit(1);'
+
 STUDENT_ID='00000000-0000-4000-8000-000000009111'
 STUDENT_CONSENT="{\"recipient_type\":\"STUDENT\",\"recipient_id\":\"$STUDENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000111\",\"status\":\"OPTED_IN\",\"consent_source\":\"HTTP CI student consent\"}"
 call_api student_opt_in 200 "$ALLOWED_SID" POST /api/whatsapp/recipient-consents.php "$STUDENT_CONSENT" whatsapp-ci-csrf-token
