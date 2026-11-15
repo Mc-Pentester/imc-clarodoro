@@ -53,6 +53,25 @@ event_count="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_
 test "$final_status" = "READ"
 test "$event_count" = "2"
 
+# Simulate the webhook arriving before the outbound send transaction commits.
+race_body='{"entry":[{"changes":[{"value":{"statuses":[{"id":"wamid.whatsapp-ci-race","status":"delivered","timestamp":"1800000002"},{"id":"wamid.whatsapp-ci-race","status":"read","timestamp":"1800000003"}]}}]}]}'
+race_response="$(sign_and_post "$race_body")"
+php -r '$d=json_decode($argv[1],true); if (($d["success"]??false)!==true || ($d["processed"]??-1)!==0) exit(1);' "$race_response"
+
+psql -X -v ON_ERROR_STOP=1 <<'SQL'
+INSERT INTO whatsapp_recipient_message_log
+  (consent_id,idempotency_key,purpose,status,template_name,payload_sha256,provider_message_id,initiated_by)
+SELECT c.id,'whatsapp-recipient-race-key-000001','GENERAL','SENT',
+       'ci_template',repeat('e',64),'wamid.whatsapp-ci-race',u.id
+FROM whatsapp_recipient_consents c CROSS JOIN users u
+WHERE c.recipient_type='STUDENT'
+  AND c.student_id='00000000-0000-4000-8000-000000009111'
+  AND u.username='whatsapp-ci-user';
+SQL
+php -r 'require "config/database.php"; require "api/whatsapp/delivery-status.php"; reconcileWhatsAppDeliveryStatus(getDatabaseConnection(), $argv[1]);' 'wamid.whatsapp-ci-race'
+race_status="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT status FROM whatsapp_recipient_message_log WHERE provider_message_id='wamid.whatsapp-ci-race'")"
+test "$race_status" = "READ"
+
 psql -X -v ON_ERROR_STOP=1 <<'SQL'
 DO $webhook_audit$
 BEGIN
@@ -67,4 +86,4 @@ END
 $webhook_audit$;
 SQL
 
-echo "PASS Meta webhook verification, HMAC signature, deduplication, DELIVERED -> READ lifecycle and append-only audit"
+echo "PASS Meta webhook verification, HMAC, deduplication, delivery/read lifecycle, early-webhook race reconciliation and append-only audit"
