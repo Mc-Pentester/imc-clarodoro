@@ -135,7 +135,61 @@ jobs:
           INSERT INTO roles (name, description) VALUES ('WhatsApp CI', 'Isolated runtime test');
           INSERT INTO users (username, password_hash, role_id)
           SELECT 'whatsapp-ci-user', 'not-a-real-login', id FROM roles WHERE name = 'WhatsApp CI';
-          INSERT INTO parents (last_name, first_name) VALUES ('Runtime', 'Fixture');
+          INSERT INTO parents (id,last_name,first_name,phone) VALUES
+            ('00000000-0000-4000-8000-000000009101','Parent','One','+50937000101'),
+            ('00000000-0000-4000-8000-000000009102','Parent','Two','+50937000102')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO students(id,matricule,last_name,first_name,date_of_birth,status)
+          VALUES ('00000000-0000-4000-8000-000000009111','WA-CI-ADULT','Student','Adult','2000-01-01','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO student_parents(student_id,parent_id,relationship_type,is_primary) VALUES
+            ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009101','Parent',TRUE),
+            ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009102','Guardian',FALSE)
+          ON CONFLICT (student_id,parent_id) DO NOTHING;
+          INSERT INTO staff(id,first_name,last_name,phone,status)
+          VALUES ('00000000-0000-4000-8000-000000009121','Staff','Recipient','+50937000121','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO teachers(id,first_name,last_name,phone,status)
+          VALUES ('00000000-0000-4000-8000-000000009122','Teacher','Recipient','+50937000122','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO whatsapp_recipient_consents
+            (recipient_type,parent_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES
+            ('PARENT','00000000-0000-4000-8000-000000009101','GENERAL','+50937000101','OPTED_IN','CI',NOW()),
+            ('PARENT','00000000-0000-4000-8000-000000009102','GENERAL','+50937000102','OPTED_IN','CI',NOW()),
+            ('STUDENT',NULL,'GENERAL','+50937000111','OPTED_IN','CI',NOW()),
+            ('STAFF',NULL,'GENERAL','+50937000121','OPTED_IN','CI',NOW()),
+            ('TEACHER',NULL,'GENERAL','+50937000122','OPTED_IN','CI',NOW())
+          ON CONFLICT DO NOTHING;
+          UPDATE whatsapp_recipient_consents SET student_id='00000000-0000-4000-8000-000000009111'
+          WHERE recipient_type='STUDENT' AND phone_e164='+50937000111';
+          UPDATE whatsapp_recipient_consents SET staff_id='00000000-0000-4000-8000-000000009121'
+          WHERE recipient_type='STAFF' AND phone_e164='+50937000121';
+          UPDATE whatsapp_recipient_consents SET teacher_id='00000000-0000-4000-8000-000000009122'
+          WHERE recipient_type='TEACHER' AND phone_e164='+50937000122';
+          INSERT INTO whatsapp_recipient_consent_audit
+            (consent_id,recipient_type,previous_status,new_status,actor_user_id)
+          SELECT c.id,c.recipient_type,NULL,c.status,u.id
+          FROM whatsapp_recipient_consents c CROSS JOIN users u
+          WHERE u.username='whatsapp-ci-user'
+            AND c.phone_e164 IN ('+50937000101','+50937000102','+50937000111','+50937000121','+50937000122');
+          DO $multi$
+          BEGIN
+            IF (SELECT COUNT(*) FROM whatsapp_recipient_consents
+                WHERE recipient_type='PARENT' AND parent_id IN
+                  ('00000000-0000-4000-8000-000000009101','00000000-0000-4000-8000-000000009102')
+                  AND status='OPTED_IN') <> 2
+              THEN RAISE EXCEPTION 'All consented linked parents must be represented'; END IF;
+            IF (SELECT COUNT(*) FROM whatsapp_recipient_consents WHERE recipient_type IN ('PARENT','STUDENT','STAFF','TEACHER')) < 5
+              THEN RAISE EXCEPTION 'Multi-recipient consent types missing'; END IF;
+            BEGIN
+              UPDATE whatsapp_recipient_consent_audit SET new_status='OPTED_OUT';
+              RAISE EXCEPTION 'Recipient audit UPDATE unexpectedly succeeded';
+            EXCEPTION WHEN raise_exception THEN
+              IF SQLERRM = 'Recipient audit UPDATE unexpectedly succeeded' THEN RAISE; END IF;
+            END;
+          END $multi$;
 
           INSERT INTO whatsapp_consents
             (parent_id, purpose, phone_e164, status, consent_source, consented_at, created_by, updated_by)
