@@ -35,7 +35,7 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <h2>Envoyer manuellement</h2>
 <div class="grid">
 <div class="wide"><label for="manual_message">Message à préparer</label><textarea id="manual_message" maxlength="4000" placeholder="Rédigez le message à envoyer au parent…" required></textarea></div>
-<div class="wide actions"><button type="button" id="manualButton">Ouvrir WhatsApp pour vérifier et envoyer</button></div>
+<div class="wide actions"><button type="button" id="manualButton" disabled>Ouvrir WhatsApp pour vérifier et envoyer (parents uniquement)</button></div>
 </div>
 <div id="manualResult" class="result" hidden aria-live="polite"></div>
 <p class="hint">Clarodaro vérifie à nouveau le consentement et journalise la préparation avant d’ouvrir WhatsApp. Le message prérempli figure dans l’URL WhatsApp : évitez les informations scolaires, médicales, disciplinaires ou financières sensibles.</p>
@@ -154,8 +154,8 @@ function makeIdempotencyKey(){
 $('sendButton').addEventListener('click',async()=>{
   const out=$('sendResult');out.hidden=true;
   if(!configReady){show(out,'La configuration Meta n’est pas prête. Aucun envoi effectué.',true);return}
-  let parentId;
-  try{parentId=validParent()}catch(error){show(out,error.message,true);return}
+  const recipientId=$('recipient_id').value.trim(),recipientType=$('recipientType').value;
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipientId)){show(out,'Recherchez puis sélectionnez un destinataire.',true);return}
   const templateName=$('template_name').value,language=$('language').value.trim();
   if(!templateName){show(out,'Choisissez un modèle approuvé.',true);return}
   if(!/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language)){show(out,'Code de langue invalide.',true);return}
