@@ -137,14 +137,24 @@ jobs:
           SELECT 'whatsapp-ci-user', 'not-a-real-login', id FROM roles WHERE name = 'WhatsApp CI';
           INSERT INTO parents (id,last_name,first_name,phone) VALUES
             ('00000000-0000-4000-8000-000000009101','Parent','One','+50937000101'),
-            ('00000000-0000-4000-8000-000000009102','Parent','Two','+50937000102')
+            ('00000000-0000-4000-8000-000000009102','Parent','Two','+50937000102'),
+            ('00000000-0000-4000-8000-000000009103','Parent','NoConsent','+50937000103')
           ON CONFLICT (id) DO NOTHING;
-          INSERT INTO students(id,matricule,last_name,first_name,date_of_birth,status)
-          VALUES ('00000000-0000-4000-8000-000000009111','WA-CI-ADULT','Student','Adult','2000-01-01','ACTIVE')
+          INSERT INTO students(id,matricule,last_name,first_name,date_of_birth,status) VALUES
+            ('00000000-0000-4000-8000-000000009111','WA-CI-ADULT','Student','Adult','2000-01-01','ACTIVE'),
+            ('00000000-0000-4000-8000-000000009112','WA-CI-MINOR','Student','Minor','2012-01-01','ACTIVE'),
+            ('00000000-0000-4000-8000-000000009113','WA-CI-UNKNOWN','Student','Unknown',NULL,'ACTIVE')
           ON CONFLICT (id) DO NOTHING;
           INSERT INTO student_parents(student_id,parent_id,relationship_type,is_primary) VALUES
             ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009101','Parent',TRUE),
-            ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009102','Guardian',FALSE)
+            ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009102','Guardian',FALSE),
+            ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009103','Other',FALSE),
+            ('00000000-0000-4000-8000-000000009112','00000000-0000-4000-8000-000000009101','Parent',TRUE),
+            ('00000000-0000-4000-8000-000000009112','00000000-0000-4000-8000-000000009102','Guardian',FALSE),
+            ('00000000-0000-4000-8000-000000009112','00000000-0000-4000-8000-000000009103','Other',FALSE),
+            ('00000000-0000-4000-8000-000000009113','00000000-0000-4000-8000-000000009101','Parent',TRUE),
+            ('00000000-0000-4000-8000-000000009113','00000000-0000-4000-8000-000000009102','Guardian',FALSE),
+            ('00000000-0000-4000-8000-000000009113','00000000-0000-4000-8000-000000009103','Other',FALSE)
           ON CONFLICT (student_id,parent_id) DO NOTHING;
           INSERT INTO staff(id,first_name,last_name,phone,status)
           VALUES ('00000000-0000-4000-8000-000000009121','Staff','Recipient','+50937000121','ACTIVE')
@@ -257,11 +267,16 @@ jobs:
           END $$;
           SQL
 
+      - name: Verify age-based recipient resolution without sending messages
+        run: php tests/whatsapp-recipient-routing.php
+
       - name: Verify WhatsApp endpoint PHP syntax
         run: |
           php -l api/whatsapp/consents.php
           php -l api/whatsapp/send.php
           php -l api/whatsapp/manual-preparations.php
+          php -l api/whatsapp/recipient-resolver.php
+          php -l tests/whatsapp-recipient-routing.php
           php -l api/whatsapp/recipient-consents.php
           php -l api/whatsapp/recipient-search.php
           php -l api/whatsapp/send-multi.php
