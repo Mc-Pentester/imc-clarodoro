@@ -95,8 +95,8 @@ try {
              evidence_reference, consented_at, revoked_at, created_by, updated_by)
          VALUES
             (:type, :recipient_id, :purpose, :phone, :status, :source,
-             :evidence, CASE WHEN :status = 'OPTED_IN' THEN NOW() ELSE NULL END,
-             CASE WHEN :status = 'OPTED_OUT' THEN NOW() ELSE NULL END, :actor, :actor)
+             :evidence, CASE WHEN :status_in = 'OPTED_IN' THEN NOW() ELSE NULL END,
+             CASE WHEN :status_out = 'OPTED_OUT' THEN NOW() ELSE NULL END, :actor_created, :actor_updated)
          ON CONFLICT ({$column}, purpose) WHERE recipient_type = '{$type}'
          DO UPDATE SET phone_e164 = EXCLUDED.phone_e164,
              status = EXCLUDED.status, consent_source = EXCLUDED.consent_source,
@@ -108,8 +108,8 @@ try {
     );
     $upsert->execute([
         ':type' => $type, ':recipient_id' => $id, ':purpose' => $purpose,
-        ':phone' => $phone, ':status' => $status, ':source' => $source,
-        ':evidence' => $evidence, ':actor' => $user['id'],
+        ':phone' => $phone, ':status' => $status, ':status_in' => $status, ':status_out' => $status, ':source' => $source,
+        ':evidence' => $evidence, ':actor_created' => $user['id'], ':actor_updated' => $user['id'],
     ]);
     $consent = $upsert->fetch();
 
@@ -121,8 +121,8 @@ try {
                 (parent_id, purpose, phone_e164, status, consent_source, evidence_reference,
                  consented_at, revoked_at, created_by, updated_by)
              VALUES (:parent_id, :purpose, :phone, :status, :source, :evidence,
-                 CASE WHEN :status = 'OPTED_IN' THEN NOW() ELSE NULL END,
-                 CASE WHEN :status = 'OPTED_OUT' THEN NOW() ELSE NULL END, :actor, :actor)
+                 CASE WHEN :legacy_status_in = 'OPTED_IN' THEN NOW() ELSE NULL END,
+                 CASE WHEN :legacy_status_out = 'OPTED_OUT' THEN NOW() ELSE NULL END, :legacy_actor_created, :legacy_actor_updated)
              ON CONFLICT (parent_id, purpose) DO UPDATE SET
                  phone_e164 = EXCLUDED.phone_e164, status = EXCLUDED.status,
                  consent_source = EXCLUDED.consent_source, evidence_reference = EXCLUDED.evidence_reference,
@@ -133,8 +133,9 @@ try {
         );
         $legacy->execute([
             ':parent_id' => $id, ':purpose' => $purpose, ':phone' => $phone,
-            ':status' => $status, ':source' => $source, ':evidence' => $evidence,
-            ':actor' => $user['id'],
+            ':status' => $status, ':legacy_status_in' => $status, ':legacy_status_out' => $status,
+            ':source' => $source, ':evidence' => $evidence,
+            ':legacy_actor_created' => $user['id'], ':legacy_actor_updated' => $user['id'],
         ]);
         $legacyConsentId = $legacy->fetchColumn();
         $legacyAudit = $pdo->prepare(
