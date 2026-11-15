@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/delivery-status.php';
 
 header('Cache-Control: no-store');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -63,6 +64,7 @@ if (!is_array($payload)) {
 $pdo = getDatabaseConnection();
 $payloadHash = hash('sha256', $rawBody);
 $processed = 0;
+$messageIdsToReconcile = [];
 $pdo->beginTransaction();
 try {
     foreach (($payload['entry'] ?? []) as $entry) {
@@ -110,6 +112,7 @@ try {
                     ':payload_hash' => $payloadHash,
                 ]);
                 if (!$eventInsert->fetchColumn()) continue;
+                $messageIdsToReconcile[$messageId] = true;
 
                 $log = $pdo->prepare(
                     'SELECT id, status FROM whatsapp_recipient_message_log
@@ -144,6 +147,15 @@ try {
         }
     }
     $pdo->commit();
+    // Reconcile again after commit to close the race where the webhook arrives
+    // while the send log is still uncommitted and therefore invisible.
+    foreach (array_keys($messageIdsToReconcile) as $messageId) {
+        try {
+            reconcileWhatsAppDeliveryStatus($pdo, (string) $messageId);
+        } catch (Throwable $reconcileError) {
+            error_log('WhatsApp webhook receipt reconciliation failed: ' . $reconcileError->getMessage());
+        }
+    }
 } catch (Throwable $error) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     error_log('WhatsApp webhook processing failed: ' . $error->getMessage());
