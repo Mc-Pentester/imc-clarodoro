@@ -49,7 +49,7 @@ if ($task) {
     Write-UpgradeLog ('Action de la tâche : ' + $taskAction)
     Stop-ScheduledTask -TaskName $taskName -ErrorAction Stop
     Write-UpgradeLog 'Demande Stop-ScheduledTask acceptée.'
-    $expectedPhp = [System.IO.Path]::GetFullPath((Join-Path $AppRoot 'runtime\\php\\php.exe'))
+    $expectedPhp = [System.IO.Path]::GetFullPath((Join-Path $AppRoot 'runtime\php\php.exe'))
     $expectedRouter = [System.IO.Path]::GetFullPath((Join-Path $AppRoot 'router.php'))
     $deadline = (Get-Date).AddSeconds(45)
     $graceDeadline = (Get-Date).AddSeconds(5)
@@ -85,7 +85,7 @@ if ($task) {
         $isExpectedExecutable = [string]::Equals($actualExecutable, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
         $hasExpectedRouter = $commandLine.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0
         $hasExpectedAppRoot = $commandLine.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
-        $hasExpectedPort = $commandLine -match ('(?i)(?:^|\\s)-S\\s+["'']?0\\.0\\.0\\.0:' + $HttpPort + '["'']?(?:\\s|$)')
+        $hasExpectedPort = $commandLine -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $HttpPort + '["'']?(?:\s|$)')
 
         Write-UpgradeLog ('Écouteur HTTP : PID=' + $listenerPid + '; exécutable=' + $actualExecutable + '; commande=' + $commandLine)
         if (-not $isExpectedExecutable -or -not $hasExpectedRouter -or -not $hasExpectedAppRoot -or -not $hasExpectedPort) {
@@ -112,7 +112,7 @@ if ($task) {
                 $currentIdentityMatches = $currentExecutableMatches -and
                     $currentCommand.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
                     $currentCommand.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-                    ($currentCommand -match ('(?i)(?:^|\\s)-S\\s+["'']?0\\.0\\.0\\.0:' + $HttpPort + '["'']?(?:\\s|$)'))
+                    ($currentCommand -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $HttpPort + '["'']?(?:\s|$)'))
                 if (-not $currentIdentityMatches) {
                     throw "L'identité du processus HTTP (PID $listenerPid) a changé avant son arrêt. Aucun processus ne sera arrêté."
                 }
