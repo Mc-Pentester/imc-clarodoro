@@ -211,6 +211,11 @@ function makeIdempotencyKey(){
   const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
   return 'clarodaro-'+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
 }
+let activeSendIdempotencyKey=makeIdempotencyKey();
+function renewSendIdempotencyKey(){activeSendIdempotencyKey=makeIdempotencyKey()}
+['recipientSearch','recipientType','studentScope','purpose','template_name','language','parameters'].forEach(id=>{
+  $(id).addEventListener(id==='recipientSearch'||id==='parameters'||id==='language'?'input':'change',renewSendIdempotencyKey);
+});
 $('sendButton').addEventListener('click',async()=>{
   const out=$('sendResult');out.hidden=true;
   if(!configReady){show(out,'La configuration Meta n’est pas prête. Aucun envoi effectué.',true);return}
@@ -225,7 +230,7 @@ $('sendButton').addEventListener('click',async()=>{
     const response=await fetch('/api/whatsapp/send-multi.php',{
       method:'POST',credentials:'same-origin',cache:'no-store',
       headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-Token':csrf},
-      body:JSON.stringify({recipient_type:$('recipientType').value,recipient_id:$('recipient_id').value,scope:$('studentScope').value,purpose:$('purpose').value,template_name:templateName,language,parameters,idempotency_key:makeIdempotencyKey()})
+      body:JSON.stringify({recipient_type:$('recipientType').value,recipient_id:$('recipient_id').value,scope:$('studentScope').value,purpose:$('purpose').value,template_name:templateName,language,parameters,idempotency_key:activeSendIdempotencyKey})
     });
     const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
     if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status)+(data.provider_error_code?' · Code Meta '+data.provider_error_code:''));
