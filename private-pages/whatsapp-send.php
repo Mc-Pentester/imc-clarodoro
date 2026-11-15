@@ -68,6 +68,13 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <div id="sendResult" class="result" hidden aria-live="polite"></div>
 <p class="hint">L’acceptation par Meta ne confirme pas la livraison. Vérifiez la réception sur le téléphone destinataire et les statuts WhatsApp Business.</p>
 </section>
+<section class="card" id="messageHistory">
+<h2>Historique des messages WhatsApp</h2>
+<p class="hint">Les statuts distinguent la demande acceptée par Meta, la livraison et la lecture lorsqu'un accusé Meta est reçu. Seuls les utilisateurs autorisés à consulter l'audit voient cet historique.</p>
+<div class="actions"><button type="button" id="refreshHistory">Actualiser l’historique</button></div>
+<div id="historyResult" class="result" hidden aria-live="polite"></div>
+<div id="historyList" aria-live="polite"></div>
+</section>
 </main>
 <script>
 const csrf=document.querySelector('meta[name="csrf-token"]').content,$=id=>document.getElementById(id);
@@ -238,7 +245,36 @@ $('sendButton').addEventListener('click',async()=>{
   }catch(error){show(out,'ÉCHEC DE L’ENVOI : '+error.message,true)}
   finally{$('sendButton').disabled=!configReady}
 });
+async function loadMessageHistory(){
+  const card=$('messageHistory'),list=$('historyList'),out=$('historyResult');
+  if(window.IMCAuth&&typeof window.IMCAuth.hasPermission==='function'&&!window.IMCAuth.hasPermission('whatsapp.message.audit')){
+    card.hidden=true;return;
+  }
+  $('refreshHistory').disabled=true;out.hidden=true;
+  try{
+    const response=await fetch('/api/whatsapp/recipient-message-history.php',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
+    const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+    if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
+    list.replaceChildren();
+    if(!Array.isArray(data.messages)||data.messages.length===0){show(out,'Aucun message journalisé pour le moment.');return}
+    for(const message of data.messages){
+      const item=document.createElement('div');item.className='result';
+      const date=message.created_at?new Date(message.created_at).toLocaleString('fr-HT'):'Date inconnue';
+      const parts=[
+        (message.recipient_name||'Destinataire')+' · '+(message.recipient_type||''),
+        (message.purpose||'')+' · '+(message.status||''),
+        (message.template_name||'')+' · '+date
+      ];
+      if(message.provider_message_id)parts.push('ID Meta : '+message.provider_message_id);
+      if(message.provider_error_code)parts.push('Code erreur : '+message.provider_error_code);
+      item.textContent=parts.join(' — ');list.appendChild(item);
+    }
+  }catch(error){show(out,'Historique indisponible : '+error.message,true)}
+  finally{$('refreshHistory').disabled=false}
+}
+$('refreshHistory').addEventListener('click',loadMessageHistory);
 loadConfig();
+loadMessageHistory();
 </script>
 </body>
 </html>
