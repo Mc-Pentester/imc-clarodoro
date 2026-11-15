@@ -102,5 +102,15 @@ VALUES
     ('whatsapp.message.audit', 'Consulter les résultats des envois WhatsApp')
 ON CONFLICT (name) DO NOTHING;
 
+-- Donner la lecture des fiches de destinataires aux rôles qui ont déjà
+-- le droit d'initier un envoi. La gestion des consentements reste distincte
+-- et n'est pas accordée automatiquement.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT rp.role_id, p_read.id
+FROM role_permissions rp
+INNER JOIN permissions p_send ON p_send.id = rp.permission_id AND p_send.name = 'whatsapp.message.send'
+INNER JOIN permissions p_read ON p_read.name = 'whatsapp.recipient.read'
+ON CONFLICT DO NOTHING;
+
 -- Le PDG conserve l'accès global; aucun autre rôle n'est automatiquement promu.
 COMMIT;
