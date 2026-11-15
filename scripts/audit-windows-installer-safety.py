@@ -73,8 +73,10 @@ require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
 prepare_upgrade = read("installer/Prepare-Upgrade.ps1")
 require("Stop-Process -Id $listenerPid -Force -ErrorAction Stop" in prepare_upgrade
-        and "Wait-Process -Id $listenerPid -Timeout 15" in prepare_upgrade,
-        "upgrade must explicitly stop and wait for the exact verified PHP listener PID")
+        and "Wait-Process -Id $listenerPid -Timeout 5" in prepare_upgrade
+        and "taskkill.exe" in prepare_upgrade and "/PID $listenerPid /T /F" in prepare_upgrade
+        and "Processus PHP authentifié" in prepare_upgrade,
+        "upgrade must stop, retry termination for, and confirm exit of the exact verified PHP listener PID")
 require("CommandLine" in prepare_upgrade and "$expectedRouter" in prepare_upgrade
         and "$hasExpectedPort" in prepare_upgrade and "$currentIdentityMatches" in prepare_upgrade,
         "PHP process termination must verify executable, app router, app root and HTTP port twice")
