@@ -130,11 +130,17 @@ foreach ($consentTargets as $target) {
             } catch (Throwable $reconcileError) {
                 error_log('WhatsApp post-send receipt reconciliation failed: ' . $reconcileError->getMessage());
             }
-            $finalStatusStmt = $pdo->prepare('SELECT status FROM whatsapp_recipient_message_log WHERE id = :id');
-            $finalStatusStmt->execute([':id' => $logId]);
-            $finalStatus = $finalStatusStmt->fetchColumn();
             $accepted++;
-            $results[] = ['consent_id' => $target['id'], 'status' => is_string($finalStatus) ? $finalStatus : 'SENT', 'message_log_id' => $logId, 'provider_message_id' => $messageId];
+            $finalStatus = 'SENT';
+            try {
+                $finalStatusStmt = $pdo->prepare('SELECT status FROM whatsapp_recipient_message_log WHERE id = :id');
+                $finalStatusStmt->execute([':id' => $logId]);
+                $storedStatus = $finalStatusStmt->fetchColumn();
+                if (is_string($storedStatus)) $finalStatus = $storedStatus;
+            } catch (Throwable $statusReadError) {
+                error_log('WhatsApp post-send status read failed: ' . $statusReadError->getMessage());
+            }
+            $results[] = ['consent_id' => $target['id'], 'status' => $finalStatus, 'message_log_id' => $logId, 'provider_message_id' => $messageId];
         } else {
             $errorCode = is_array($provider) ? (string) ($provider['error']['code'] ?? 'PROVIDER_ERROR') : ($curlError ? 'NETWORK_UNCERTAIN' : 'PROVIDER_ERROR');
             $update = $pdo->prepare("UPDATE whatsapp_recipient_message_log SET status='FAILED', provider_error_code=:code, updated_at=NOW() WHERE id=:id");
