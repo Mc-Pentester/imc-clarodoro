@@ -19,7 +19,8 @@ La migration additive `20261115150000_whatsapp_multi_recipient_consents.sql` cr�
 
 - `whatsapp_recipient_consents` : consentement par personne, numéro et finalité;
 - `whatsapp_recipient_consent_audit` : historique append-only;
-- `whatsapp_recipient_message_log` : statut d'envoi individuel et clé idempotente par destinataire.
+- `whatsapp_recipient_message_log` : statut d'envoi individuel et clé idempotente par destinataire;
+- `whatsapp_webhook_events` : accusés Meta dédupliqués et empreinte du corps reçu, sans conservation du corps brut.
 
 Les consentements parentaux existants de `whatsapp_consents` sont copiés vers la nouvelle table. L'ancienne table et son audit ne sont pas supprimés. Les deux API de consentement parentales synchronisent les deux modèles afin de maintenir la compatibilité.
 
@@ -30,6 +31,8 @@ Un numéro présent dans le dossier scolaire n'est pas une preuve de consentemen
 - `GET /api/whatsapp/recipient-search.php?recipient_type=...&q=...` — recherche de personnes.
 - `GET|POST /api/whatsapp/recipient-consents.php` — consultation et gestion des consentements.
 - `POST /api/whatsapp/send-multi.php` — calcul serveur des destinataires et envoi individuel par Meta.
+- `GET /api/whatsapp/recipient-message-history.php` — historique des 100 derniers envois, protégé par `whatsapp.message.audit`.
+- `GET|POST /api/whatsapp/webhook.php` — vérification du webhook Meta et traitement des statuts `sent`, `delivered`, `read`, `failed`.
 - `GET /api/whatsapp/send.php` — état de configuration Meta existant.
 
 Le service revérifie et verrouille chaque consentement juste avant l'appel Meta. Chaque destinataire obtient une ligne d'audit indépendante et une clé idempotente. Un résultat accepté par Meta ne garantit pas la livraison. Les erreurs réseau dont l'issue est incertaine ne sont pas réessayées automatiquement.
