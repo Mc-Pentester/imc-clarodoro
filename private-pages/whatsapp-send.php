@@ -23,10 +23,12 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <section class="card">
 <h2>Destinataire et autorisation</h2>
 <div class="grid">
-<div class="wide"><label for="parentSearch">Rechercher un parent par nom ou numéro de téléphone</label><input id="parentSearch" type="search" autocomplete="off" placeholder="Nom, prénom ou numéro de téléphone…" aria-describedby="parentSearchHint"><p id="parentSearchHint" class="hint">Saisissez au moins 2 caractères. Seuls les parents ayant un consentement actif pour la finalité choisie apparaissent.</p><div id="parentResults" class="result" hidden role="listbox" aria-label="Résultats de recherche des parents"></div><div id="selectedParent" class="result" hidden aria-live="polite"></div><input id="parent_id" type="hidden" required></div>
+<div><label for="recipientType">Type de destinataire</label><select id="recipientType"><option value="STUDENT">Élève</option><option value="PARENT">Parent / responsable</option><option value="STAFF">Personnel</option><option value="TEACHER">Enseignant</option></select></div>
 <div><label for="purpose">Finalité / consentement</label><select id="purpose"><option value="ATTENDANCE">Présence / absence</option><option value="RESULTS_AVAILABLE">Résultats disponibles</option><option value="PAYMENT_REMINDER">Rappel de paiement</option><option value="GENERAL">Message général</option></select></div>
+<div class="wide"><label for="recipientSearch">Rechercher un destinataire</label><input id="recipientSearch" type="search" autocomplete="off" placeholder="Nom, prénom ou matricule…" aria-describedby="recipientSearchHint"><p id="recipientSearchHint" class="hint">Saisissez au moins 2 caractères. La sélection d’un élève applique automatiquement les règles mineur/majeur sur le serveur.</p><div id="recipientResults" class="result" hidden role="listbox" aria-label="Résultats des destinataires"></div><div id="selectedRecipient" class="result" hidden aria-live="polite"></div><input id="recipient_id" type="hidden" required><input id="parent_id" type="hidden"></div>
+<div class="wide" id="studentScopeWrap"><label for="studentScope">Portée du message pour un élève majeur</label><select id="studentScope"><option value="STUDENT_ONLY">Message personnel : élève uniquement</option><option value="STUDENT_AND_PARENTS">Message concernant aussi les parents : élève et responsables consentants</option></select><p class="hint">Pour un mineur, seuls les responsables liés ayant un consentement actif seront ciblés, quel que soit ce choix. Pour un majeur, le serveur applique la portée sélectionnée.</p></div>
 </div>
-<p class="hint">Les deux modes sont actuellement destinés aux parents disposant d’un consentement actif pour la finalité choisie.</p>
+<p class="hint">Les consentements sont vérifiés individuellement par finalité et par numéro. Les responsables sont sélectionnés à partir de la relation élève-responsable en base de données.</p>
 </section>
 <section class="card">
 <div class="mode">Mode 1 · WhatsApp sur le poste</div>
@@ -58,39 +60,51 @@ const csrf=document.querySelector('meta[name="csrf-token"]').content,$=id=>docum
 let configReady=false;
 function show(node,text,error=false){node.hidden=false;node.textContent=text;node.classList.toggle('error',error)}
 function validParent(){const value=$('parent_id').value.trim();if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error('Recherchez puis sélectionnez un parent dans la liste.');return value}
-let parentSearchTimer=null,parentSearchController=null;
-function clearSelectedParent(){ $('parent_id').value=''; $('selectedParent').hidden=true; $('selectedParent').textContent=''; }
-async function searchParents(){
-  const q=$('parentSearch').value.trim(),results=$('parentResults');
-  clearSelectedParent();
+let recipientSearchTimer=null,recipientSearchController=null;
+function clearSelectedRecipient(){
+  $('recipient_id').value='';$('parent_id').value='';
+  $('selectedRecipient').hidden=true;$('selectedRecipient').textContent='';
+}
+async function searchRecipients(){
+  const q=$('recipientSearch').value.trim(),results=$('recipientResults'),type=$('recipientType').value;
+  clearSelectedRecipient();
   if(q.length<2){results.hidden=true;results.textContent='';return}
-  if(parentSearchController)parentSearchController.abort();
-  parentSearchController=new AbortController();
-  show(results,'Recherche des parents…');
+  if(recipientSearchController)recipientSearchController.abort();
+  recipientSearchController=new AbortController();show(results,'Recherche…');
   try{
-    const url='/api/whatsapp/parents-search.php?purpose='+encodeURIComponent($('purpose').value)+'&q='+encodeURIComponent(q);
-    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:parentSearchController.signal});
+    const url='/api/whatsapp/recipient-search.php?recipient_type='+encodeURIComponent(type)+'&q='+encodeURIComponent(q);
+    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'},signal:recipientSearchController.signal});
     const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
     if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
     results.replaceChildren();
-    if(!Array.isArray(data.parents)||data.parents.length===0){show(results,'Aucun parent avec consentement actif trouvé pour cette recherche et cette finalité.');return}
-    for(const parent of data.parents){
-      const option=document.createElement('button');option.type='button';option.style.cssText='display:block;width:100%;text-align:left;margin:5px 0;background:#f0f7f4;color:#173b32;border:1px solid #c9ded5';
-      const fullName=[parent.first_name,parent.last_name].filter(Boolean).join(' ');
-      option.textContent=fullName+' — '+parent.phone_e164;
+    if(!Array.isArray(data.recipients)||data.recipients.length===0){show(results,'Aucun résultat trouvé. Vérifiez aussi que le consentement est enregistré pour la bonne finalité.');return}
+    for(const recipient of data.recipients){
+      const option=document.createElement('button');option.type='button';
+      option.style.cssText='display:block;width:100%;text-align:left;margin:5px 0;background:#f0f7f4;color:#173b32;border:1px solid #c9ded5';
+      const fullName=[recipient.first_name,recipient.last_name].filter(Boolean).join(' ');
+      option.textContent=fullName+(recipient.phone?' — téléphone dossier : '+recipient.phone:'');
       option.setAttribute('role','option');
       option.addEventListener('click',()=>{
-        $('parent_id').value=parent.id;
-        $('selectedParent').textContent='Destinataire sélectionné : '+fullName+' · '+parent.phone_e164;
-        $('selectedParent').hidden=false;results.hidden=true;results.replaceChildren();
+        $('recipient_id').value=recipient.id;
+        $('parent_id').value=type==='PARENT'?recipient.id:'';
+        $('selectedRecipient').textContent='Destinataire sélectionné : '+fullName+' · '+type;
+        $('selectedRecipient').hidden=false;results.hidden=true;results.replaceChildren();
+        $('manualButton').disabled=type!=='PARENT';
       });
       results.appendChild(option);
     }
     results.hidden=false;
   }catch(error){if(error.name!=='AbortError')show(results,'Recherche impossible : '+error.message,true)}
 }
-$('parentSearch').addEventListener('input',()=>{clearTimeout(parentSearchTimer);parentSearchTimer=setTimeout(searchParents,250)});
-$('purpose').addEventListener('change',()=>{if($('parentSearch').value.trim().length>=2)searchParents();else clearSelectedParent()});
+$('recipientSearch').addEventListener('input',()=>{clearTimeout(recipientSearchTimer);recipientSearchTimer=setTimeout(searchRecipients,250)});
+$('recipientType').addEventListener('change',()=>{
+  $('recipientSearch').value='';clearSelectedRecipient();$('recipientResults').hidden=true;
+  $('studentScopeWrap').hidden=$('recipientType').value!=='STUDENT';
+  $('manualButton').disabled=$('recipientType').value!=='PARENT';
+});
+$('purpose').addEventListener('change',()=>{if($('recipientSearch').value.trim().length>=2)searchRecipients();else clearSelectedRecipient()});
+$('studentScopeWrap').hidden=false;
+function validParent(){const value=$('parent_id').value.trim();if($('recipientType').value!=='PARENT'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error('Le mode manuel est disponible uniquement pour un parent sélectionné.');return value}
 async function loadConfig(){
   const status=$('configStatus');
   try{
@@ -148,14 +162,14 @@ $('sendButton').addEventListener('click',async()=>{
   const parameters=$('parameters').value.split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
   $('sendButton').disabled=true;show(out,'Envoi de la demande à Meta…');
   try{
-    const response=await fetch('/api/whatsapp/send.php',{
+    const response=await fetch('/api/whatsapp/send-multi.php',{
       method:'POST',credentials:'same-origin',cache:'no-store',
       headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-Token':csrf},
-      body:JSON.stringify({parent_id:parentId,purpose:$('purpose').value,template_name:templateName,language,parameters,idempotency_key:makeIdempotencyKey()})
+      body:JSON.stringify({recipient_type:$('recipientType').value,recipient_id:$('recipient_id').value,scope:$('studentScope').value,purpose:$('purpose').value,template_name:templateName,language,parameters,idempotency_key:makeIdempotencyKey()})
     });
     const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
     if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status)+(data.provider_error_code?' · Code Meta '+data.provider_error_code:''));
-    show(out,'DEMANDE ACCEPTÉE PAR META.\nRéférence Clarodaro : '+data.message_log_id+'\nIdentifiant WhatsApp : '+data.provider_message_id+'\n'+data.message+'\nLa livraison doit être vérifiée dans le suivi WhatsApp Business.');
+    show(out,'Résultat : '+data.accepted_by_meta+' demande(s) acceptée(s) par Meta sur '+data.total_eligible+' destinataire(s) éligible(s).\n'+(data.results||[]).map(r=>r.status+' — '+r.consent_id+(r.provider_message_id?' — '+r.provider_message_id:'')+(r.reason?' — '+r.reason:'')).join('\n')+'\n'+data.message);
   }catch(error){show(out,'ÉCHEC DE L’ENVOI : '+error.message,true)}
   finally{$('sendButton').disabled=!configReady}
 });
