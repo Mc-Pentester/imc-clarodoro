@@ -53,19 +53,25 @@ function reconcileWhatsAppDeliveryStatus(PDO $pdo, string $providerMessageId): v
         }
 
         if ($currentStatus !== (string) $log['status'] || $errorCode !== null) {
-            $update = $pdo->prepare(
-                'UPDATE whatsapp_recipient_message_log
-                 SET status = :status,
-                     provider_error_code = CASE WHEN :has_error THEN :error_code ELSE provider_error_code END,
-                     updated_at = NOW()
-                 WHERE id = :id'
-            );
-            $update->execute([
-                ':status' => $currentStatus,
-                ':has_error' => $errorCode !== null,
-                ':error_code' => $errorCode,
-                ':id' => $log['id'],
-            ]);
+            if ($errorCode !== null) {
+                $update = $pdo->prepare(
+                    'UPDATE whatsapp_recipient_message_log
+                     SET status = :status, provider_error_code = :error_code, updated_at = NOW()
+                     WHERE id = :id'
+                );
+                $update->execute([
+                    ':status' => $currentStatus,
+                    ':error_code' => $errorCode,
+                    ':id' => $log['id'],
+                ]);
+            } else {
+                $update = $pdo->prepare(
+                    'UPDATE whatsapp_recipient_message_log
+                     SET status = :status, updated_at = NOW()
+                     WHERE id = :id'
+                );
+                $update->execute([':status' => $currentStatus, ':id' => $log['id']]);
+            }
         }
         if ($ownsTransaction) $pdo->commit();
     } catch (Throwable $error) {
