@@ -80,7 +80,7 @@ if (!$exists->fetchColumn()) {
 $pdo->beginTransaction();
 try {
     $lock = $pdo->prepare('SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))');
-    $lock->execute([':lock_key' => $type . ':' . $id . ':' . $purpose]);
+    $lock->execute([':lock_key' => ($type === 'PARENT' ? $id : $type . ':' . $id) . ':' . $purpose]);
     $previousStmt = $pdo->prepare(
         "SELECT id, status FROM whatsapp_recipient_consents
          WHERE recipient_type = :type AND {$column} = :recipient_id AND purpose = :purpose
