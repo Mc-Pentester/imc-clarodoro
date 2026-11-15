@@ -238,16 +238,28 @@ jobs:
             (consent_id, parent_id, purpose, previous_status, new_status, actor_user_id)
           SELECT c.id, c.parent_id, c.purpose, NULL, c.status, u.id
           FROM whatsapp_consents c CROSS JOIN users u
-          WHERE u.username = 'whatsapp-ci-user';
+          WHERE u.username = 'whatsapp-ci-user'
+            AND c.parent_id = (
+              SELECT id FROM parents
+              WHERE first_name = 'Fixture' AND last_name = 'Runtime'
+              ORDER BY id LIMIT 1
+            )
+          LIMIT 1;
 
           INSERT INTO whatsapp_message_log
             (consent_id, idempotency_key, purpose, status, template_name, payload_sha256, initiated_by)
           SELECT c.id, 'whatsapp-ci-key-000001', 'GENERAL', 'SIMULATED',
                  'ci_template', repeat('a', 64), u.id
           FROM whatsapp_consents c CROSS JOIN users u
-          WHERE u.username = 'whatsapp-ci-user';
+          WHERE u.username = 'whatsapp-ci-user'
+            AND c.parent_id = (
+              SELECT id FROM parents
+              WHERE first_name = 'Fixture' AND last_name = 'Runtime'
+              ORDER BY id LIMIT 1
+            )
+          LIMIT 1;
 
-          DO $$
+          DO $
           BEGIN
             BEGIN
               UPDATE whatsapp_consent_audit SET new_status = 'OPTED_OUT';
@@ -276,7 +288,13 @@ jobs:
               SELECT c.id, 'whatsapp-ci-key-000001', 'GENERAL', 'SIMULATED',
                      'ci_template', repeat('b', 64), u.id
               FROM whatsapp_consents c CROSS JOIN users u
-              WHERE u.username = 'whatsapp-ci-user';
+              WHERE u.username = 'whatsapp-ci-user'
+                AND c.parent_id = (
+                  SELECT id FROM parents
+                  WHERE first_name = 'Fixture' AND last_name = 'Runtime'
+                  ORDER BY id LIMIT 1
+                )
+              LIMIT 1;
               RAISE EXCEPTION 'Duplicate idempotency key unexpectedly succeeded';
             EXCEPTION WHEN unique_violation THEN
               NULL;
