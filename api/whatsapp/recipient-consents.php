@@ -113,6 +113,41 @@ try {
     ]);
     $consent = $upsert->fetch();
 
+    // Keep the legacy parent-consent table synchronized so the existing
+    // manual WhatsApp preparation and older integrations remain compatible.
+    if ($type === 'PARENT') {
+        $legacy = $pdo->prepare(
+            "INSERT INTO whatsapp_consents
+                (parent_id, purpose, phone_e164, status, consent_source, evidence_reference,
+                 consented_at, revoked_at, created_by, updated_by)
+             VALUES (:parent_id, :purpose, :phone, :status, :source, :evidence,
+                 CASE WHEN :status = 'OPTED_IN' THEN NOW() ELSE NULL END,
+                 CASE WHEN :status = 'OPTED_OUT' THEN NOW() ELSE NULL END, :actor, :actor)
+             ON CONFLICT (parent_id, purpose) DO UPDATE SET
+                 phone_e164 = EXCLUDED.phone_e164, status = EXCLUDED.status,
+                 consent_source = EXCLUDED.consent_source, evidence_reference = EXCLUDED.evidence_reference,
+                 consented_at = CASE WHEN EXCLUDED.status = 'OPTED_IN' THEN NOW() ELSE NULL END,
+                 revoked_at = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN NOW() ELSE NULL END,
+                 updated_by = EXCLUDED.updated_by, updated_at = NOW()
+             RETURNING id"
+        );
+        $legacy->execute([
+            ':parent_id' => $id, ':purpose' => $purpose, ':phone' => $phone,
+            ':status' => $status, ':source' => $source, ':evidence' => $evidence,
+            ':actor' => $user['id'],
+        ]);
+        $legacyConsentId = $legacy->fetchColumn();
+        $legacyAudit = $pdo->prepare(
+            'INSERT INTO whatsapp_consent_audit
+                (consent_id, parent_id, purpose, previous_status, new_status, actor_user_id)
+             VALUES (:consent, :parent, :purpose, :previous, :new, :actor)'
+        );
+        $legacyAudit->execute([
+            ':consent' => $legacyConsentId, ':parent' => $id, ':purpose' => $purpose,
+            ':previous' => $previous['status'] ?? null, ':new' => $status, ':actor' => $user['id'],
+        ]);
+    }
+
     $audit = $pdo->prepare(
         'INSERT INTO whatsapp_recipient_consent_audit
             (consent_id, recipient_type, previous_status, new_status, actor_user_id)
