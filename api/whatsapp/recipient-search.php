@@ -27,8 +27,8 @@ $digits = preg_replace('/\D+/', '', $q) ?? '';
 try {
     if ($type === 'PARENT') {
         $sql = "SELECT id, first_name, last_name, phone FROM parents
-                WHERE first_name ILIKE :q OR last_name ILIKE :q
-                   OR (first_name || ' ' || last_name) ILIKE :q
+                WHERE first_name ILIKE :q1 OR last_name ILIKE :q2
+                   OR (first_name || ' ' || last_name) ILIKE :q3
                    OR (:digits <> '' AND regexp_replace(COALESCE(phone,''), '[^0-9]', '', 'g') LIKE :phone)
                 ORDER BY last_name, first_name LIMIT 30";
     } elseif ($type === 'STUDENT') {
@@ -48,7 +48,8 @@ try {
                 ORDER BY last_name, first_name LIMIT 30";
     }
     $stmt = $pdo->prepare($sql);
-    $params = [':q' => $like];
+    $params = [':q1' => $like, ':q2' => $like, ':q3' => $like];
+    if ($type === 'STUDENT') $params[':q4'] = $like;
     if ($type === 'PARENT') {
         $params[':digits'] = $digits;
         $params[':phone'] = '%' . $digits . '%';
