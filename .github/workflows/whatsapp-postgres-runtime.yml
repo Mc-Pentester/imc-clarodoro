@@ -157,17 +157,20 @@ jobs:
             (recipient_type,parent_id,purpose,phone_e164,status,consent_source,consented_at)
           VALUES
             ('PARENT','00000000-0000-4000-8000-000000009101','GENERAL','+50937000101','OPTED_IN','CI',NOW()),
-            ('PARENT','00000000-0000-4000-8000-000000009102','GENERAL','+50937000102','OPTED_IN','CI',NOW()),
-            ('STUDENT',NULL,'GENERAL','+50937000111','OPTED_IN','CI',NOW()),
-            ('STAFF',NULL,'GENERAL','+50937000121','OPTED_IN','CI',NOW()),
-            ('TEACHER',NULL,'GENERAL','+50937000122','OPTED_IN','CI',NOW())
+            ('PARENT','00000000-0000-4000-8000-000000009102','GENERAL','+50937000102','OPTED_IN','CI',NOW())
           ON CONFLICT DO NOTHING;
-          UPDATE whatsapp_recipient_consents SET student_id='00000000-0000-4000-8000-000000009111'
-          WHERE recipient_type='STUDENT' AND phone_e164='+50937000111';
-          UPDATE whatsapp_recipient_consents SET staff_id='00000000-0000-4000-8000-000000009121'
-          WHERE recipient_type='STAFF' AND phone_e164='+50937000121';
-          UPDATE whatsapp_recipient_consents SET teacher_id='00000000-0000-4000-8000-000000009122'
-          WHERE recipient_type='TEACHER' AND phone_e164='+50937000122';
+          INSERT INTO whatsapp_recipient_consents
+            (recipient_type,student_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES ('STUDENT','00000000-0000-4000-8000-000000009111','GENERAL','+50937000111','OPTED_IN','CI',NOW())
+          ON CONFLICT DO NOTHING;
+          INSERT INTO whatsapp_recipient_consents
+            (recipient_type,staff_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES ('STAFF','00000000-0000-4000-8000-000000009121','GENERAL','+50937000121','OPTED_IN','CI',NOW())
+          ON CONFLICT DO NOTHING;
+          INSERT INTO whatsapp_recipient_consents
+            (recipient_type,teacher_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES ('TEACHER','00000000-0000-4000-8000-000000009122','GENERAL','+50937000122','OPTED_IN','CI',NOW())
+          ON CONFLICT DO NOTHING;
           INSERT INTO whatsapp_recipient_consent_audit
             (consent_id,recipient_type,previous_status,new_status,actor_user_id)
           SELECT c.id,c.recipient_type,NULL,c.status,u.id
