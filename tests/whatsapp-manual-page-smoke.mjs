@@ -27,7 +27,10 @@ assert.ok(page.includes('Envoyer automatiquement via Meta'), 'Meta Cloud API mod
 assert.ok(script.includes("fetch('/api/whatsapp/manual-preparations.php'"), 'Manual server-side consent/audit endpoint missing');
 assert.ok(script.includes("fetch('/api/whatsapp/send.php'"), 'Meta configuration/send endpoint missing');
 assert.ok(script.includes("'X-CSRF-Token':csrf"), 'CSRF header missing');
-assert.ok(script.includes('idempotency_key:makeIdempotencyKey()'), 'Meta idempotency key missing');
+assert.ok(script.includes('idempotency_key:activeSendIdempotencyKey'), 'Stable Meta idempotency key missing');
+assert.ok(page.includes('Historique des messages WhatsApp'), 'Message history UI missing');
+assert.ok(script.includes('/api/whatsapp/recipient-message-history.php'), 'Message history API missing');
+assert.ok(script.includes('whatsapp.message.audit'), 'Message history must be permission-gated');
 assert.ok(script.includes('https://wa.me/'), 'Manual click-to-chat navigation missing');
 assert.ok(script.includes('Préparation journalisée'), 'Manual preparation must be clearly distinguished from actual send');
 assert.ok(script.includes('acceptée(s) par Meta'), 'Provider acceptance must be distinguished from delivery');
@@ -53,4 +56,8 @@ assert.ok(multiApi.includes('whatsapp_recipient_message_log'), 'Each recipient s
 assert.ok(multiApi.includes("$current['status'] !== 'OPTED_IN'"), 'Consent must be rechecked immediately before each send');
 const consentApi = fs.readFileSync('api/whatsapp/recipient-consents.php', 'utf8');
 assert.ok(consentApi.includes('whatsapp_recipient_consent_audit'), 'Recipient consent changes must be audited');
-console.log('PASS WhatsApp dual-mode smoke: JS syntax, DOM references, manual wa.me preparation/audit, Meta Cloud API, CSRF, idempotency, fail-closed configuration');
+const webhookApi = fs.readFileSync('api/whatsapp/webhook.php', 'utf8');
+assert.ok(webhookApi.includes('hash_hmac'), 'Meta webhook must validate the HMAC signature');
+assert.ok(webhookApi.includes('whatsapp_webhook_events'), 'Meta webhook events must be deduplicated and audited');
+assert.ok(webhookApi.includes("'DELIVERED'"), 'Meta delivery statuses must be recorded');
+console.log('PASS WhatsApp smoke: recipient UI, consent management, multi-recipient Meta, webhook HMAC, history, manual wa.me, CSRF and idempotency');
