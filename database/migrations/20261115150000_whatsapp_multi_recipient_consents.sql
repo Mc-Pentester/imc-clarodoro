@@ -113,6 +113,9 @@ CREATE TABLE IF NOT EXISTS whatsapp_recipient_message_log (
 );
 CREATE INDEX IF NOT EXISTS idx_whatsapp_recipient_message_log_status
     ON whatsapp_recipient_message_log(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_recipient_message_provider
+    ON whatsapp_recipient_message_log(provider_message_id)
+    WHERE provider_message_id IS NOT NULL;
 
 -- Delivery receipts arrive asynchronously from Meta after the initial API response.
 ALTER TABLE whatsapp_recipient_message_log
