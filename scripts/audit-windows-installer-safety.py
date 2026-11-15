@@ -76,8 +76,9 @@ require("Stop-Process -Id $listenerPid -Force -ErrorAction Stop" in prepare_upgr
         and "Wait-Process -Id $listenerPid -Timeout 15" in prepare_upgrade,
         "upgrade must explicitly stop and wait for the exact verified PHP listener PID")
 require("CommandLine" in prepare_upgrade and "$expectedRouter" in prepare_upgrade
-        and "$hasExpectedPort" in prepare_upgrade and "$currentIdentityMatches" in prepare_upgrade,
-        "PHP process termination must verify executable, app router, app root and HTTP port twice")
+        and "Test-LocalServiceProcessOwner" in prepare_upgrade and "S-1-5-19" in prepare_upgrade
+        and "$currentIdentityMatches" in prepare_upgrade and "$commandLineMatches" in prepare_upgrade,
+        "PHP process termination must verify exact executable and LOCAL SERVICE owner, and validate command-line identity when Windows exposes it")
 require("Get-Process -Id $listenerPid" in prepare_upgrade,
         "PHP executable-path fallback is missing when CIM omits ExecutablePath")
 require("Stop-Process -Name" not in prepare_upgrade,
