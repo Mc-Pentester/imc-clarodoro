@@ -52,7 +52,7 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <div class="wide actions"><button type="button" id="manualButton" disabled>Ouvrir WhatsApp pour vérifier et envoyer (parents uniquement)</button></div>
 </div>
 <div id="manualResult" class="result" hidden aria-live="polite"></div>
-<p class="hint">Clarodaro vérifie à nouveau le consentement et journalise la préparation avant d’ouvrir WhatsApp. Le message prérempli figure dans l’URL WhatsApp : évitez les informations scolaires, médicales, disciplinaires ou financières sensibles.</p>
+<p class="hint">Ce mode manuel prépare un message pour un parent sélectionné individuellement. Pour un message concernant un élève, utilisez l’envoi Meta : Clarodaro calculera alors automatiquement tous les destinataires autorisés selon l’âge de l’élève et les consentements actifs. Clarodaro vérifie à nouveau le consentement du parent et journalise la préparation avant d’ouvrir WhatsApp. Le message prérempli figure dans l’URL WhatsApp : évitez les informations scolaires, médicales, disciplinaires ou financières sensibles.</p>
 </section>
 <section class="card">
 <div class="mode">Mode 2 · Envoi serveur Meta</div>
