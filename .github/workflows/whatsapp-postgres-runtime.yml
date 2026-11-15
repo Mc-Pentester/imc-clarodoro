@@ -77,6 +77,19 @@ jobs:
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
           done
+          # Seed one legacy parent consent before the additive migration to prove backfill.
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO parents(id,last_name,first_name,phone)
+          VALUES ('00000000-0000-4000-8000-000000009001','Backfill','Parent','+50937000001')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO whatsapp_consents
+            (parent_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES ('00000000-0000-4000-8000-000000009001','GENERAL','+50937000001','OPTED_IN','pre-migration fixture',NOW())
+          ON CONFLICT (parent_id,purpose) DO NOTHING;
+          SQL
+          for pass in 1 2; do
+            psql -X -v ON_ERROR_STOP=1 -f database/migrations/20261115150000_whatsapp_multi_recipient_consents.sql
+          done
 
       - name: Verify PDG permissions are least-privilege
         run: |
@@ -94,6 +107,16 @@ jobs:
               SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
               WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.consent.read'
             ) THEN RAISE EXCEPTION 'PDG lacks whatsapp.consent.read'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+              WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.recipient.manage'
+            ) THEN RAISE EXCEPTION 'PDG lacks whatsapp.recipient.manage'; END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM whatsapp_recipient_consents c
+              WHERE c.parent_id = '00000000-0000-4000-8000-000000009001'
+                AND c.recipient_type = 'PARENT' AND c.purpose = 'GENERAL'
+                AND c.status = 'OPTED_IN'
+            ) THEN RAISE EXCEPTION 'Legacy parent consent was not backfilled'; END IF;
             IF EXISTS (
               SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
               WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.consent.manage'
@@ -182,6 +205,9 @@ jobs:
           php -l api/whatsapp/consents.php
           php -l api/whatsapp/send.php
           php -l api/whatsapp/manual-preparations.php
+          php -l api/whatsapp/recipient-consents.php
+          php -l api/whatsapp/recipient-search.php
+          php -l api/whatsapp/send-multi.php
           php -l private-pages/whatsapp-send.php
 
       - name: Verify unauthenticated HTTP requests are rejected
