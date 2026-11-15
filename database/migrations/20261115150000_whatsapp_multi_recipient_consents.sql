@@ -112,5 +112,15 @@ INNER JOIN permissions p_send ON p_send.id = rp.permission_id AND p_send.name = 
 INNER JOIN permissions p_read ON p_read.name = 'whatsapp.recipient.read'
 ON CONFLICT DO NOTHING;
 
--- Le PDG conserve l'accès global; aucun autre rôle n'est automatiquement promu.
+-- Maintenir le contrat PDG : le rôle propriétaire reçoit toutes les permissions
+-- explicitement créées par cette migration. Les autres rôles ne reçoivent que
+-- whatsapp.recipient.read s'ils possédaient déjà whatsapp.message.send.
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+CROSS JOIN permissions p
+WHERE r.name = 'PDG'
+  AND p.name IN ('whatsapp.recipient.read', 'whatsapp.recipient.manage', 'whatsapp.message.audit')
+ON CONFLICT DO NOTHING;
+
 COMMIT;
