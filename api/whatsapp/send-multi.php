@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/auth.php';
+require_once __DIR__ . '/recipient-resolver.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, private');
@@ -50,71 +51,11 @@ $configured = $enabled && is_string($token) && $token !== ''
     && function_exists('curl_init') && in_array($templateName, $allowedTemplates, true);
 if (!$configured) apiError(503, 'Envoi Meta non configuré ou modèle non autorisé; aucun message envoyé.');
 
-$consentTargets = [];
-$targetType = null;
-$targetId = null;
-if ($recipientType === 'STUDENT') {
-    if (!is_string($recipientId) || !preg_match($uuid, $recipientId)) apiError(422, 'Élève invalide');
-    if (!in_array($scope, ['STUDENT_ONLY', 'STUDENT_AND_PARENTS'], true)) apiError(422, 'Portée du message invalide');
-
-    $studentStmt = $pdo->prepare("SELECT id, CASE WHEN date_of_birth IS NOT NULL AND date_of_birth <= (CURRENT_DATE - INTERVAL '18 years') THEN 1 ELSE 0 END AS is_adult FROM students WHERE id = :id AND status = 'ACTIVE' LIMIT 1");
-    $studentStmt->execute([':id' => $recipientId]);
-    $student = $studentStmt->fetch(PDO::FETCH_ASSOC);
-    if (!$student) apiError(404, 'Élève actif introuvable');
-
-    // En Haïti, la majorité est fixée à 18 ans. Une date de naissance absente
-    // est traitée par prudence comme un élève mineur pour le routage.
-    $isAdult = (int) $student['is_adult'] === 1;
-
-    if ($isAdult && $scope === 'STUDENT_ONLY') {
-        $targetType = 'STUDENT';
-        $targetId = $recipientId;
-        $stmt = $pdo->prepare(
-            "SELECT id, recipient_type, phone_e164 FROM whatsapp_recipient_consents
-             WHERE recipient_type = 'STUDENT' AND student_id = :id
-               AND purpose = :purpose AND status = 'OPTED_IN'"
-        );
-        $stmt->execute([':id' => $recipientId, ':purpose' => $purpose]);
-        $consentTargets = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        // Mineurs: parents/responsables seulement, quel que soit le scope envoyé.
-        // Majeurs en mode relation familiale: élève + tous les responsables actifs.
-        if ($isAdult && $scope === 'STUDENT_AND_PARENTS') {
-            $stmt = $pdo->prepare(
-                "SELECT id, recipient_type, phone_e164 FROM whatsapp_recipient_consents
-                 WHERE recipient_type = 'STUDENT' AND student_id = :id
-                   AND purpose = :purpose AND status = 'OPTED_IN'"
-            );
-            $stmt->execute([':id' => $recipientId, ':purpose' => $purpose]);
-            $consentTargets = array_merge($consentTargets, $stmt->fetchAll(PDO::FETCH_ASSOC));
-        }
-        $parentsStmt = $pdo->prepare(
-            "SELECT c.id, c.recipient_type, c.phone_e164
-             FROM student_parents sp
-             INNER JOIN whatsapp_recipient_consents c
-               ON c.parent_id = sp.parent_id
-              AND c.recipient_type = 'PARENT'
-              AND c.purpose = :purpose
-              AND c.status = 'OPTED_IN'
-             WHERE sp.student_id = :student_id
-             ORDER BY sp.parent_id"
-        );
-        $parentsStmt->execute([':purpose' => $purpose, ':student_id' => $recipientId]);
-        $consentTargets = array_merge($consentTargets, $parentsStmt->fetchAll(PDO::FETCH_ASSOC));
-    }
-} elseif (in_array($recipientType, ['STAFF', 'TEACHER', 'PARENT'], true)) {
-    if (!is_string($recipientId) || !preg_match($uuid, $recipientId)) apiError(422, 'Destinataire invalide');
-    $idColumn = ['STAFF' => 'staff_id', 'TEACHER' => 'teacher_id', 'PARENT' => 'parent_id'][$recipientType];
-    $stmt = $pdo->prepare(
-        "SELECT id, recipient_type, phone_e164 FROM whatsapp_recipient_consents
-         WHERE recipient_type = :type AND {$idColumn} = :id
-           AND purpose = :purpose AND status = 'OPTED_IN'"
-    );
-    $stmt->execute([':type' => $recipientType, ':id' => $recipientId, ':purpose' => $purpose]);
-    $consentTargets = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} else {
-    apiError(422, 'Type de destinataire non pris en charge');
+if (!in_array($recipientType, ['STUDENT', 'PARENT', 'STAFF', 'TEACHER'], true)
+    || !is_string($recipientId) || !preg_match($uuid, $recipientId)) {
+    apiError(422, 'Type ou identifiant du destinataire invalide');
 }
+$consentTargets = resolveWhatsAppConsentTargets($pdo, $recipientType, $recipientId, $scope, $purpose);
 
 if (!$consentTargets) apiError(403, 'Aucun destinataire ne possède un consentement WhatsApp actif pour cette finalité.');
 
