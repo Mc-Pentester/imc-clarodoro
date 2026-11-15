@@ -46,8 +46,9 @@ assert.ok(api.includes("if (!$configured || !in_array($templateName, $allowedTem
 assert.ok(!api.includes("'mode' => 'simulation'"), 'The real-send endpoint must never report a simulated success');
 assert.ok(api.includes("'mode' => 'live'"), 'The endpoint must report live mode');
 const multiApi = fs.readFileSync('api/whatsapp/send-multi.php', 'utf8');
-assert.ok(multiApi.includes('student_parents'), 'Student parent links must be resolved server-side');
-assert.ok(multiApi.includes("CURRENT_DATE - INTERVAL '18 years'"), 'Majority must be computed server-side at 18 years');
+const resolver = fs.readFileSync('api/whatsapp/recipient-resolver.php', 'utf8');
+assert.ok(resolver.includes('student_parents'), 'Student parent links must be resolved server-side');
+assert.ok(resolver.includes("CURRENT_DATE - INTERVAL '18 years'"), 'Majority must be computed server-side at 18 years');
 assert.ok(multiApi.includes('whatsapp_recipient_message_log'), 'Each recipient send must be audited independently');
 assert.ok(multiApi.includes("$current['status'] !== 'OPTED_IN'"), 'Consent must be rechecked immediately before each send');
 const consentApi = fs.readFileSync('api/whatsapp/recipient-consents.php', 'utf8');
