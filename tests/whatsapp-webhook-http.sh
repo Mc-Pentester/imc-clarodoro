@@ -56,7 +56,7 @@ test "$event_count" = "2"
 # Simulate the webhook arriving before the outbound send transaction commits.
 race_body='{"entry":[{"changes":[{"value":{"statuses":[{"id":"wamid.whatsapp-ci-race","status":"delivered","timestamp":"1800000002"},{"id":"wamid.whatsapp-ci-race","status":"read","timestamp":"1800000003"}]}}]}]}'
 race_response="$(sign_and_post "$race_body")"
-php -r '$d=json_decode($argv[1],true); if (($d["success"]??false)!==true || ($d["processed"]??-1)!==0) exit(1);' "$race_response"
+php -r '$d=json_decode($argv[1],true); if (($d["success"]??false)!==true || ($d["processed"]??-1)!==2) exit(1);' "$race_response"
 
 psql -X -v ON_ERROR_STOP=1 <<'SQL'
 INSERT INTO whatsapp_recipient_message_log
