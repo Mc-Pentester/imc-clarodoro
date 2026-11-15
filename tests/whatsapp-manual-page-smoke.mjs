@@ -60,4 +60,6 @@ const webhookApi = fs.readFileSync('api/whatsapp/webhook.php', 'utf8');
 assert.ok(webhookApi.includes('hash_hmac'), 'Meta webhook must validate the HMAC signature');
 assert.ok(webhookApi.includes('whatsapp_webhook_events'), 'Meta webhook events must be deduplicated and audited');
 assert.ok(webhookApi.includes("'DELIVERED'"), 'Meta delivery statuses must be recorded');
+const deliveryHelper = fs.readFileSync('api/whatsapp/delivery-status.php', 'utf8');
+assert.ok(deliveryHelper.includes('whatsapp_webhook_events'), 'Early Meta receipts must be reconciled after send commit');
 console.log('PASS WhatsApp smoke: recipient UI, consent management, multi-recipient Meta, webhook HMAC, history, manual wa.me, CSRF and idempotency');
