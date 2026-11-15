@@ -79,11 +79,11 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_recipient_consent_audit_time
 CREATE OR REPLACE FUNCTION prevent_whatsapp_recipient_consent_audit_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $
+AS $$
 BEGIN
     RAISE EXCEPTION 'whatsapp_recipient_consent_audit is append-only';
 END;
-$;
+$$;
 DROP TRIGGER IF EXISTS whatsapp_recipient_consent_audit_no_mutation
     ON whatsapp_recipient_consent_audit;
 CREATE TRIGGER whatsapp_recipient_consent_audit_no_mutation
@@ -142,11 +142,11 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_webhook_events_message
 CREATE OR REPLACE FUNCTION prevent_whatsapp_webhook_event_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
-AS $
+AS $$
 BEGIN
     RAISE EXCEPTION 'whatsapp_webhook_events is append-only';
 END;
-$;
+$$;
 DROP TRIGGER IF EXISTS whatsapp_webhook_events_no_mutation ON whatsapp_webhook_events;
 CREATE TRIGGER whatsapp_webhook_events_no_mutation
     BEFORE UPDATE OR DELETE ON whatsapp_webhook_events
