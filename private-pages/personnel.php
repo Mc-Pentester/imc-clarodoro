@@ -1010,6 +1010,33 @@ async function connecterPersonnel(){
 
     document.getElementById("sectionConnexion").classList.add("hidden");
     document.getElementById("interfacePersonnel").classList.remove("hidden");
+
+    // Après une connexion manuelle, charger les mêmes données serveur
+    // que lors de la restauration d'une session déjà ouverte.
+    try {
+      await chargerAnneeAcademique();
+      await chargerDonnees();
+
+      const maintenant = new Date();
+      document.getElementById("anneeRapportMensuel").value = maintenant.getFullYear();
+      document.getElementById("moisRapportMensuel").value = String(maintenant.getMonth() + 1);
+      document.getElementById("dateRapportJournalier").value = dateISO(maintenant);
+      document.getElementById("dateRapportHebdomadaire").value = dateISO(obtenirLundi(maintenant));
+      document.getElementById("dateDebutSemaine").value = dateISO(obtenirLundi(maintenant));
+      document.getElementById("anneeAcademique").textContent = anneeAcademique;
+      document.getElementById("anneeAcademiquePresence").textContent = anneeAcademique;
+      verifierPersonnelEnregistre();
+    } catch (loadError) {
+      console.error("Erreur de chargement après connexion du personnel :", loadError);
+      afficherMessage(
+        "messagePresence",
+        loadError && loadError.message
+          ? loadError.message
+          : "La connexion est réussie, mais les données des élèves n'ont pas pu être chargées.",
+        "erreur"
+      );
+    }
+
     afficherInformationsEnseignant();
   } catch (error) {
     afficherMessage(
