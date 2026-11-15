@@ -114,34 +114,6 @@ try {
                 if (!$eventInsert->fetchColumn()) continue;
                 $messageIdsToReconcile[$messageId] = true;
 
-                $log = $pdo->prepare(
-                    'SELECT id, status FROM whatsapp_recipient_message_log
-                     WHERE provider_message_id = :message_id
-                     FOR UPDATE'
-                );
-                $log->execute([':message_id' => $messageId]);
-                $messageLog = $log->fetch(PDO::FETCH_ASSOC);
-                if (!$messageLog) continue;
-
-                $rank = ['PROCESSING' => 0, 'SENT' => 1, 'DELIVERED' => 2, 'READ' => 3, 'FAILED' => 4];
-                $currentStatus = (string) $messageLog['status'];
-                // Ignore late/out-of-order events after a terminal status or an advanced receipt.
-                if (in_array($currentStatus, ['READ', 'FAILED'], true)) continue;
-                if (($rank[$providerStatus] ?? 0) < ($rank[$currentStatus] ?? 0)) continue;
-
-                $update = $pdo->prepare(
-                    'UPDATE whatsapp_recipient_message_log
-                     SET status = :status,
-                         provider_error_code = CASE WHEN :has_error THEN :error_code ELSE provider_error_code END,
-                         updated_at = NOW()
-                     WHERE id = :id'
-                );
-                $update->execute([
-                    ':status' => $providerStatus,
-                    ':has_error' => $errorCode !== null,
-                    ':error_code' => $errorCode,
-                    ':id' => $messageLog['id'],
-                ]);
                 $processed++;
             }
         }
