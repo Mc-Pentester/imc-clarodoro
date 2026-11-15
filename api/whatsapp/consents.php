@@ -80,7 +80,7 @@ $stmt = $pdo->prepare(
          consented_at, revoked_at, created_by, updated_by)
      VALUES
         (:parent_id, :purpose, :phone, :status, :source, :evidence,
-         :consented_at, :revoked_at, :actor, :actor)
+         :consented_at, :revoked_at, :created_actor, :updated_actor)
      ON CONFLICT (parent_id, purpose) DO UPDATE SET
         phone_e164 = EXCLUDED.phone_e164,
         status = EXCLUDED.status,
@@ -118,7 +118,8 @@ try {
         ':evidence' => $evidence,
         ':consented_at' => $consentedAt,
         ':revoked_at' => $revokedAt,
-        ':actor' => $user['id'],
+        ':created_actor' => $user['id'],
+        ':updated_actor' => $user['id'],
     ]);
     $consent = $stmt->fetch();
 
