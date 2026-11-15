@@ -80,7 +80,7 @@ $stmt = $pdo->prepare(
          consented_at, revoked_at, created_by, updated_by)
      VALUES
         (:parent_id, :purpose, :phone, :status, :source, :evidence,
-         :consented_at, :revoked_at, :actor, :actor)
+         :consented_at, :revoked_at, :created_actor, :updated_actor)
      ON CONFLICT (parent_id, purpose) DO UPDATE SET
         phone_e164 = EXCLUDED.phone_e164,
         status = EXCLUDED.status,
@@ -118,7 +118,8 @@ try {
         ':evidence' => $evidence,
         ':consented_at' => $consentedAt,
         ':revoked_at' => $revokedAt,
-        ':actor' => $user['id'],
+        ':created_actor' => $user['id'],
+        ':updated_actor' => $user['id'],
     ]);
     $consent = $stmt->fetch();
 
@@ -135,6 +136,51 @@ try {
         ':new_status' => $status,
         ':actor' => $user['id'],
     ]);
+    // Synchroniser le consentement parent dans le modèle multi-destinataires.
+    // Les anciens écrans et API continuent ainsi d'alimenter le même état effectif.
+    $genericPreviousStmt = $pdo->prepare(
+        "SELECT id, status FROM whatsapp_recipient_consents
+         WHERE recipient_type = 'PARENT' AND parent_id = :parent_id AND purpose = :purpose
+         FOR UPDATE"
+    );
+    $genericPreviousStmt->execute([':parent_id' => $parentId, ':purpose' => $purpose]);
+    $genericPrevious = $genericPreviousStmt->fetch();
+
+    $genericUpsert = $pdo->prepare(
+        "INSERT INTO whatsapp_recipient_consents
+            (recipient_type, parent_id, purpose, phone_e164, status, consent_source,
+             evidence_reference, consented_at, revoked_at, created_by, updated_by)
+         VALUES ('PARENT', :parent_id, :purpose, :phone, :status, :source,
+             :evidence, :generic_opted_in, :generic_opted_out, :generic_created_by, :generic_updated_by)
+         ON CONFLICT (parent_id, purpose) WHERE recipient_type = 'PARENT'
+         DO UPDATE SET phone_e164 = EXCLUDED.phone_e164,
+             status = EXCLUDED.status, consent_source = EXCLUDED.consent_source,
+             evidence_reference = EXCLUDED.evidence_reference,
+             consented_at = CASE WHEN EXCLUDED.status = 'OPTED_IN' THEN NOW() ELSE NULL END,
+             revoked_at = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN NOW() ELSE NULL END,
+             updated_by = EXCLUDED.updated_by, updated_at = NOW()
+         RETURNING id"
+    );
+    $genericUpsert->execute([
+        ':parent_id' => $parentId, ':purpose' => $purpose, ':phone' => $phone,
+        ':status' => $status, ':source' => $source, ':evidence' => $evidence,
+        ':generic_opted_in' => $status === 'OPTED_IN' ? $now : null,
+        ':generic_opted_out' => $status === 'OPTED_OUT' ? $now : null,
+        ':generic_created_by' => $user['id'], ':generic_updated_by' => $user['id'],
+    ]);
+    $genericConsentId = $genericUpsert->fetchColumn();
+    $genericAudit = $pdo->prepare(
+        'INSERT INTO whatsapp_recipient_consent_audit
+            (consent_id, recipient_type, previous_status, new_status, actor_user_id)
+         VALUES (:consent_id, \'PARENT\', :previous_status, :new_status, :actor)'
+    );
+    $genericAudit->execute([
+        ':consent_id' => $genericConsentId,
+        ':previous_status' => $genericPrevious['status'] ?? null,
+        ':new_status' => $status,
+        ':actor' => $user['id'],
+    ]);
+
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {

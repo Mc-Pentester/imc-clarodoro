@@ -1,12 +1,6 @@
 name: Windows installer package
 
 on:
-  push:
-    branches:
-      - feature/windows-installer-clarodaro
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
