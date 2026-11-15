@@ -19,7 +19,7 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r CROSS JOIN permissions p
 WHERE r.name = 'WhatsApp CI'
-  AND p.name IN ('whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send', 'whatsapp.recipient.read', 'whatsapp.recipient.manage')
+  AND p.name IN ('whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send', 'whatsapp.recipient.read', 'whatsapp.recipient.manage', 'whatsapp.message.audit')
 ON CONFLICT DO NOTHING;
 SQL
 
@@ -98,6 +98,9 @@ php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-student_consent_read.jso
 
 call_api recipient_search 200 "$ALLOWED_SID" GET "/api/whatsapp/recipient-search.php?recipient_type=STUDENT&q=Adult" '' ''
 php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-recipient_search.json"),true); if (($d["success"]??false)!==true || count($d["recipients"]??[])<1) exit(1);'
+
+call_api message_history 200 "$ALLOWED_SID" GET /api/whatsapp/recipient-message-history.php '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-message_history.json"),true); if (($d["success"]??false)!==true || count($d["messages"]??[])<1) exit(1);'
 
 MULTI_SEND="{\"recipient_type\":\"STUDENT\",\"recipient_id\":\"$STUDENT_ID\",\"scope\":\"STUDENT_ONLY\",\"purpose\":\"GENERAL\",\"template_name\":\"ci_template\",\"language\":\"fr\",\"idempotency_key\":\"whatsapp-multi-http-key-000001\",\"parameters\":[\"CI\"]}"
 call_api multi_send_disabled 503 "$ALLOWED_SID" POST /api/whatsapp/send-multi.php "$MULTI_SEND" whatsapp-ci-csrf-token
