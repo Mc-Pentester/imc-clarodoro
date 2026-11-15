@@ -19,7 +19,7 @@ function resolveWhatsAppConsentTargets(
         $studentStmt = $pdo->prepare(
             "SELECT id,
                     CASE WHEN date_of_birth IS NOT NULL
-                               AND date_of_birth <= (CURRENT_DATE - INTERVAL '18 years')
+                               AND date_of_birth <= ((timezone('America/Port-au-Prince', NOW())::date - INTERVAL '18 years')::date)
                          THEN 1 ELSE 0 END AS is_adult
              FROM students
              WHERE id = :id AND status = 'ACTIVE'
