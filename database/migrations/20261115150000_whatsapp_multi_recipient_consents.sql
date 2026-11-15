@@ -114,6 +114,28 @@ CREATE TABLE IF NOT EXISTS whatsapp_recipient_message_log (
 CREATE INDEX IF NOT EXISTS idx_whatsapp_recipient_message_log_status
     ON whatsapp_recipient_message_log(status, created_at DESC);
 
+-- Delivery receipts arrive asynchronously from Meta after the initial API response.
+ALTER TABLE whatsapp_recipient_message_log
+    DROP CONSTRAINT IF EXISTS whatsapp_recipient_message_log_status_check;
+ALTER TABLE whatsapp_recipient_message_log
+    ADD CONSTRAINT whatsapp_recipient_message_log_status_check
+    CHECK (status IN ('PROCESSING', 'SENT', 'DELIVERED', 'READ', 'FAILED'));
+
+CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider_message_id VARCHAR(255) NOT NULL,
+    provider_status VARCHAR(20) NOT NULL
+        CHECK (provider_status IN ('SENT', 'DELIVERED', 'READ', 'FAILED')),
+    provider_timestamp TIMESTAMPTZ NOT NULL,
+    provider_error_code VARCHAR(80),
+    payload_sha256 CHAR(64) NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT whatsapp_webhook_event_unique
+        UNIQUE (provider_message_id, provider_status, provider_timestamp)
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_webhook_events_message
+    ON whatsapp_webhook_events(provider_message_id, provider_timestamp DESC);
+
 INSERT INTO permissions (name, description)
 VALUES
     ('whatsapp.recipient.read', 'Consulter les destinataires et consentements WhatsApp'),
