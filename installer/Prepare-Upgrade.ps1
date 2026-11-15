@@ -120,8 +120,29 @@ if ($task) {
                 Write-UpgradeLog ("Arrêt forcé du processus PHP Clarodaro authentifié : PID=$listenerPid.")
                 try {
                     Stop-Process -Id $listenerPid -Force -ErrorAction Stop
-                    Wait-Process -Id $listenerPid -Timeout 15 -ErrorAction SilentlyContinue
-                    Write-UpgradeLog ("Commande d'arrêt envoyée au processus PHP PID=$listenerPid.")
+                    Wait-Process -Id $listenerPid -Timeout 5 -ErrorAction SilentlyContinue
+
+                    # Stop-ScheduledTask can leave the LOCAL SERVICE child process alive.
+                    # If PowerShell's termination request did not end this exact process,
+                    # retry through taskkill while retaining the already-verified PID.
+                    $remainingPhp = Get-Process -Id $listenerPid -ErrorAction SilentlyContinue
+                    if ($remainingPhp) {
+                        Write-UpgradeLog ("Stop-Process n'a pas terminé PHP PID=$listenerPid ; tentative taskkill ciblée.")
+                        $taskkillPath = Join-Path $env:SystemRoot 'System32\taskkill.exe'
+                        $taskkillOutput = @(& $taskkillPath /PID $listenerPid /T /F 2>&1)
+                        $taskkillExitCode = $LASTEXITCODE
+                        foreach ($line in $taskkillOutput) {
+                            Write-UpgradeLog ("taskkill : " + [string]$line)
+                        }
+                        Write-UpgradeLog ("Code retour taskkill PID=$listenerPid : $taskkillExitCode.")
+                        Wait-Process -Id $listenerPid -Timeout 10 -ErrorAction SilentlyContinue
+                    }
+
+                    $remainingPhp = Get-Process -Id $listenerPid -ErrorAction SilentlyContinue
+                    if ($remainingPhp) {
+                        throw "Le processus PHP authentifié PID=$listenerPid existe toujours après Stop-Process et taskkill."
+                    }
+                    Write-UpgradeLog ("Processus PHP authentifié PID=$listenerPid terminé et confirmé absent.")
                 } catch {
                     throw "Impossible d'arrêter le processus PHP Clarodaro authentifié (PID $listenerPid). Vérifiez les droits administrateur. Détail : $($_.Exception.Message)"
                 }
