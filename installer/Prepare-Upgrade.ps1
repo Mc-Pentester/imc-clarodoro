@@ -14,6 +14,18 @@ $logFile = Join-Path $logRoot 'upgrade-preparation.log'
 $expectedPgCtl = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\pg_ctl.exe'
 $expectedLauncher = Join-Path $AppRoot 'installer\Start-Clarodaro-Server.ps1'
 
+function Test-LocalServiceProcessOwner($Process) {
+    if (-not $Process) { return $false }
+    try {
+        $owner = Invoke-CimMethod -InputObject $Process -MethodName GetOwnerSid -ErrorAction Stop
+        return ($owner.ReturnValue -eq 0 -and [string]$owner.Sid -eq 'S-1-5-19')
+    }
+    catch {
+        Write-UpgradeLog ('Impossible de vérifier le propriétaire du processus HTTP : ' + $_.Exception.Message)
+        return $false
+    }
+}
+
 function Write-UpgradeLog([string]$Message) {
     $line = '{0} {1}{2}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'), $Message, [Environment]::NewLine
     try {
@@ -71,24 +83,31 @@ if ($task) {
 
         $executablePath = [string]$listenerProcess.ExecutablePath
         if ([string]::IsNullOrWhiteSpace($executablePath)) {
-            # CIM can omit ExecutablePath even for an accessible process. Get-Process
-            # provides a second read path; never infer identity from the PID alone.
+            # CIM peut masquer ExecutablePath pour un processus exécuté sous LOCAL SERVICE.
             $processInfo = Get-Process -Id $listenerPid -ErrorAction SilentlyContinue
             if ($processInfo) { $executablePath = [string]$processInfo.Path }
         }
         $commandLine = [string]$listenerProcess.CommandLine
-        if ([string]::IsNullOrWhiteSpace($executablePath) -or [string]::IsNullOrWhiteSpace($commandLine)) {
-            throw "Impossible de confirmer l'identité complète du processus HTTP (PID $listenerPid). Aucun fichier ne sera remplacé."
+        if ([string]::IsNullOrWhiteSpace($executablePath)) {
+            throw "Impossible de confirmer le chemin de l'exécutable HTTP (PID $listenerPid). Aucun fichier ne sera remplacé."
         }
 
         $actualExecutable = [System.IO.Path]::GetFullPath($executablePath)
         $isExpectedExecutable = [string]::Equals($actualExecutable, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
-        $hasExpectedRouter = $commandLine.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0
-        $hasExpectedAppRoot = $commandLine.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
-        $hasExpectedPort = $commandLine -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $HttpPort + '["'']?(?:\s|$)')
+        $isLocalServiceOwner = Test-LocalServiceProcessOwner $listenerProcess
+        $commandLineMatches = $true
+        if (-not [string]::IsNullOrWhiteSpace($commandLine)) {
+            $hasExpectedRouter = $commandLine.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            $hasExpectedAppRoot = $commandLine.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            $hasExpectedPort = $commandLine -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $HttpPort + '["'']?(?:\s|$)')
+            $commandLineMatches = $hasExpectedRouter -and $hasExpectedAppRoot -and $hasExpectedPort
+        }
+        else {
+            Write-UpgradeLog ('Métadonnées de ligne de commande masquées ; identité confirmée par exécutable exact et propriétaire LOCAL SERVICE (PID=' + $listenerPid + ').')
+        }
 
-        Write-UpgradeLog ('Écouteur HTTP : PID=' + $listenerPid + '; exécutable=' + $actualExecutable + '; commande=' + $commandLine)
-        if (-not $isExpectedExecutable -or -not $hasExpectedRouter -or -not $hasExpectedAppRoot -or -not $hasExpectedPort) {
+        Write-UpgradeLog ('Écouteur HTTP : PID=' + $listenerPid + '; exécutable=' + $actualExecutable + '; propriétaire LOCAL SERVICE=' + $isLocalServiceOwner + '; commande=' + $commandLine)
+        if (-not $isExpectedExecutable -or -not $isLocalServiceOwner -or -not $commandLineMatches) {
             throw "Le port HTTP $HttpPort est occupé par un processus qui ne peut pas être authentifié comme le serveur Clarodaro attendu (PID $listenerPid). Aucun processus tiers ne sera arrêté."
         }
 
@@ -109,10 +128,14 @@ if ($task) {
                 if (-not [string]::IsNullOrWhiteSpace($currentPath)) {
                     $currentExecutableMatches = [string]::Equals([System.IO.Path]::GetFullPath($currentPath), $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
                 }
-                $currentIdentityMatches = $currentExecutableMatches -and
-                    $currentCommand.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-                    $currentCommand.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-                    ($currentCommand -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $HttpPort + '["'']?(?:\s|$)'))
+                $currentOwnerMatches = Test-LocalServiceProcessOwner $currentProcess
+                $currentCommandMatches = $true
+                if (-not [string]::IsNullOrWhiteSpace($currentCommand)) {
+                    $currentCommandMatches = $currentCommand.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                        $currentCommand.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                        ($currentCommand -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $HttpPort + '["'']?(?:\s|$)'))
+                }
+                $currentIdentityMatches = $currentExecutableMatches -and $currentOwnerMatches -and $currentCommandMatches
                 if (-not $currentIdentityMatches) {
                     throw "L'identité du processus HTTP (PID $listenerPid) a changé avant son arrêt. Aucun processus ne sera arrêté."
                 }
@@ -120,8 +143,48 @@ if ($task) {
                 Write-UpgradeLog ("Arrêt forcé du processus PHP Clarodaro authentifié : PID=$listenerPid.")
                 try {
                     Stop-Process -Id $listenerPid -Force -ErrorAction Stop
-                    Wait-Process -Id $listenerPid -Timeout 15 -ErrorAction SilentlyContinue
-                    Write-UpgradeLog ("Commande d'arrêt envoyée au processus PHP PID=$listenerPid.")
+                    Wait-Process -Id $listenerPid -Timeout 5 -ErrorAction SilentlyContinue
+
+                    # Stop-ScheduledTask peut laisser le processus enfant LOCAL SERVICE actif.
+                    # Avant taskkill, réauthentifier le PID pour éviter de tuer un PID recyclé.
+                    $remainingPhp = Get-Process -Id $listenerPid -ErrorAction SilentlyContinue
+                    if ($remainingPhp) {
+                        $retryListener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue |
+                            Where-Object { [int]$_.OwningProcess -eq $listenerPid } | Select-Object -First 1
+                        $retryProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$listenerPid" -ErrorAction SilentlyContinue
+                        $retryPath = if ($retryProcess) { [string]$retryProcess.ExecutablePath } else { '' }
+                        if ([string]::IsNullOrWhiteSpace($retryPath)) {
+                            $retryInfo = Get-Process -Id $listenerPid -ErrorAction SilentlyContinue
+                            if ($retryInfo) { $retryPath = [string]$retryInfo.Path }
+                        }
+                        $retryExecutableMatches = -not [string]::IsNullOrWhiteSpace($retryPath) -and
+                            [string]::Equals([System.IO.Path]::GetFullPath($retryPath), $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
+                        $retryOwnerMatches = Test-LocalServiceProcessOwner $retryProcess
+                        $retryCommand = if ($retryProcess) { [string]$retryProcess.CommandLine } else { '' }
+                        $retryCommandMatches = [string]::IsNullOrWhiteSpace($retryCommand) -or
+                            ($retryCommand.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                             $retryCommand.IndexOf($AppRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                             ($retryCommand -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $HttpPort + '["'']?(?:\s|$)')))
+                        if (-not $retryExecutableMatches -or -not $retryOwnerMatches -or -not $retryCommandMatches) {
+                            throw "Le PID $listenerPid n'est plus authentifié comme le serveur PHP Clarodaro ; taskkill est refusé."
+                        }
+
+                        Write-UpgradeLog ("Stop-Process n'a pas terminé PHP PID=$listenerPid ; tentative taskkill après réauthentification.")
+                        $taskkillPath = Join-Path $env:SystemRoot 'System32\taskkill.exe'
+                        $taskkillOutput = @(& $taskkillPath /PID $listenerPid /T /F 2>&1)
+                        $taskkillExitCode = $LASTEXITCODE
+                        foreach ($line in $taskkillOutput) {
+                            Write-UpgradeLog ("taskkill : " + [string]$line)
+                        }
+                        Write-UpgradeLog ("Code retour taskkill PID=$listenerPid : $taskkillExitCode.")
+                        Wait-Process -Id $listenerPid -Timeout 10 -ErrorAction SilentlyContinue
+                    }
+
+                    $remainingPhp = Get-Process -Id $listenerPid -ErrorAction SilentlyContinue
+                    if ($remainingPhp) {
+                        throw "Le processus PHP authentifié PID=$listenerPid existe toujours après Stop-Process et taskkill."
+                    }
+                    Write-UpgradeLog ("Processus PHP authentifié PID=$listenerPid terminé et confirmé absent.")
                 } catch {
                     throw "Impossible d'arrêter le processus PHP Clarodaro authentifié (PID $listenerPid). Vérifiez les droits administrateur. Détail : $($_.Exception.Message)"
                 }
