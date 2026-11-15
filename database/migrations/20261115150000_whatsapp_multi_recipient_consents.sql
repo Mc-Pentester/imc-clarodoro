@@ -76,6 +76,25 @@ CREATE TABLE IF NOT EXISTS whatsapp_recipient_consent_audit (
 CREATE INDEX IF NOT EXISTS idx_whatsapp_recipient_consent_audit_time
     ON whatsapp_recipient_consent_audit(consent_id, action_at DESC);
 
+CREATE OR REPLACE FUNCTION prevent_whatsapp_recipient_consent_audit_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $
+BEGIN
+    RAISE EXCEPTION 'whatsapp_recipient_consent_audit is append-only';
+END;
+$;
+DROP TRIGGER IF EXISTS whatsapp_recipient_consent_audit_no_mutation
+    ON whatsapp_recipient_consent_audit;
+CREATE TRIGGER whatsapp_recipient_consent_audit_no_mutation
+    BEFORE UPDATE OR DELETE ON whatsapp_recipient_consent_audit
+    FOR EACH ROW EXECUTE FUNCTION prevent_whatsapp_recipient_consent_audit_mutation();
+DROP TRIGGER IF EXISTS whatsapp_recipient_consent_audit_no_truncate
+    ON whatsapp_recipient_consent_audit;
+CREATE TRIGGER whatsapp_recipient_consent_audit_no_truncate
+    BEFORE TRUNCATE ON whatsapp_recipient_consent_audit
+    FOR EACH STATEMENT EXECUTE FUNCTION prevent_whatsapp_recipient_consent_audit_mutation();
+
 CREATE TABLE IF NOT EXISTS whatsapp_recipient_message_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     consent_id UUID NOT NULL REFERENCES whatsapp_recipient_consents(id) ON DELETE RESTRICT,
