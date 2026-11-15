@@ -4,8 +4,19 @@
 (function () {
   "use strict";
 
-  function ajouterAccesWhatsApp() {
-    if (!window.IMCAuth || !window.IMCAuth.isAuthenticated || !window.IMCAuth.isAuthenticated()) return;
+  async function ajouterAccesWhatsApp() {
+    if (!window.IMCAuth || typeof window.IMCAuth.verifySession !== "function") return;
+
+    // La session serveur est chargée de façon asynchrone. Ne pas tester
+    // isAuthenticated() avant que /api/auth/me.php ait répondu.
+    try {
+      await window.IMCAuth.verifySession();
+    } catch (error) {
+      console.error("Vérification de session WhatsApp impossible:", error);
+      return;
+    }
+
+    if (!window.IMCAuth.isAuthenticated()) return;
     if (!window.IMCAuth.hasPermission("whatsapp.message.send")) return;
 
     document.querySelectorAll(".menu-principal").forEach(function (menu) {
@@ -23,9 +34,15 @@
     });
   }
 
+  function initialiserAccesWhatsApp() {
+    ajouterAccesWhatsApp().catch(function (error) {
+      console.error("Initialisation de l'accès WhatsApp impossible:", error);
+    });
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", ajouterAccesWhatsApp);
+    document.addEventListener("DOMContentLoaded", initialiserAccesWhatsApp, { once: true });
   } else {
-    ajouterAccesWhatsApp();
+    initialiserAccesWhatsApp();
   }
 })();
