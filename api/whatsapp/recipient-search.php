@@ -19,7 +19,7 @@ $q = trim((string) ($_GET['q'] ?? ''));
 if (!in_array($type, ['PARENT', 'STUDENT', 'STAFF', 'TEACHER'], true)) {
     apiError(422, 'Type de destinataire invalide');
 }
-if (mb_strlen($q) < 2 || mb_strlen($q) > 100) {
+if (strlen($q) < 2 || strlen($q) > 100) {
     apiError(422, 'Saisissez au moins 2 caractères');
 }
 $like = '%' . $q . '%';
