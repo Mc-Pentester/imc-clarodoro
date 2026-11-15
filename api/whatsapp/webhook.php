@@ -39,6 +39,10 @@ if (!is_string($appSecret) || $appSecret === '' || !is_string($rawBody) || $rawB
     http_response_code(503);
     exit;
 }
+if (strlen($rawBody) > 1048576) {
+    http_response_code(413);
+    exit;
+}
 $expectedSignature = 'sha256=' . hash_hmac('sha256', $rawBody, $appSecret);
 if (!is_string($signature) || !hash_equals($expectedSignature, $signature)) {
     http_response_code(403);
@@ -84,8 +88,11 @@ try {
                 $providerStatus = $statusMap[$rawStatus];
                 $providerTime = (new DateTimeImmutable('@' . (int) $timestamp))->format('Y-m-d H:i:sP');
                 $errorCode = null;
-                if ($providerStatus === 'FAILED' && isset($statusEvent['errors'][0]['code'])) {
-                    $errorCode = substr((string) $statusEvent['errors'][0]['code'], 0, 80);
+                if ($providerStatus === 'FAILED') {
+                    $providerErrors = $statusEvent['errors'] ?? [];
+                    if (is_array($providerErrors) && isset($providerErrors[0]) && is_array($providerErrors[0]) && isset($providerErrors[0]['code'])) {
+                        $errorCode = substr((string) $providerErrors[0]['code'], 0, 80);
+                    }
                 }
 
                 $eventInsert = $pdo->prepare(
