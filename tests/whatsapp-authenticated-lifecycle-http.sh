@@ -19,7 +19,7 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r CROSS JOIN permissions p
 WHERE r.name = 'WhatsApp CI'
-  AND p.name IN ('whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send')
+  AND p.name IN ('whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send', 'whatsapp.recipient.read', 'whatsapp.recipient.manage')
 ON CONFLICT DO NOTHING;
 SQL
 
@@ -85,3 +85,20 @@ REVOKE="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+
 call_api opt_out 200 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$REVOKE" whatsapp-ci-csrf-token
 SEND_AGAIN="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"template_name\":\"ci_template\",\"language\":\"fr\",\"idempotency_key\":\"whatsapp-http-key-000002\",\"parameters\":[\"blocked\"]}"
 call_api send_after_opt_out 403 "$ALLOWED_SID" POST /api/whatsapp/send.php "$SEND_AGAIN" whatsapp-ci-csrf-token
+
+# Legacy parent consent changes must be mirrored into the generic recipient model.
+call_api generic_parent_consent_read 200 "$ALLOWED_SID" GET "/api/whatsapp/recipient-consents.php?recipient_type=PARENT&recipient_id=$PARENT_ID" '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-generic_parent_consent_read.json"),true); if (($d["success"]??false)!==true || count($d["consents"]??[])!==1 || ($d["consents"][0]["status"]??"")!=="OPTED_OUT") exit(1);'
+
+STUDENT_ID='00000000-0000-4000-8000-000000009111'
+STUDENT_CONSENT="{\\"recipient_type\\":\\"STUDENT\\",\\"recipient_id\\":\\"$STUDENT_ID\\",\\"purpose\\":\\"GENERAL\\",\\"phone_e164\\":\\"+50937000111\\",\\"status\\":\\"OPTED_IN\\",\\"consent_source\\":\\"HTTP CI student consent\\"}"
+call_api student_opt_in 200 "$ALLOWED_SID" POST /api/whatsapp/recipient-consents.php "$STUDENT_CONSENT" whatsapp-ci-csrf-token
+call_api student_consent_read 200 "$ALLOWED_SID" GET "/api/whatsapp/recipient-consents.php?recipient_type=STUDENT&recipient_id=$STUDENT_ID" '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-student_consent_read.json"),true); if (($d["success"]??false)!==true || count($d["consents"]??[])!==1 || ($d["consents"][0]["status"]??"")!=="OPTED_IN") exit(1);'
+
+call_api recipient_search 200 "$ALLOWED_SID" GET "/api/whatsapp/recipient-search.php?recipient_type=STUDENT&q=Adult" '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-recipient_search.json"),true); if (($d["success"]??false)!==true || count($d["recipients"]??[])<1) exit(1);'
+
+MULTI_SEND="{\\"recipient_type\\":\\"STUDENT\\",\\"recipient_id\\":\\"$STUDENT_ID\\",\\"scope\\":\\"STUDENT_ONLY\\",\\"purpose\\":\\"GENERAL\\",\\"template_name\\":\\"ci_template\\",\\"language\\":\\"fr\\",\\"idempotency_key\\":\\"whatsapp-multi-http-key-000001\\",\\"parameters\\":[\\"CI\\"]}"
+call_api multi_send_disabled 503 "$ALLOWED_SID" POST /api/whatsapp/send-multi.php "$MULTI_SEND" whatsapp-ci-csrf-token
+echo 'WHATSAPP MULTI-RECIPIENT AUTHENTICATED HTTP LIFECYCLE: PASS'
