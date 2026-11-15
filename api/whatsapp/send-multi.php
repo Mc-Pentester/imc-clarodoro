@@ -57,19 +57,14 @@ if ($recipientType === 'STUDENT') {
     if (!is_string($recipientId) || !preg_match($uuid, $recipientId)) apiError(422, 'Élève invalide');
     if (!in_array($scope, ['STUDENT_ONLY', 'STUDENT_AND_PARENTS'], true)) apiError(422, 'Portée du message invalide');
 
-    $studentStmt = $pdo->prepare('SELECT id, date_of_birth FROM students WHERE id = :id AND status = \'ACTIVE\' LIMIT 1');
+    $studentStmt = $pdo->prepare("SELECT id, CASE WHEN date_of_birth IS NOT NULL AND date_of_birth <= (CURRENT_DATE - INTERVAL '18 years') THEN TRUE ELSE FALSE END AS is_adult FROM students WHERE id = :id AND status = 'ACTIVE' LIMIT 1");
     $studentStmt->execute([':id' => $recipientId]);
     $student = $studentStmt->fetch(PDO::FETCH_ASSOC);
     if (!$student) apiError(404, 'Élève actif introuvable');
 
     // En Haïti, la majorité est fixée à 18 ans. Une date de naissance absente
     // est traitée par prudence comme un élève mineur pour le routage.
-    $isAdult = false;
-    if (!empty($student['date_of_birth'])) {
-        $birth = new DateTimeImmutable((string) $student['date_of_birth']);
-        $today = new DateTimeImmutable('today');
-        $isAdult = $birth <= $today->modify('-18 years');
-    }
+    $isAdult = filter_var($student['is_adult'], FILTER_VALIDATE_BOOLEAN);
 
     if ($isAdult && $scope === 'STUDENT_ONLY') {
         $targetType = 'STUDENT';
