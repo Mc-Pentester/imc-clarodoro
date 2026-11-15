@@ -53,4 +53,18 @@ event_count="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_
 test "$final_status" = "READ"
 test "$event_count" = "2"
 
-echo "PASS Meta webhook verification, HMAC signature, deduplication and DELIVERED -> READ status lifecycle"
+psql -X -v ON_ERROR_STOP=1 <<'SQL'
+DO $webhook_audit$
+BEGIN
+  BEGIN
+    UPDATE whatsapp_webhook_events SET provider_status='SENT'
+    WHERE provider_message_id='wamid.whatsapp-ci-test';
+    RAISE EXCEPTION 'Webhook event UPDATE unexpectedly succeeded';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Webhook event UPDATE unexpectedly succeeded' THEN RAISE; END IF;
+  END;
+END
+$webhook_audit$;
+SQL
+
+echo "PASS Meta webhook verification, HMAC signature, deduplication, DELIVERED -> READ lifecycle and append-only audit"
