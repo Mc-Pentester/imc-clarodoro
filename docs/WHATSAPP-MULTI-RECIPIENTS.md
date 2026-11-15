@@ -11,7 +11,7 @@ L'API serveur est seule autorisée à déterminer les destinataires. Le navigate
 - **Personnel / enseignants** : envoi direct uniquement si leur consentement individuel est actif pour la finalité.
 - Les finalités sont distinctes : `ATTENDANCE`, `RESULTS_AVAILABLE`, `PAYMENT_REMINDER`, `GENERAL`.
 
-La majorité est calculée côté PostgreSQL à 18 ans selon l'article 16.2 de la Constitution haïtienne. La date de naissance est évaluée par rapport à `CURRENT_DATE` de la base.
+La majorité est calculée côté PostgreSQL à 18 ans selon l'article 16.2 de la Constitution haïtienne. La date de naissance est évaluée selon le calendrier local `America/Port-au-Prince`, indépendamment du fuseau horaire du serveur.
 
 ## Consentement
 
