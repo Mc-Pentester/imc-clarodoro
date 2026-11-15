@@ -304,6 +304,7 @@ jobs:
           php -l api/whatsapp/recipient-consents.php
           php -l api/whatsapp/recipient-search.php
           php -l api/whatsapp/send-multi.php
+          php -l api/whatsapp/delivery-status.php
           php -l api/whatsapp/webhook.php
           php -l api/whatsapp/recipient-message-history.php
           php -l private-pages/whatsapp-send.php
