@@ -259,7 +259,7 @@ jobs:
             )
           LIMIT 1;
 
-          DO $
+          DO $$
           BEGIN
             BEGIN
               UPDATE whatsapp_consent_audit SET new_status = 'OPTED_OUT';
