@@ -30,6 +30,20 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 </div>
 <p class="hint">Les consentements sont vérifiés individuellement par finalité et par numéro. Les responsables sont sélectionnés à partir de la relation élève-responsable en base de données.</p>
 </section>
+<section class="card" id="consentManagement">
+<h2>Gérer les consentements WhatsApp</h2>
+<p class="hint">Enregistrez le numéro WhatsApp réellement autorisé, la finalité, la source et la preuve du consentement. Un téléphone présent dans le dossier scolaire ne constitue pas à lui seul un consentement.</p>
+<div class="grid">
+<div><label for="consentType">Type de personne</label><select id="consentType"><option value="PARENT">Parent / responsable</option><option value="STUDENT">Élève majeur</option><option value="STAFF">Personnel</option><option value="TEACHER">Enseignant</option></select></div>
+<div><label for="consentPurpose">Finalité</label><select id="consentPurpose"><option value="ATTENDANCE">Présence / absence</option><option value="RESULTS_AVAILABLE">Résultats disponibles</option><option value="PAYMENT_REMINDER">Rappel de paiement</option><option value="GENERAL">Message général</option></select></div>
+<div class="wide"><label for="consentSearch">Rechercher la personne</label><input id="consentSearch" type="search" autocomplete="off" placeholder="Nom, prénom ou matricule"><div id="consentResults" class="result" hidden></div><div id="consentSelected" class="result" hidden></div><input id="consentRecipientId" type="hidden"></div>
+<div><label for="consentPhone">Numéro WhatsApp autorisé (E.164)</label><input id="consentPhone" placeholder="+509XXXXXXXX" autocomplete="tel"></div>
+<div><label for="consentStatus">Statut</label><select id="consentStatus"><option value="OPTED_IN">Consentement actif</option><option value="PENDING">En attente</option><option value="OPTED_OUT">Retiré / désactivé</option></select></div>
+<div><label for="consentSource">Source du consentement</label><input id="consentSource" maxlength="255" placeholder="Formulaire signé, accord enregistré…"></div>
+<div><label for="consentEvidence">Référence de preuve (facultatif)</label><input id="consentEvidence" maxlength="255" placeholder="Référence interne"></div>
+<div class="wide"><button type="button" id="saveConsentButton">Enregistrer le consentement</button><div id="consentResult" class="result" hidden aria-live="polite"></div></div>
+</div>
+</section>
 <section class="card">
 <div class="mode">Mode 1 · WhatsApp sur le poste</div>
 <h2>Envoyer manuellement</h2>
@@ -105,6 +119,53 @@ $('recipientType').addEventListener('change',()=>{
 $('purpose').addEventListener('change',()=>{if($('recipientSearch').value.trim().length>=2)searchRecipients();else clearSelectedRecipient()});
 $('studentScopeWrap').hidden=false;
 function validParent(){const value=$('parent_id').value.trim();if($('recipientType').value!=='PARENT'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error('Le mode manuel est disponible uniquement pour un parent sélectionné.');return value}
+let consentSearchTimer=null,consentSearchController=null;
+$('consentSearch').addEventListener('input',()=>{
+  clearTimeout(consentSearchTimer);
+  consentSearchTimer=setTimeout(async()=>{
+    const q=$('consentSearch').value.trim(),type=$('consentType').value,box=$('consentResults');
+    $('consentRecipientId').value='';$('consentSelected').hidden=true;
+    if(q.length<2){box.hidden=true;return}
+    if(consentSearchController)consentSearchController.abort();
+    consentSearchController=new AbortController();show(box,'Recherche…');
+    try{
+      const response=await fetch('/api/whatsapp/recipient-search.php?recipient_type='+encodeURIComponent(type)+'&q='+encodeURIComponent(q),{credentials:'same-origin',cache:'no-store',signal:consentSearchController.signal});
+      const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+      if(!response.ok||data.success!==true)throw Error(data.error||'Recherche impossible');
+      box.replaceChildren();
+      if(!data.recipients?.length){show(box,'Aucun résultat.');return}
+      for(const person of data.recipients){
+        const b=document.createElement('button');b.type='button';b.style.cssText='display:block;width:100%;text-align:left;margin:5px 0;background:#f0f7f4;color:#173b32';
+        const name=[person.first_name,person.last_name].filter(Boolean).join(' ');
+        b.textContent=name+(person.phone?' — '+person.phone:'');
+        b.addEventListener('click',()=>{
+          $('consentRecipientId').value=person.id;
+          $('consentSelected').textContent='Personne sélectionnée : '+name;$('consentSelected').hidden=false;
+          if(person.phone&&/^\\+[1-9][0-9]{7,14}$/.test(person.phone))$('consentPhone').value=person.phone;
+          box.hidden=true;box.replaceChildren();
+        });
+        box.appendChild(b);
+      }
+      box.hidden=false;
+    }catch(error){if(error.name!=='AbortError')show(box,error.message,true)}
+  },250);
+});
+$('consentType').addEventListener('change',()=>{$('consentSearch').value='';$('consentRecipientId').value='';$('consentResults').hidden=true;$('consentSelected').hidden=true;$('consentPhone').value=''});
+$('saveConsentButton').addEventListener('click',async()=>{
+  const out=$('consentResult');out.hidden=true;
+  const recipientId=$('consentRecipientId').value.trim(),phone=$('consentPhone').value.trim(),status=$('consentStatus').value;
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recipientId)){show(out,'Sélectionnez une personne.',true);return}
+  if(!/^\\+[1-9][0-9]{7,14}$/.test(phone)){show(out,'Saisissez un numéro international valide, par exemple +509XXXXXXXX.',true);return}
+  if(status==='OPTED_IN'&&!$('consentSource').value.trim()){show(out,'La source du consentement est obligatoire.',true);return}
+  $('saveConsentButton').disabled=true;
+  try{
+    const response=await fetch('/api/whatsapp/recipient-consents.php',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({recipient_type:$('consentType').value,recipient_id:recipientId,purpose:$('consentPurpose').value,phone_e164:phone,status,consent_source:$('consentSource').value.trim()||null,evidence_reference:$('consentEvidence').value.trim()||null})});
+    const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+    if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
+    show(out,'Consentement enregistré : '+data.consent.status+' · '+data.consent.recipient_type+' · '+data.consent.purpose);
+  }catch(error){show(out,'Enregistrement impossible : '+error.message,true)}
+  finally{$('saveConsentButton').disabled=false}
+});
 async function loadConfig(){
   const status=$('configStatus');
   try{
