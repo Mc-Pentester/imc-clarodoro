@@ -136,6 +136,23 @@ CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (
 CREATE INDEX IF NOT EXISTS idx_whatsapp_webhook_events_message
     ON whatsapp_webhook_events(provider_message_id, provider_timestamp DESC);
 
+CREATE OR REPLACE FUNCTION prevent_whatsapp_webhook_event_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $
+BEGIN
+    RAISE EXCEPTION 'whatsapp_webhook_events is append-only';
+END;
+$;
+DROP TRIGGER IF EXISTS whatsapp_webhook_events_no_mutation ON whatsapp_webhook_events;
+CREATE TRIGGER whatsapp_webhook_events_no_mutation
+    BEFORE UPDATE OR DELETE ON whatsapp_webhook_events
+    FOR EACH ROW EXECUTE FUNCTION prevent_whatsapp_webhook_event_mutation();
+DROP TRIGGER IF EXISTS whatsapp_webhook_events_no_truncate ON whatsapp_webhook_events;
+CREATE TRIGGER whatsapp_webhook_events_no_truncate
+    BEFORE TRUNCATE ON whatsapp_webhook_events
+    FOR EACH STATEMENT EXECUTE FUNCTION prevent_whatsapp_webhook_event_mutation();
+
 INSERT INTO permissions (name, description)
 VALUES
     ('whatsapp.recipient.read', 'Consulter les destinataires et consentements WhatsApp'),
