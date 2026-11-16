@@ -29,6 +29,14 @@ require("Test-LocalServiceProcessOwner" in configure and "GetOwnerSid" in config
         "HTTP startup validation must authenticate the exact PHP executable and LOCAL SERVICE owner when CIM metadata is partially hidden")
 require("commandLineMatches" in configure and "router.php" in configure and "0\\.0\\.0\\.0:" in configure,
         "HTTP startup validation must check the expected router and port whenever Windows exposes the process command line")
+require("function Get-ClarodaroHttpListener" in configure
+        and "Get-NetTCPConnection" in configure and "netstat.exe" in configure
+        and "Source = 'netstat'" in configure,
+        "HTTP listener detection must fall back to the native Windows TCP table when Get-NetTCPConnection is unavailable or empty")
+require("Get-ClarodaroHttpListener -Port $Port" in configure
+        and "Get-NetTCPConnection et netstat" in configure
+        and "$request.Proxy = $null" in configure,
+        "HTTP health check must use the authenticated listener fallback and bypass system proxy for localhost")
 require("TASK_STATE_RUNNING" in configure and "LastTaskResult n'est pas un code d'échec final" in configure
         and "Aucun processus php.exe actif" in configure,
         "startup diagnostics must distinguish a still-running scheduled task from its final exit code and record PHP process presence")

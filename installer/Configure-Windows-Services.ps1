@@ -63,6 +63,44 @@ function Test-PortAvailable([int]$Port) {
     return ($null -eq $listener)
 }
 
+function Get-ClarodaroHttpListener([int]$Port) {
+    # Dans certains contextes de service restreints, Get-NetTCPConnection
+    # peut ne rien retourner alors que le serveur PHP écoute réellement.
+    # netstat fournit alors une seconde source Windows pour retrouver le PID.
+    try {
+        $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction Stop |
+            Select-Object -First 1
+        if ($listener) {
+            return [pscustomobject]@{
+                LocalAddress = [string]$listener.LocalAddress
+                LocalPort = [int]$listener.LocalPort
+                OwningProcess = [int]$listener.OwningProcess
+                Source = 'Get-NetTCPConnection'
+            }
+        }
+    }
+    catch {
+        Write-Step "Détection TCP PowerShell indisponible pour le port $Port : $($_.Exception.Message)"
+    }
+
+    $netstat = Join-Path $env:SystemRoot 'System32\netstat.exe'
+    if (Test-Path -LiteralPath $netstat -PathType Leaf) {
+        $lines = & $netstat -ano -p tcp 2>$null
+        foreach ($line in $lines) {
+            if ([string]$line -match '^\s*TCP\s+(?<local>\S+):(?<port>\d+)\s+\S+\s+LISTENING\s+(?<pid>\d+)\s*$' -and
+                [int]$Matches.port -eq $Port) {
+                return [pscustomobject]@{
+                    LocalAddress = [string]$Matches.local
+                    LocalPort = [int]$Matches.port
+                    OwningProcess = [int]$Matches.pid
+                    Source = 'netstat'
+                }
+            }
+        }
+    }
+    return $null
+}
+
 function Test-LocalServiceProcessOwner($Process) {
     if (-not $Process) { return $false }
     try {
@@ -76,10 +114,9 @@ function Test-LocalServiceProcessOwner($Process) {
 }
 
 function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
-    $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue |
-        Select-Object -First 1
+    $listener = Get-ClarodaroHttpListener -Port $Port
     if (-not $listener) {
-        throw "Aucun processus n'écoute sur le port HTTP $Port."
+        throw "Aucun listener TCP détecté sur le port HTTP $Port (Get-NetTCPConnection et netstat)."
     }
 
     $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
@@ -122,6 +159,7 @@ function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
     $request.Method = 'GET'
     $request.AllowAutoRedirect = $false
     $request.Timeout = 8000
+    $request.Proxy = $null
     $response = $null
     try {
         $response = $request.GetResponse()
@@ -149,7 +187,7 @@ function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
     if ($body -notmatch '(?i)Bienvenue sur Clarodaro|Connexion requise|Créer mon compte PDG|Configuration terminée') {
         throw "Le serveur répond avec une page Clarodaro inattendue (HTTP $statusCode)."
     }
-    Write-Step "Contrôle HTTP Clarodaro réussi : port $Port, PID $($listener.OwningProcess), exécutable PHP et propriétaire LOCAL SERVICE confirmés, HTTP $statusCode."
+    Write-Step "Contrôle HTTP Clarodaro réussi : port $Port, PID $($listener.OwningProcess), source=$($listener.Source), exécutable PHP et propriétaire LOCAL SERVICE confirmés, HTTP $statusCode."
 }
 
 $AppRoot = [System.IO.Path]::GetFullPath($AppRoot)
