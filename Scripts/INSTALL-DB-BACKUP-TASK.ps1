@@ -65,9 +65,14 @@ foreach ($name in @($TaskName, $CopyTaskName)) {
 
 # Exécuter une première sauvegarde sous le même compte que la tâche quotidienne.
 # Cela valide réellement l'accès au fichier .env, au runtime PostgreSQL et au dossier.
-$before = Get-ChildItem -LiteralPath $backupFullPath -Filter '*.backup' -File -ErrorAction SilentlyContinue |
-    Measure-Object -Property LastWriteTimeUtc -Maximum
-$beforeTime = if ($before.Count -gt 0) { [datetime]$before.Maximum } else { [datetime]::MinValue }
+$beforeFiles = @(Get-ChildItem -LiteralPath $backupFullPath -Filter '*.backup' -File -ErrorAction SilentlyContinue)
+$beforeTime = [datetime]::MinValue
+if ($beforeFiles.Length -gt 0) {
+    $latestBefore = $beforeFiles | Measure-Object -Property LastWriteTimeUtc -Maximum
+    if ($null -ne $latestBefore.Maximum) {
+        $beforeTime = [datetime]$latestBefore.Maximum
+    }
+}
 Start-ScheduledTask -TaskName $TaskName
 $deadline = (Get-Date).AddMinutes(5)
 $verifiedBackup = $null
