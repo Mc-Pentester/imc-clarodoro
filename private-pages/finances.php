@@ -711,13 +711,19 @@ step="0.01">
 
 <div>
 
-<label>Réduction exceptionnelle</label>
+<label>Type de réduction</label>
+<select id="reductionType">
+<option value="FIXED">Montant fixe (HTG)</option>
+<option value="PERCENT">Pourcentage (%)</option>
+</select>
 
+<label style="margin-top:8px">Valeur de la réduction</label>
 <input
 id="reduction"
 type="number"
 min="0"
-step="0.01">
+step="0.01"
+placeholder="Montant ou pourcentage">
 
 </div>
 
@@ -1488,7 +1494,7 @@ function afficherTableauResumeEleve(e,f){
   const x=obtenirLigneFinance(e);
   const payments=(f?.payments||[]).sort((a,b)=>String(a.payment_date||"").localeCompare(String(b.payment_date||"")));
   const byNumber=[1,2,3].map(n=>payments[n-1]||null);
-  const cells=byNumber.map((p,n)=>`<td><input class="versement-input" type="number" min="0" step="0.01" value="${p?Number(p.amount):""}" placeholder="0" onchange="enregistrerVersementDirect(${n+1},this.value)"></td>`).join("");
+  const cells=byNumber.map(p=>`<td>${p?formatMontant(p.amount):"—"}</td>`).join("");
   const last=payments[payments.length-1];
   const tr=document.createElement("tr");
   tr.innerHTML=`<td>1</td><td>${escapeHtml(e.last_name+" "+e.first_name)}</td><td>${escapeHtml(e.class_name||"")}</td><td class="money">${formatMontant(x.ap)}</td>${cells}<td id="totalAutoEleve" class="money total-auto">${formatMontant(x.tv)}</td><td id="balanceAutoEleve" class="money balance-auto">${formatMontant(x.r)}</td><td>${last?escapeHtml(last.payment_date||"—"):"—"}</td><td>${last?escapeHtml(last.method||"—"):"—"}</td>`;
@@ -1502,7 +1508,11 @@ function chargerFicheEleve(){
   const x=obtenirLigneFinance(eleveSelectionne);
   document.getElementById("identiteEleve").innerHTML=`<p><strong>Nom et prénom :</strong> ${escapeHtml(eleveSelectionne.last_name+" "+eleveSelectionne.first_name)}</p><p><strong>Classe :</strong> ${escapeHtml(eleveSelectionne.class_name||"")}</p><p><strong>Année académique :</strong> ${escapeHtml(anneesServeur.find(y=>y.id===anneeServeurId)?.label||"")}</p>`;
   document.getElementById("tarifNormal").value=f?Number(f.amount):Number(t?.amount||0);
-  document.getElementById("reduction").value=f?Number(f.reduction||0):0;
+  const reductionType=f?.reduction_type||"FIXED";
+  document.getElementById("reductionType").value=reductionType;
+  document.getElementById("reduction").value=f
+    ? Number(reductionType==="PERCENT"?(f.reduction_percent||0):(f.reduction||0))
+    : 0;
   document.getElementById("montantAPayer").value=x.ap.toFixed(2);
   document.getElementById("totalVerse").value=x.tv.toFixed(2);
   document.getElementById("reste").value=x.r.toFixed(2);
@@ -1522,16 +1532,20 @@ function chargerFicheEleve(){
 async function enregistrerSituation(){
   if(!eleveSelectionne) return;
   if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
-  const reduction=Number(document.getElementById("reduction").value||0);
+  const reductionType=document.getElementById("reductionType").value;
+  const reductionValue=Number(document.getElementById("reduction").value||0);
+  const reductionPayload=reductionType==="PERCENT"
+    ? {reduction_type:"PERCENT",reduction_percent:reductionValue}
+    : {reduction_type:"FIXED",reduction:reductionValue};
   const reason=document.getElementById("motifReduction").value.trim();
   let f=factureEleve(eleveSelectionne.id);
   try{
     if(!f){
       const t=tarifEleve(eleveSelectionne);
       if(!t||Number(t.amount)<=0) throw new Error("Aucun tarif serveur pour cette classe.");
-      await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"invoice",student_id:eleveSelectionne.id,school_year_id:anneeServeurId,amount:Number(t.amount),reduction,reduction_reason:reason})});
+      await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"invoice",student_id:eleveSelectionne.id,school_year_id:anneeServeurId,amount:Number(t.amount),...reductionPayload,reduction_reason:reason})});
     }else{
-      await apiJson(FINANCE_API+"?invoice_id="+encodeURIComponent(f.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({reduction,reduction_reason:reason})});
+      await apiJson(FINANCE_API+"?invoice_id="+encodeURIComponent(f.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...reductionPayload,reduction_reason:reason})});
     }
     await chargerFinance();
     afficherMessage("Situation enregistrée.");
