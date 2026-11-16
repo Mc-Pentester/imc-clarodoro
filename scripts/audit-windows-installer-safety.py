@@ -47,6 +47,17 @@ require("hasProtectedConfig" in configure and "hasLegacyConfig" in configure,
 require("Set-PrivateAcl $legacyEnvironmentFile" in configure and "icacls.exe $AppRoot /reset" in configure and "Permissions: users-modify" not in iss,
         "installed code and legacy database secrets must not be writable by all local users")
 require("0.0.0.0:$HttpPort" in launcher, "PHP startup launcher is not configurable")
+require("function Get-ClarodaroHttpListener" in configure
+        and "Get-NetTCPConnection" in configure and "netstat.exe" in configure
+        and "Source = 'netstat'" in configure,
+        "HTTP listener detection must fall back to the native Windows TCP table when Get-NetTCPConnection is unavailable or empty")
+require("PID=$($listener.OwningProcess)" in configure
+        and "Win32_Process" in configure and "ExecutablePath" in configure
+        and "ExpectedPhpPath" in configure,
+        "HTTP health check must continue to authenticate the exact PHP executable and listener PID")
+require("http://127.0.0.1:$Port/" in configure and "Clarodaro|IMC-Clarodaro" in configure
+        and "Créer mon compte PDG" in configure,
+        "HTTP health check must verify a real localhost response and Clarodaro page content")
 require("IMC_CLARODARO_ENV_FILE" in launcher and "router.php" in launcher,
         "PHP server does not load protected environment or router")
 require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup and "NETWORK SERVICE" in cleanup and "LOCAL SERVICE" in cleanup,
