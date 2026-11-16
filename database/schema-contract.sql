@@ -17,6 +17,8 @@ BEGIN
  ('grades','id'),('grades','enrollment_id'),('grades','subject_id'),('grades','grade'),('grades','assessment_number'),
  ('attendance','id'),('attendance','enrollment_id'),('attendance','attendance_date'),('attendance','status'),
  ('invoices','id'),('invoices','student_id'),('invoices','amount'),('invoices','status'),('invoices','school_year_id'),('invoices','reduction'),('invoices','reduction_reason'),
+ ('invoices','reduction_type'),('invoices','reduction_percent'),
+ ('invoice_reduction_audit','id'),('invoice_reduction_audit','invoice_id'),('invoice_reduction_audit','actor_user_id'),('invoice_reduction_audit','old_reduction'),('invoice_reduction_audit','new_reduction'),('invoice_reduction_audit','old_reduction_type'),('invoice_reduction_audit','new_reduction_type'),('invoice_reduction_audit','old_reduction_percent'),('invoice_reduction_audit','new_reduction_percent'),('invoice_reduction_audit','old_reason'),('invoice_reduction_audit','new_reason'),('invoice_reduction_audit','created_at'),
  ('payments','id'),('payments','invoice_id'),('payments','amount'),('payments','payment_date'),('payments','method'),
  ('staff','id'),('staff','first_name'),('staff','last_name'),('staff','function_name'),('staff','user_id'),('staff','class_name'),('staff','status'),
  ('user_teachers','user_id'),('user_teachers','teacher_id'),
