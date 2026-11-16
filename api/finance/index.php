@@ -122,6 +122,17 @@ if ($method === 'GET') {
         );
         $paymentStmt->execute([':invoice_id' => $invoice['id']]);
         $invoice['payments'] = $paymentStmt->fetchAll();
+        $reductionAuditStmt = $pdo->prepare(
+            'SELECT a.id, a.old_reduction, a.new_reduction, a.old_reduction_type, a.new_reduction_type,
+                    a.old_reduction_percent, a.new_reduction_percent, a.old_reason, a.new_reason,
+                    a.created_at, u.username AS actor_username
+             FROM invoice_reduction_audit a
+             INNER JOIN users u ON u.id = a.actor_user_id
+             WHERE a.invoice_id = :invoice_id
+             ORDER BY a.created_at ASC, a.id ASC'
+        );
+        $reductionAuditStmt->execute([':invoice_id' => $invoice['id']]);
+        $invoice['reduction_history'] = $reductionAuditStmt->fetchAll();
         foreach ($invoice['payments'] as &$payment) {
             $payment['amount'] = (float)$payment['amount'];
         }
@@ -369,7 +380,11 @@ if ($method === 'PUT' || $method === 'PATCH') {
             $oldType = (string)($current['reduction_type'] ?? 'FIXED');
             $oldPercent = (float)($current['reduction_percent'] ?? 0);
             $oldReason = $current['reduction_reason'] ?? null;
-            $newType = strtoupper((string)($data['reduction_type'] ?? $oldType));
+            $newType = strtoupper((string)($data['reduction_type'] ?? (
+                array_key_exists('reduction', $data) && !array_key_exists('reduction_percent', $data)
+                    ? 'FIXED'
+                    : $oldType
+            )));
             if (!in_array($newType, ['FIXED', 'PERCENT'], true)) {
                 $pdo->rollBack();
                 apiError(422, 'reduction_type invalide');
@@ -401,6 +416,13 @@ if ($method === 'PUT' || $method === 'PATCH') {
             $fields[] = 'reduction_type = :reduction_type';
             $fields[] = 'reduction_percent = :reduction_percent';
             $fields[] = 'reduction_reason = :reduction_reason';
+            if (!in_array((string)$current['status'], ['CANCELLED', 'ARCHIVED'], true)) {
+                $newBalance = max(0, (float)$current['amount'] - $newReduction - (float)$current['paid_amount']);
+                $fields[] = 'status = :discount_status';
+                $params[':discount_status'] = $newBalance <= 0.00001
+                    ? 'PAID'
+                    : ((float)$current['paid_amount'] > 0.00001 ? 'PARTIALLY_PAID' : 'OPEN');
+            }
             $params[':reduction'] = number_format($newReduction, 2, '.', '');
             $params[':reduction_type'] = $newType;
             $params[':reduction_percent'] = number_format((float)$newPercent, 2, '.', '');
