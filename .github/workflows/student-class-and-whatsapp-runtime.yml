@@ -22,7 +22,7 @@ on:
       - 'private-pages/index.php'
       - 'database/schema.sql'
       - 'database/migrations/**'
-      - '.github/workflows/student-class-change-runtime.yml'
+      - '.github/workflows/student-class-and-whatsapp-runtime.yml'
   workflow_dispatch:
 
 permissions:
