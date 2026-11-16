@@ -27,7 +27,7 @@ require("Test-PortAvailable" in configure, "port conflict protection missing")
 require("Test-LocalServiceProcessOwner" in configure and "GetOwnerSid" in configure
         and "S-1-5-19" in configure and "Get-Process -Id ([int]$listener.OwningProcess)" in configure,
         "HTTP startup validation must authenticate the exact PHP executable and LOCAL SERVICE owner when CIM metadata is partially hidden")
-require("commandLineMatches" in configure and "router.php" in configure and "0\\\\.0\\\\.0\\\\.0:" in configure,
+require("commandLineMatches" in configure and "router.php" in configure and "0\\.0\\.0\\.0:" in configure,
         "HTTP startup validation must check the expected router and port whenever Windows exposes the process command line")
 require("TASK_STATE_RUNNING" in configure and "LastTaskResult n'est pas un code d'échec final" in configure
         and "Aucun processus php.exe actif" in configure,
