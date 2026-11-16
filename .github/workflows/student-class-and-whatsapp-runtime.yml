@@ -11,11 +11,14 @@ on:
       - 'private-pages/index.php'
       - 'database/schema.sql'
       - 'database/migrations/**'
-      - '.github/workflows/student-class-change-runtime.yml'
+      - '.github/workflows/student-class-and-whatsapp-runtime.yml'
   push:
     branches: [main]
     paths:
       - 'api/students/index.php'
+      - 'auth.js'
+      - 'js/whatsapp-menu.js'
+      - 'secure-page.php'
       - 'private-pages/index.php'
       - 'database/schema.sql'
       - 'database/migrations/**'
@@ -253,7 +256,7 @@ jobs:
               "window.IMCAuth.verifySession()",
               "window.IMCAuth.isAuthenticated()",
               'window.IMCAuth.hasPermission("whatsapp.message.send")',
-              'data-imc-whatsapp-send = "true"',
+              'button.dataset.imcWhatsappSend = "true"',
               "Envoyer un message WhatsApp",
           ]:
               if marker not in menu:
