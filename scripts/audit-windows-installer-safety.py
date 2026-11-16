@@ -91,6 +91,19 @@ require("playwright" in browser_smoke and "Bienvenue sur Clarodaro" in browser_s
         "real-browser first-run test must cover the visible form, password validation, Unicode password and one-time setup refusal")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
+
+prepare_upgrade = read("installer/Prepare-Upgrade.ps1")
+require("Test-LocalServiceProcessOwner" in prepare_upgrade and "GetOwnerSid" in prepare_upgrade
+        and "S-1-5-19" in prepare_upgrade and "expectedRouter" in prepare_upgrade
+        and "currentIdentityMatches" in prepare_upgrade,
+        "upgrade shutdown must authenticate the exact PHP executable, router, port and LOCAL SERVICE owner before stopping it")
+require("Wait-Process -Id $listenerPid -Timeout 5" in prepare_upgrade
+        and "taskkill.exe" in prepare_upgrade and "/PID $listenerPid /T /F" in prepare_upgrade
+        and "retryExecutableMatches" in prepare_upgrade and "retryOwnerMatches" in prepare_upgrade
+        and "Processus PHP authentifié" in prepare_upgrade,
+        "upgrade must re-authenticate the same PID before targeted taskkill and confirm that it exited")
+require("Stop-Process -Name" not in prepare_upgrade,
+        "upgrade must never stop PHP processes by process name")
 require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss and "InitializeUninstall" in iss,
         "uninstall cleanup and data-choice hooks missing")
 require("Configure-Windows-Services.ps1" in iss and "AfterInstall: ConfigureAfterFiles" in iss and "procedure ConfigureAfterFiles" in iss,
