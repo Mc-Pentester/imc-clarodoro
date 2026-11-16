@@ -73,11 +73,15 @@ require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
 prepare_upgrade = read("installer/Prepare-Upgrade.ps1")
 require("Stop-Process -Id $listenerPid -Force -ErrorAction Stop" in prepare_upgrade
-        and "Wait-Process -Id $listenerPid -Timeout 15" in prepare_upgrade,
-        "upgrade must explicitly stop and wait for the exact verified PHP listener PID")
+        and "Wait-Process -Id $listenerPid -Timeout 5" in prepare_upgrade
+        and "taskkill.exe" in prepare_upgrade and "/PID $listenerPid /T /F" in prepare_upgrade
+        and "Processus PHP authentifié" in prepare_upgrade
+        and "retryExecutableMatches" in prepare_upgrade and "retryOwnerMatches" in prepare_upgrade,
+        "upgrade must stop, re-authenticate the exact PHP PID before targeted taskkill, and confirm process exit")
 require("CommandLine" in prepare_upgrade and "$expectedRouter" in prepare_upgrade
-        and "$hasExpectedPort" in prepare_upgrade and "$currentIdentityMatches" in prepare_upgrade,
-        "PHP process termination must verify executable, app router, app root and HTTP port twice")
+        and "Test-LocalServiceProcessOwner" in prepare_upgrade and "S-1-5-19" in prepare_upgrade
+        and "$currentIdentityMatches" in prepare_upgrade and "$commandLineMatches" in prepare_upgrade,
+        "PHP process termination must verify exact executable and LOCAL SERVICE owner, and validate command-line identity when Windows exposes it")
 require("Get-Process -Id $listenerPid" in prepare_upgrade,
         "PHP executable-path fallback is missing when CIM omits ExecutablePath")
 require("Stop-Process -Name" not in prepare_upgrade,
