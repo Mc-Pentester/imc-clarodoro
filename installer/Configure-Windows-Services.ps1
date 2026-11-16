@@ -108,7 +108,7 @@ function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
         $expectedRouter = Join-Path $expectedRoot 'router.php'
         $commandLineMatches = $normalizedCommandLine.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
             $normalizedCommandLine.IndexOf($expectedRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-            ($normalizedCommandLine -match ('(?i)(?:^|\\s)-S\\s+["'']?0\\.0\\.0\\.0:' + $Port + '["'']?(?:\\s|$)'))
+            ($normalizedCommandLine -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $Port + '["'']?(?:\s|$)'))
     }
     else {
         Write-Step "Ligne de commande masquée par Windows pour PID $($listener.OwningProcess) ; validation par exécutable exact et SID LOCAL SERVICE."
