@@ -1,6 +1,8 @@
 name: F-02-A student server authority runtime proof
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main, feature/f02-a-student-server-authority]
     paths:
@@ -79,6 +81,17 @@ jobs:
             ('00000000-0000-0000-0000-000000001001', '00000000-0000-0000-0000-000000001003'),
             ('00000000-0000-0000-0000-000000001001', '00000000-0000-0000-0000-000000001004');
 
+          INSERT INTO levels (id, code, name)
+          VALUES ('00000000-0000-0000-0000-000000001006', 'F02A', 'F02A Runtime Level');
+
+          INSERT INTO classes (id, code, name, level_id, status)
+          VALUES ('00000000-0000-0000-0000-000000001007', 'F02A-CLASS', 'F02A Runtime Class',
+            '00000000-0000-0000-0000-000000001006', 'ACTIVE');
+
+          INSERT INTO school_years (id, label, start_date, end_date, status)
+          VALUES ('00000000-0000-0000-0000-000000001008', 'F02A-2026-2027',
+            '2026-09-01', '2027-07-15', 'ACTIVE');
+
           INSERT INTO users (id, username, password_hash, role_id)
           VALUES (
             '00000000-0000-0000-0000-000000001005',
@@ -120,7 +133,7 @@ jobs:
           CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["csrfToken"] ?? "";')"
           test -n "$CSRF"
 
-          CREATE="$(curl -fsS -c /tmp/f02a.cookies -b /tmp/f02a.cookies             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"matricule":"F02A-001","last_name":"Serveur","first_name":"Autoritaire","sex":"M","profile_data":{"classe":"7e","anneeScolaire":"2026 - 2027","nisu":"F02A-001","contact":"50900000000"}}'             http://127.0.0.1:8090/api/students/index.php)"
+          CREATE="$(curl -fsS -c /tmp/f02a.cookies -b /tmp/f02a.cookies             -H "X-CSRF-Token: $CSRF"             -H 'Content-Type: application/json'             -d '{"matricule":"F02A-001","last_name":"Serveur","first_name":"Autoritaire","sex":"M","class_id":"00000000-0000-0000-0000-000000001007","school_year_id":"00000000-0000-0000-0000-000000001008","profile_data":{"classe":"7e","anneeScolaire":"2026 - 2027","nisu":"F02A-001","contact":"50900000000"}}'             http://127.0.0.1:8090/api/students/index.php)"
 
           ID="$(printf '%s' "$CREATE" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["student"]["id"] ?? "";')"
           test -n "$ID"

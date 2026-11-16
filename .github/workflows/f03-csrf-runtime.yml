@@ -1,6 +1,8 @@
 name: F-03 CSRF runtime proof
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
   push:
     branches:
@@ -83,6 +85,17 @@ jobs:
               '00000000-0000-0000-0000-000000000304'
             );
 
+          INSERT INTO levels (id, code, name)
+          VALUES ('00000000-0000-0000-0000-000000000305', 'F03', 'F03 CSRF Runtime Level');
+
+          INSERT INTO classes (id, code, name, level_id, status)
+          VALUES ('00000000-0000-0000-0000-000000000306', 'F03-CLASS', 'F03 CSRF Runtime Class',
+            '00000000-0000-0000-0000-000000000305', 'ACTIVE');
+
+          INSERT INTO school_years (id, label, start_date, end_date, status)
+          VALUES ('00000000-0000-0000-0000-000000000307', 'F03-2026-2027',
+            '2026-09-01', '2027-07-15', 'ACTIVE');
+
           INSERT INTO users (id, username, password_hash, role_id)
           VALUES (
             '00000000-0000-0000-0000-000000000303',
@@ -151,7 +164,7 @@ jobs:
           test -n "$CSRF2"
           test "$CSRF1" != "$CSRF2"
 
-          BODY='{"matricule":"F03-CSRF-001","last_name":"CSRF","first_name":"Proof"}'
+          BODY='{"matricule":"F03-CSRF-001","last_name":"CSRF","first_name":"Proof","class_id":"00000000-0000-0000-0000-000000000306","school_year_id":"00000000-0000-0000-0000-000000000307"}'
 
           STATUS="$(status_with_body /tmp/cookie1.txt __NONE__ "$BODY" /tmp/no-token.json)"
           test "$STATUS" = "403"

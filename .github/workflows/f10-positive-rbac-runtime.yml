@@ -1,6 +1,8 @@
 name: F-10 positive RBAC authorized mutation proof
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -67,6 +69,17 @@ jobs:
           WHERE r.name = 'Directeur' AND p.name = 'eleves.create'
           ON CONFLICT DO NOTHING;
 
+          INSERT INTO levels (id, code, name)
+          VALUES ('00000000-0000-0000-0000-000000000923', 'F10POS', 'F10 Positive Runtime Level');
+
+          INSERT INTO classes (id, code, name, level_id, status)
+          VALUES ('00000000-0000-0000-0000-000000000924', 'F10POS-CLASS', 'F10 Positive Runtime Class',
+            '00000000-0000-0000-0000-000000000923', 'ACTIVE');
+
+          INSERT INTO school_years (id, label, start_date, end_date, status)
+          VALUES ('00000000-0000-0000-0000-000000000925', 'F10POS-2026-2027',
+            '2026-09-01', '2027-07-15', 'ACTIVE');
+
           INSERT INTO users (id, username, password_hash, role_id, status)
           VALUES (
             '00000000-0000-0000-0000-000000000922',
@@ -119,7 +132,7 @@ jobs:
             -b "$COOKIE" -X POST \
             -H 'Content-Type: application/json' \
             -H "X-CSRF-Token: $CSRF" \
-            -d '{"matricule":"F10-RBAC-POSITIVE-001","last_name":"RBAC","first_name":"Authorized"}' \
+            -d '{"matricule":"F10-RBAC-POSITIVE-001","last_name":"RBAC","first_name":"Authorized","class_id":"00000000-0000-0000-0000-000000000924","school_year_id":"00000000-0000-0000-0000-000000000925"}' \
             "$BASE/api/students/index.php")"
           if [ "$STATUS" != '201' ]; then
             echo "FAIL: expected HTTP 201, got $STATUS"

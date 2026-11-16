@@ -1,6 +1,8 @@
 name: F-10 positive RBAC operations runtime proof
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
     paths:
@@ -241,7 +243,7 @@ jobs:
           echo 'Authorized login and CSRF token: PASS'
 
           # Authorized student create, read, then update and verify persisted state.
-          STUDENT_STATUS="$(curl -sS -o /tmp/f10ops-student-create.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X POST             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d '{"matricule":"F10OPS-CREATED-001","last_name":"Authorized","first_name":"Before"}'             "$BASE/api/students/index.php")"
+          STUDENT_STATUS="$(curl -sS -o /tmp/f10ops-student-create.json -w '%{http_code}'             -c "$COOKIE" -b "$COOKIE" -X POST             -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json'             -d '{"matricule":"F10OPS-CREATED-001","last_name":"Authorized","first_name":"Before","class_id":"00000000-0000-0000-0000-000000004004","school_year_id":"00000000-0000-0000-0000-000000004005"}'             "$BASE/api/students/index.php")"
           test "$STUDENT_STATUS" = '201'
           STUDENT_ID="$(jq -r '.student.id' /tmp/f10ops-student-create.json)"
           test -n "$STUDENT_ID" && test "$STUDENT_ID" != 'null'
