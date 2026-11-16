@@ -103,8 +103,8 @@ function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
     $commandLine = [string]$listenerProcess.CommandLine
     $commandLineMatches = $true
     if (-not [string]::IsNullOrWhiteSpace($commandLine)) {
-        $normalizedCommandLine = $commandLine.Replace('/', '\\')
-        $expectedRoot = [System.IO.Path]::GetFullPath($AppRoot).TrimEnd('\\')
+        $normalizedCommandLine = $commandLine.Replace('/', '\')
+        $expectedRoot = [System.IO.Path]::GetFullPath($AppRoot).TrimEnd('\')
         $expectedRouter = Join-Path $expectedRoot 'router.php'
         $commandLineMatches = $normalizedCommandLine.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
             $normalizedCommandLine.IndexOf($expectedRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
