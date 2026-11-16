@@ -46,6 +46,7 @@ jobs:
           DB='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
           psql "$DB" -v ON_ERROR_STOP=1 -f database/schema.sql
           php database/migrate.php --apply
+          psql "$DB" -v ON_ERROR_STOP=1 -f database/schema-contract.sql
           psql "$DB" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles(id,name) VALUES ('00000000-0000-0000-0000-000000005001','PDG') ON CONFLICT (id) DO NOTHING;
           INSERT INTO permissions(name) VALUES ('finances.read'),('finances.create'),('finances.update'),('finances.delete') ON CONFLICT (name) DO NOTHING;
@@ -79,6 +80,12 @@ jobs:
           fi
           grep -Fq 'const FINANCE_API = "/api/finance/index.php";' "$FINANCE_PAGE"
           grep -Fq 'apiJson(FINANCE_API' "$FINANCE_PAGE"
+          grep -Fq 'id="reductionType"' "$FINANCE_PAGE"
+          grep -Fq 'reduction_percent:reductionValue' "$FINANCE_PAGE"
+          if grep -Fq 'onchange="enregistrerVersementDirect' "$FINANCE_PAGE"; then
+            echo "FAIL: existing payment amounts must not create duplicate payments when edited"
+            exit 1
+          fi
           echo 'F-02-F FRONTEND AUTHORITY CHECK: PASS'
 
       - name: Start API
@@ -118,13 +125,30 @@ jobs:
           test "$DB_PAID" = "1000.00"
 
           set +e
+          DISCOUNT_TOO_HIGH="$(curl -sS -o /tmp/f02f-discount-high.json -w '%{http_code}' -X PATCH -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"reduction_type":"PERCENT","reduction_percent":70,"reduction_reason":"Test plafond"}' "$BASE/api/finance/index.php?invoice_id=$INVOICE_ID")"
+          set -e
+          test "$DISCOUNT_TOO_HIGH" = "422"
+
+          DISCOUNT_OK="$(curl -fsS -X PATCH -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"reduction_type":"PERCENT","reduction_percent":60,"reduction_reason":"Bourse partielle"}' "$BASE/api/finance/index.php?invoice_id=$INVOICE_ID")"
+          printf '%s' "$DISCOUNT_OK" | grep -q '"reduction_type":"PERCENT"'
+          printf '%s' "$DISCOUNT_OK" | grep -q '"reduction_percent":"60.00"'
+          printf '%s' "$DISCOUNT_OK" | grep -q '"balance":200'
+
+          PERCENT_INVOICE="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"invoice","student_id":"00000000-0000-0000-0000-000000005071","school_year_id":"00000000-0000-0000-0000-000000005051","amount":1000,"reduction_type":"PERCENT","reduction_percent":10,"reduction_reason":"Réduction 10%"}' "$BASE/api/finance/index.php")"
+          printf '%s' "$PERCENT_INVOICE" | grep -q '"reduction":"100.00"'
+          printf '%s' "$PERCENT_INVOICE" | grep -q '"balance":900'
+
+          AUDIT_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM invoice_reduction_audit WHERE invoice_id='$INVOICE_ID';")"
+          test "$AUDIT_COUNT" = "2"
+
+          set +e
           OVER="$(curl -sS -o /tmp/f02f-over.json -w '%{http_code}' -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{\"resource\":\"payment\",\"invoice_id\":\"$INVOICE_ID\",\"amount\":1900,\"method\":\"Espèces\"}" "$BASE/api/finance/index.php")"
           set -e
           echo "F02F OVERPAY STATUS: [$OVER]"
           test "$OVER" = "409"
 
           GET="$(curl -fsS -b "$COOKIE" "$BASE/api/finance/index.php?student_id=00000000-0000-0000-0000-000000005071&school_year_id=00000000-0000-0000-0000-000000005051")"
-          printf '%s' "$GET" | grep -q '"balance":1800'
+          printf '%s' "$GET" | grep -q '"balance":200'
           printf '%s' "$GET" | grep -q '"amount":"3000.00"'
           printf '%s' "$GET" | grep -q '"students":'
           printf '%s' "$GET" | grep -q '"payments":'

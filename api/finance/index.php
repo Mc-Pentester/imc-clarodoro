@@ -81,7 +81,7 @@ if ($method === 'GET') {
 
     $stmt = $pdo->prepare(
         'SELECT i.id, i.student_id, i.school_year_id, i.amount, i.reduction,
-                i.reduction_reason, i.status, i.invoice_date, i.description,
+                i.reduction_type, i.reduction_percent, i.reduction_reason, i.status, i.invoice_date, i.description,
                 i.created_at, i.updated_at,
                 s.matricule, s.last_name, s.first_name,
                 COALESCE(SUM(p.amount), 0) AS paid_amount,
@@ -122,6 +122,17 @@ if ($method === 'GET') {
         );
         $paymentStmt->execute([':invoice_id' => $invoice['id']]);
         $invoice['payments'] = $paymentStmt->fetchAll();
+        $reductionAuditStmt = $pdo->prepare(
+            'SELECT a.id, a.old_reduction, a.new_reduction, a.old_reduction_type, a.new_reduction_type,
+                    a.old_reduction_percent, a.new_reduction_percent, a.old_reason, a.new_reason,
+                    a.created_at, u.username AS actor_username
+             FROM invoice_reduction_audit a
+             INNER JOIN users u ON u.id = a.actor_user_id
+             WHERE a.invoice_id = :invoice_id
+             ORDER BY a.created_at ASC, a.id ASC'
+        );
+        $reductionAuditStmt->execute([':invoice_id' => $invoice['id']]);
+        $invoice['reduction_history'] = $reductionAuditStmt->fetchAll();
         foreach ($invoice['payments'] as &$payment) {
             $payment['amount'] = (float)$payment['amount'];
         }
@@ -226,9 +237,18 @@ if ($method === 'POST') {
         $studentId = financeUuid((string)($data['student_id'] ?? ''), 'student_id');
         $amount = $data['amount'] ?? null;
         $reduction = $data['reduction'] ?? 0;
+        $reductionType = strtoupper((string)($data['reduction_type'] ?? 'FIXED'));
+        $reductionPercent = $data['reduction_percent'] ?? 0;
         $schoolYearId = isset($data['school_year_id']) ? financeUuid((string)$data['school_year_id'], 'school_year_id') : null;
 
         if (!is_numeric($amount) || (float)$amount <= 0) apiError(422, 'amount doit être supérieur à 0');
+        if (!in_array($reductionType, ['FIXED', 'PERCENT'], true)) apiError(422, 'reduction_type invalide');
+        if (!is_numeric($reductionPercent) || (float)$reductionPercent < 0 || (float)$reductionPercent > 100) apiError(422, 'reduction_percent invalide');
+        if ($reductionType === 'PERCENT') {
+            $reduction = round((float)$amount * (float)$reductionPercent / 100, 2);
+        } else {
+            $reductionPercent = 0;
+        }
         if (!is_numeric($reduction) || (float)$reduction < 0 || (float)$reduction > (float)$amount) apiError(422, 'reduction invalide');
 
         $scope = financeScopeSql($user, 's.id');
@@ -240,9 +260,9 @@ if ($method === 'POST') {
 
         $stmt = $pdo->prepare(
             'INSERT INTO invoices
-                (student_id, school_year_id, amount, reduction, reduction_reason, status, invoice_date, description)
+                (student_id, school_year_id, amount, reduction, reduction_type, reduction_percent, reduction_reason, status, invoice_date, description)
              VALUES
-                (:student_id, :school_year_id, :amount, :reduction, :reduction_reason, :status, :invoice_date, :description)
+                (:student_id, :school_year_id, :amount, :reduction, :reduction_type, :reduction_percent, :reduction_reason, :status, :invoice_date, :description)
              RETURNING id'
         );
         $stmt->execute([
@@ -250,12 +270,31 @@ if ($method === 'POST') {
             ':school_year_id' => $schoolYearId,
             ':amount' => number_format((float)$amount, 2, '.', ''),
             ':reduction' => number_format((float)$reduction, 2, '.', ''),
+            ':reduction_type' => $reductionType,
+            ':reduction_percent' => number_format((float)$reductionPercent, 2, '.', ''),
             ':reduction_reason' => isset($data['reduction_reason']) && is_string($data['reduction_reason']) ? trim($data['reduction_reason']) : null,
             ':status' => 'OPEN',
             ':invoice_date' => isset($data['invoice_date']) && is_string($data['invoice_date']) ? $data['invoice_date'] : date('Y-m-d'),
             ':description' => isset($data['description']) && is_string($data['description']) ? trim($data['description']) : null,
         ]);
-        $invoice = financeInvoice($pdo, (string)$stmt->fetchColumn(), $user);
+        $createdInvoiceId = (string)$stmt->fetchColumn();
+        if ((float)$reduction > 0) {
+            $audit = $pdo->prepare(
+                'INSERT INTO invoice_reduction_audit
+                    (invoice_id, actor_user_id, old_reduction, new_reduction, old_reduction_type, new_reduction_type,
+                     old_reduction_percent, new_reduction_percent, old_reason, new_reason)
+                 VALUES (:invoice_id, :actor, 0, :new_reduction, \'FIXED\', :new_type, 0, :new_percent, NULL, :new_reason)'
+            );
+            $audit->execute([
+                ':invoice_id' => $createdInvoiceId,
+                ':actor' => $user['id'],
+                ':new_reduction' => number_format((float)$reduction, 2, '.', ''),
+                ':new_type' => $reductionType,
+                ':new_percent' => number_format((float)$reductionPercent, 2, '.', ''),
+                ':new_reason' => isset($data['reduction_reason']) && is_string($data['reduction_reason']) ? trim($data['reduction_reason']) : null,
+            ]);
+        }
+        $invoice = financeInvoice($pdo, $createdInvoiceId, $user);
         http_response_code(201);
         echo json_encode(['success' => true, 'invoice' => $invoice], JSON_UNESCAPED_UNICODE);
         exit;
@@ -322,40 +361,118 @@ if ($method === 'PUT' || $method === 'PATCH') {
     $invoiceId = financeUuid((string)($_GET['invoice_id'] ?? ''), 'invoice_id');
     $data = readJsonBody();
 
-    $allowed = ['reduction', 'reduction_reason', 'description', 'status'];
+    $allowed = ['reduction', 'reduction_type', 'reduction_percent', 'reduction_reason', 'description', 'status'];
     foreach (array_keys($data) as $key) {
         if (!in_array($key, $allowed, true)) apiError(422, "Champ inconnu: $key");
     }
-
-    $fields = [];
-    $params = [':id' => $invoiceId];
-    if (array_key_exists('reduction', $data)) {
-        if (!is_numeric($data['reduction']) || (float)$data['reduction'] < 0) apiError(422, 'reduction invalide');
-        $fields[] = 'reduction = :reduction';
-        $params[':reduction'] = number_format((float)$data['reduction'], 2, '.', '');
-    }
-    if (array_key_exists('reduction_reason', $data)) {
-        $fields[] = 'reduction_reason = :reduction_reason';
-        $params[':reduction_reason'] = is_string($data['reduction_reason']) ? trim($data['reduction_reason']) : null;
-    }
-    if (array_key_exists('description', $data)) {
-        $fields[] = 'description = :description';
-        $params[':description'] = is_string($data['description']) ? trim($data['description']) : null;
-    }
-    if (array_key_exists('status', $data)) {
-        if (!in_array($data['status'], ['OPEN','PARTIALLY_PAID','PAID','CANCELLED','ARCHIVED'], true)) apiError(422, 'status invalide');
-        $fields[] = 'status = :status';
-        $params[':status'] = $data['status'];
-    }
-    if (!$fields) apiError(422, 'Aucun champ à modifier');
+    if (!$data) apiError(422, 'Aucun champ à modifier');
 
     $pdo->beginTransaction();
     try {
         $current = financeInvoice($pdo, $invoiceId, $user, true);
-        if (array_key_exists('reduction', $data) && (float)$data['reduction'] > (float)$current['amount']) {
-            $pdo->rollBack();
-            apiError(422, 'reduction supérieure au montant');
+        $discountFields = ['reduction', 'reduction_type', 'reduction_percent', 'reduction_reason'];
+        $discountChanged = count(array_intersect(array_keys($data), $discountFields)) > 0;
+        $fields = [];
+        $params = [':id' => $invoiceId];
+
+        if ($discountChanged) {
+            $oldReduction = (float)$current['reduction'];
+            $oldType = (string)($current['reduction_type'] ?? 'FIXED');
+            $oldPercent = (float)($current['reduction_percent'] ?? 0);
+            $oldReason = $current['reduction_reason'] ?? null;
+            $newType = strtoupper((string)($data['reduction_type'] ?? (
+                array_key_exists('reduction', $data) && !array_key_exists('reduction_percent', $data)
+                    ? 'FIXED'
+                    : $oldType
+            )));
+            if (!in_array($newType, ['FIXED', 'PERCENT'], true)) {
+                $pdo->rollBack();
+                apiError(422, 'reduction_type invalide');
+            }
+            $newPercent = $newType === 'PERCENT'
+                ? ($data['reduction_percent'] ?? ($oldType === 'PERCENT' ? $oldPercent : 0))
+                : 0;
+            if (!is_numeric($newPercent) || (float)$newPercent < 0 || (float)$newPercent > 100) {
+                $pdo->rollBack();
+                apiError(422, 'reduction_percent invalide');
+            }
+            $newReduction = $newType === 'PERCENT'
+                ? round((float)$current['amount'] * (float)$newPercent / 100, 2)
+                : ($data['reduction'] ?? ($oldType === 'FIXED' ? $oldReduction : 0));
+            if (!is_numeric($newReduction) || (float)$newReduction < 0) {
+                $pdo->rollBack();
+                apiError(422, 'reduction invalide');
+            }
+            $newReduction = round((float)$newReduction, 2);
+            if ($newReduction + (float)$current['paid_amount'] > (float)$current['amount'] + 0.00001) {
+                $pdo->rollBack();
+                apiError(422, 'La réduction ne peut pas annuler un montant déjà encaissé');
+            }
+            $newReason = array_key_exists('reduction_reason', $data)
+                ? (is_string($data['reduction_reason']) ? trim($data['reduction_reason']) : null)
+                : $oldReason;
+
+            $fields[] = 'reduction = :reduction';
+            $fields[] = 'reduction_type = :reduction_type';
+            $fields[] = 'reduction_percent = :reduction_percent';
+            $fields[] = 'reduction_reason = :reduction_reason';
+            if (!in_array((string)$current['status'], ['CANCELLED', 'ARCHIVED'], true)) {
+                $newBalance = max(0, (float)$current['amount'] - $newReduction - (float)$current['paid_amount']);
+                $fields[] = 'status = :discount_status';
+                $params[':discount_status'] = $newBalance <= 0.00001
+                    ? 'PAID'
+                    : ((float)$current['paid_amount'] > 0.00001 ? 'PARTIALLY_PAID' : 'OPEN');
+            }
+            $params[':reduction'] = number_format($newReduction, 2, '.', '');
+            $params[':reduction_type'] = $newType;
+            $params[':reduction_percent'] = number_format((float)$newPercent, 2, '.', '');
+            $params[':reduction_reason'] = $newReason;
+
+            if (
+                abs($newReduction - $oldReduction) > 0.00001 ||
+                $newType !== $oldType ||
+                abs((float)$newPercent - $oldPercent) > 0.00001 ||
+                $newReason !== $oldReason
+            ) {
+                $audit = $pdo->prepare(
+                    'INSERT INTO invoice_reduction_audit
+                        (invoice_id, actor_user_id, old_reduction, new_reduction, old_reduction_type, new_reduction_type,
+                         old_reduction_percent, new_reduction_percent, old_reason, new_reason)
+                     VALUES (:invoice_id, :actor, :old_reduction, :new_reduction, :old_type, :new_type,
+                             :old_percent, :new_percent, :old_reason, :new_reason)'
+                );
+                $audit->execute([
+                    ':invoice_id' => $invoiceId,
+                    ':actor' => $user['id'],
+                    ':old_reduction' => number_format($oldReduction, 2, '.', ''),
+                    ':new_reduction' => number_format($newReduction, 2, '.', ''),
+                    ':old_type' => $oldType,
+                    ':new_type' => $newType,
+                    ':old_percent' => number_format($oldPercent, 2, '.', ''),
+                    ':new_percent' => number_format((float)$newPercent, 2, '.', ''),
+                    ':old_reason' => $oldReason,
+                    ':new_reason' => $newReason,
+                ]);
+            }
         }
+
+        if (array_key_exists('description', $data)) {
+            $fields[] = 'description = :description';
+            $params[':description'] = is_string($data['description']) ? trim($data['description']) : null;
+        }
+        if (array_key_exists('status', $data)) {
+            if (!in_array($data['status'], ['OPEN','PARTIALLY_PAID','PAID','CANCELLED','ARCHIVED'], true)) {
+                $pdo->rollBack();
+                apiError(422, 'status invalide');
+            }
+            $fields[] = 'status = :status';
+            $params[':status'] = $data['status'];
+        }
+        if (!$fields) {
+            $pdo->rollBack();
+            apiError(422, 'Aucun champ à modifier');
+        }
+
         $stmt = $pdo->prepare('UPDATE invoices SET ' . implode(', ', $fields) . ', updated_at = NOW() WHERE id = :id');
         $stmt->execute($params);
         $pdo->commit();
