@@ -1,0 +1,344 @@
+name: Student class change and WhatsApp menu end-to-end proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'api/students/index.php'
+      - 'auth.js'
+      - 'js/whatsapp-menu.js'
+      - 'secure-page.php'
+      - 'private-pages/index.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - '.github/workflows/student-class-change-runtime.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/students/index.php'
+      - 'private-pages/index.php'
+      - 'database/schema.sql'
+      - 'database/migrations/**'
+      - '.github/workflows/student-class-change-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  student-class-change:
+    name: UI contract, API, PostgreSQL history preservation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: imc_clarodoro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d imc_clarodoro"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: imc_clarodoro
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP PostgreSQL runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-pgsql postgresql-client
+
+      - name: Verify edit form sends selected class
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'classSelect.disabled = false;' private-pages/index.php
+          grep -Fq 'payload.class_id = eleve.classId;' private-pages/index.php
+          echo 'EDIT FORM CLASS SELECTOR + class_id PAYLOAD: PASS'
+
+      - name: Apply schema and authentication migrations
+        run: |
+          set -euo pipefail
+          DB_URL="postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261006170000_add_user_teacher_scope.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
+
+      - name: Seed isolated school and historical records
+        run: |
+          set -euo pipefail
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO roles (id, name)
+          VALUES ('00000000-0000-0000-0000-000000000001', 'PDG');
+
+          INSERT INTO permissions (id, name) VALUES
+            ('00000000-0000-0000-0000-000000000010', 'eleves.read'),
+            ('00000000-0000-0000-0000-000000000011', 'eleves.update');
+
+          INSERT INTO role_permissions (role_id, permission_id) VALUES
+            ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000010'),
+            ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000011');
+
+          INSERT INTO users (id, username, password_hash, role_id)
+          VALUES (
+            '00000000-0000-0000-0000-000000000020',
+            'class-change-test',
+            crypt('ClassChange-Test-2026!', gen_salt('bf')),
+            '00000000-0000-0000-0000-000000000001'
+          );
+
+          INSERT INTO levels (id, code, name)
+          VALUES ('00000000-0000-0000-0000-000000000030', 'TEST-L1', 'Test level');
+
+          INSERT INTO classes (id, code, name, level_id) VALUES
+            ('00000000-0000-0000-0000-000000000031', 'TEST-A', 'Class A', '00000000-0000-0000-0000-000000000030'),
+            ('00000000-0000-0000-0000-000000000032', 'TEST-B', 'Class B', '00000000-0000-0000-0000-000000000030');
+
+          INSERT INTO subjects (id, code, name)
+          VALUES ('00000000-0000-0000-0000-000000000040', 'TEST-MATH', 'Test mathematics');
+
+          INSERT INTO school_years (id, label, start_date, end_date)
+          VALUES ('00000000-0000-0000-0000-000000000050', 'TEST-2026-2027', '2026-09-01', '2027-06-30');
+
+          INSERT INTO students (id, matricule, last_name, first_name)
+          VALUES (
+            '00000000-0000-0000-0000-000000000060',
+            'CLASS-CHANGE-001',
+            'Test',
+            'Student'
+          );
+
+          INSERT INTO enrollments (id, student_id, class_id, school_year_id, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000000070',
+            '00000000-0000-0000-0000-000000000060',
+            '00000000-0000-0000-0000-000000000031',
+            '00000000-0000-0000-0000-000000000050',
+            'ACTIVE'
+          );
+
+          INSERT INTO grades (id, enrollment_id, subject_id, grade, assessment_number)
+          VALUES (
+            '00000000-0000-0000-0000-000000000080',
+            '00000000-0000-0000-0000-000000000070',
+            '00000000-0000-0000-0000-000000000040',
+            87,
+            1
+          );
+
+          INSERT INTO attendance (id, enrollment_id, attendance_date, status)
+          VALUES (
+            '00000000-0000-0000-0000-000000000090',
+            '00000000-0000-0000-0000-000000000070',
+            '2026-10-15',
+            'PRESENT'
+          );
+          SQL
+
+      - name: Check PHP syntax and start API
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l api/students/index.php
+          nohup php -S 127.0.0.1:8080 -t . >/tmp/class-change-php.log 2>&1 &
+          echo $! >/tmp/class-change-php.pid
+          for i in {1..30}; do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/auth/me.php || true)"
+            if [ "$code" != "000" ]; then break; fi
+            sleep 1
+          done
+          test "$code" != "000"
+
+      - name: Change class through authenticated API and verify persisted history
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='http://127.0.0.1:8080'
+          STUDENT='00000000-0000-0000-0000-000000000060'
+          OLD_ENROLLMENT='00000000-0000-0000-0000-000000000070'
+          NEW_CLASS='00000000-0000-0000-0000-000000000032'
+          DB_URL='postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro'
+
+          LOGIN="$(curl -fsS -c /tmp/class-change.cookies -b /tmp/class-change.cookies \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"class-change-test","password":"ClassChange-Test-2026!"}' \
+            "$BASE/api/auth/login.php")"
+          CSRF="$(printf '%s' "$LOGIN" | php -r '$d=json_decode(stream_get_contents(STDIN), true); echo $d["csrfToken"] ?? "";')"
+          test -n "$CSRF"
+
+          BEFORE="$(curl -fsS -b /tmp/class-change.cookies "$BASE/api/students/index.php")"
+          printf '%s' "$BEFORE" | grep -Fq '"class_id":"00000000-0000-0000-0000-000000000031"'
+          echo 'BEFORE: student is in Class A: PASS'
+
+          PATCH_BODY="$(printf '{"class_id":"%s"}' "$NEW_CLASS")"
+          RESPONSE="$(curl -fsS -c /tmp/class-change.cookies -b /tmp/class-change.cookies \
+            -X PATCH \
+            -H "X-CSRF-Token: $CSRF" \
+            -H 'Content-Type: application/json' \
+            -d "$PATCH_BODY" \
+            "$BASE/api/students/index.php?id=$STUDENT")"
+          printf '%s' "$RESPONSE" | grep -Fq '"success":true'
+          printf '%s' "$RESPONSE" | grep -Fq "\"class_id\":\"$NEW_CLASS\""
+          echo 'PATCH API returns the new class: PASS'
+
+          AFTER="$(curl -fsS -b /tmp/class-change.cookies "$BASE/api/students/index.php")"
+          printf '%s' "$AFTER" | grep -Fq "\"class_id\":\"$NEW_CLASS\""
+          echo 'GET after update returns Class B: PASS'
+
+          # Repeat the same request: it must be idempotent and must not create
+          # another active or duplicate enrollment.
+          curl -fsS -b /tmp/class-change.cookies -X PATCH \
+            -H "X-CSRF-Token: $CSRF" \
+            -H 'Content-Type: application/json' \
+            -d "$PATCH_BODY" \
+            "$BASE/api/students/index.php?id=$STUDENT" >/tmp/class-change-repeat.json
+
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -At <<SQL > /tmp/class-change-db.txt
+          SELECT
+            (SELECT COUNT(*) FROM enrollments WHERE student_id = '$STUDENT' AND status = 'ACTIVE'),
+            (SELECT class_id::text FROM enrollments WHERE student_id = '$STUDENT' AND status = 'ACTIVE'),
+            (SELECT status FROM enrollments WHERE id = '$OLD_ENROLLMENT'),
+            (SELECT COUNT(*) FROM enrollments WHERE student_id = '$STUDENT'),
+            (SELECT COUNT(*) FROM grades WHERE enrollment_id = '$OLD_ENROLLMENT'),
+            (SELECT COUNT(*) FROM attendance WHERE enrollment_id = '$OLD_ENROLLMENT');
+          SQL
+
+          EXPECTED="$(printf '1|%s|CANCELLED|2|1|1' "$NEW_CLASS")"
+          ACTUAL="$(tr -d '\r' < /tmp/class-change-db.txt | tail -n 1)"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "FAIL: PostgreSQL invariants differ."
+            echo "Expected: $EXPECTED"
+            echo "Actual:   $ACTUAL"
+            cat /tmp/class-change-db.txt
+            exit 1
+          fi
+
+          echo 'Exactly one active enrollment in Class B: PASS'
+          echo 'Previous enrollment preserved as CANCELLED: PASS'
+          echo 'Total enrollment history preserved (2 records): PASS'
+          echo 'Historical grade remains linked to old enrollment: PASS'
+          echo 'Historical attendance remains linked to old enrollment: PASS'
+          echo 'Repeated same-class update creates no duplicate enrollment: PASS'
+          echo 'STUDENT CLASS CHANGE END-TO-END PROOF: PASS'
+
+      - name: Verify protected pages inject the WhatsApp menu script
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          secure = Path("secure-page.php").read_text(encoding="utf-8")
+          menu = Path("js/whatsapp-menu.js").read_text(encoding="utf-8")
+          auth = Path("auth.js").read_text(encoding="utf-8")
+          for marker in [
+              "'<script src=\"/js/whatsapp-menu.js\" defer></script></body>$1'",
+              "preg_replace(",
+              "if (is_string($updated) && $count === 1)",
+          ]:
+              if marker not in secure:
+                  raise SystemExit(f"WhatsApp injection contract missing: {marker}")
+          for marker in [
+              "window.IMCAuth.verifySession()",
+              "window.IMCAuth.isAuthenticated()",
+              'window.IMCAuth.hasPermission("whatsapp.message.send")',
+              'data-imc-whatsapp-send = "true"',
+              "Envoyer un message WhatsApp",
+          ]:
+              if marker not in menu:
+                  raise SystemExit(f"WhatsApp menu contract missing: {marker}")
+          if "async function verifySession()" not in auth:
+              raise SystemExit("Server session restoration function is missing.")
+          print("PROTECTED PAGE WHATSAPP SCRIPT INJECTION: PASS")
+          print("SESSION WAIT + RBAC + BUTTON CONTRACT: PASS")
+          PY
+
+      - name: Browser proof — WhatsApp button waits for restored session
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const page = await browser.newPage();
+            await page.goto('http://127.0.0.1:8080/');
+            await page.setContent('<!doctype html><html><body><nav class="menu-principal"><button>Élèves</button></nav></body></html>');
+            await page.evaluate(() => {
+              let ready = false;
+              window.IMCAuth = {
+                verifySession: async () => {
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  ready = true;
+                  return { userId: 'test-user' };
+                },
+                isAuthenticated: () => ready,
+                hasPermission: permission => ready && permission === 'whatsapp.message.send'
+              };
+            });
+            await page.addScriptTag({ path: 'js/whatsapp-menu.js' });
+            if (await page.locator('[data-imc-whatsapp-send="true"]').count() !== 0) {
+              throw new Error('Le bouton est apparu avant la restauration de session.');
+            }
+            const button = page.locator('.menu-principal [data-imc-whatsapp-send="true"]');
+            await button.waitFor({ state: 'visible', timeout: 5000 });
+            if (await button.innerText() !== 'Envoyer un message WhatsApp') {
+              throw new Error('Libellé incorrect du bouton WhatsApp.');
+            }
+            if (await page.locator('[data-imc-whatsapp-send="true"]').count() !== 1) {
+              throw new Error('Le menu contient un nombre inattendu de boutons WhatsApp.');
+            }
+            await button.click();
+            await page.waitForURL(url => url.pathname === '/whatsapp-send.html', { timeout: 5000 });
+            console.log('BROWSER WHATSAPP MENU — delayed session restoration: PASS');
+            console.log('BROWSER WHATSAPP MENU — permission-gated button and navigation: PASS');
+          } finally {
+            await browser.close();
+          }
+          JS
+
+      - name: Browser proof — user without WhatsApp permission sees no button
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const page = await browser.newPage();
+            await page.goto('http://127.0.0.1:8080/');
+            await page.setContent('<!doctype html><html><body><nav class="menu-principal"><button>Élèves</button></nav></body></html>');
+            await page.evaluate(() => {
+              window.IMCAuth = {
+                verifySession: async () => ({ userId: 'read-only-user' }),
+                isAuthenticated: () => true,
+                hasPermission: () => false
+              };
+            });
+            await page.addScriptTag({ path: 'js/whatsapp-menu.js' });
+            await page.waitForTimeout(150);
+            if (await page.locator('[data-imc-whatsapp-send="true"]').count() !== 0) {
+              throw new Error('Le bouton WhatsApp est visible sans permission.');
+            }
+            console.log('BROWSER WHATSAPP MENU — RBAC deny: PASS');
+          } finally {
+            await browser.close();
+          }
+          JS
+
+      - name: Print PHP server log on failure
+        if: failure()
+        run: cat /tmp/class-change-php.log || true
