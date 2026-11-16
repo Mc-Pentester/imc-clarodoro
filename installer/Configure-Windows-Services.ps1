@@ -63,6 +63,18 @@ function Test-PortAvailable([int]$Port) {
     return ($null -eq $listener)
 }
 
+function Test-LocalServiceProcessOwner($Process) {
+    if (-not $Process) { return $false }
+    try {
+        $owner = Invoke-CimMethod -InputObject $Process -MethodName GetOwnerSid -ErrorAction Stop
+        return ($owner.ReturnValue -eq 0 -and [string]$owner.Sid -eq 'S-1-5-19')
+    }
+    catch {
+        Write-Step ("Impossible de confirmer le propriétaire LOCAL SERVICE du processus HTTP : " + $_.Exception.Message)
+        return $false
+    }
+}
+
 function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
     $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue |
         Select-Object -First 1
@@ -71,13 +83,39 @@ function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
     }
 
     $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
-    if (-not $listenerProcess -or -not $listenerProcess.ExecutablePath) {
-        throw "Impossible d'identifier le processus qui écoute sur le port $Port."
+    if (-not $listenerProcess) {
+        throw "Impossible de lire les métadonnées du processus qui écoute sur le port $Port (PID $($listener.OwningProcess))."
     }
-    $actualExecutable = [System.IO.Path]::GetFullPath([string]$listenerProcess.ExecutablePath)
+
+    $actualExecutable = [string]$listenerProcess.ExecutablePath
+    if ([string]::IsNullOrWhiteSpace($actualExecutable)) {
+        $processInfo = Get-Process -Id ([int]$listener.OwningProcess) -ErrorAction SilentlyContinue
+        if ($processInfo) { $actualExecutable = [string]$processInfo.Path }
+    }
+    if ([string]::IsNullOrWhiteSpace($actualExecutable)) {
+        throw "Impossible de confirmer le chemin de l'exécutable HTTP (PID $($listener.OwningProcess))."
+    }
+
+    $actualExecutable = [System.IO.Path]::GetFullPath($actualExecutable)
     $expectedExecutable = [System.IO.Path]::GetFullPath($ExpectedPhpPath)
-    if (-not [string]::Equals($actualExecutable, $expectedExecutable, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Le port HTTP $Port est occupé par un autre programme : $actualExecutable. Clarodaro PHP attendu : $expectedExecutable"
+    $executableMatches = [string]::Equals($actualExecutable, $expectedExecutable, [StringComparison]::OrdinalIgnoreCase)
+    $isLocalServiceOwner = Test-LocalServiceProcessOwner $listenerProcess
+    $commandLine = [string]$listenerProcess.CommandLine
+    $commandLineMatches = $true
+    if (-not [string]::IsNullOrWhiteSpace($commandLine)) {
+        $normalizedCommandLine = $commandLine.Replace('/', '\')
+        $expectedRoot = [System.IO.Path]::GetFullPath($AppRoot).TrimEnd('\')
+        $expectedRouter = Join-Path $expectedRoot 'router.php'
+        $commandLineMatches = $normalizedCommandLine.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+            $normalizedCommandLine.IndexOf($expectedRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+            ($normalizedCommandLine -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $Port + '["'']?(?:\s|$)'))
+    }
+    else {
+        Write-Step "Ligne de commande masquée par Windows pour PID $($listener.OwningProcess) ; validation par exécutable exact et SID LOCAL SERVICE."
+    }
+
+    if (-not $executableMatches -or -not $isLocalServiceOwner -or -not $commandLineMatches) {
+        throw "Le port HTTP $Port est occupé par un processus non authentifié comme PHP Clarodaro (PID $($listener.OwningProcess), exécutable=$actualExecutable, LOCAL SERVICE=$isLocalServiceOwner)."
     }
 
     $request = [System.Net.HttpWebRequest]::Create("http://127.0.0.1:$Port/")
@@ -111,7 +149,7 @@ function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
     if ($body -notmatch '(?i)Bienvenue sur Clarodaro|Connexion requise|Créer mon compte PDG|Configuration terminée') {
         throw "Le serveur répond avec une page Clarodaro inattendue (HTTP $statusCode)."
     }
-    Write-Step "Contrôle HTTP Clarodaro réussi : port $Port, processus PHP identifié, HTTP $statusCode."
+    Write-Step "Contrôle HTTP Clarodaro réussi : port $Port, PID $($listener.OwningProcess), exécutable PHP et propriétaire LOCAL SERVICE confirmés, HTTP $statusCode."
 }
 
 $AppRoot = [System.IO.Path]::GetFullPath($AppRoot)
@@ -749,7 +787,17 @@ do {
 if (-not $httpReady) {
     $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
     $taskState = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    Write-Step "Échec démarrage PHP : état tâche=$($taskState.State), LastTaskResult=$($taskInfo.LastTaskResult), LastRunTime=$($taskInfo.LastRunTime)"
+    $taskResultText = 'indisponible'
+    if ($taskInfo -and $null -ne $taskInfo.LastTaskResult) {
+        $taskResultNumber = [long]$taskInfo.LastTaskResult
+        $taskResultHex = '0x{0:X8}' -f ([uint32]$taskResultNumber)
+        $taskResultText = "$taskResultNumber ($taskResultHex)"
+    }
+    $taskStateText = if ($taskState) { [string]$taskState.State } else { 'introuvable' }
+    if ($taskStateText -eq 'Running' -and $taskResultText -like '267009*') {
+        Write-Step "La tâche PHP est toujours en cours (0x00041301 = TASK_STATE_RUNNING) ; LastTaskResult n'est pas un code d'échec final."
+    }
+    Write-Step "Échec du contrôle HTTP PHP : état tâche=$taskStateText, LastTaskResult=$taskResultText, LastRunTime=$($taskInfo.LastRunTime)"
     if ($taskState) {
         foreach ($taskAction in $taskState.Actions) {
             Write-Step "Action PHP : Execute=$($taskAction.Execute) ; Arguments=$($taskAction.Arguments) ; WorkingDirectory=$($taskAction.WorkingDirectory)"
@@ -759,6 +807,18 @@ if (-not $httpReady) {
         Where-Object { $_.Message -like "*$taskName*" } | Select-Object -First 25
     foreach ($event in $taskEvents) {
         Write-Step "TaskScheduler ID=$($event.Id) $($event.TimeCreated): $($event.Message)"
+    }
+    $phpProcesses = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue)
+    foreach ($phpProcess in $phpProcesses) {
+        $ownerSid = 'inconnu'
+        try {
+            $ownerInfo = Invoke-CimMethod -InputObject $phpProcess -MethodName GetOwnerSid -ErrorAction Stop
+            if ($ownerInfo.ReturnValue -eq 0) { $ownerSid = [string]$ownerInfo.Sid }
+        } catch {}
+        Write-Step "Processus PHP observé : PID=$($phpProcess.ProcessId), exécutable=$($phpProcess.ExecutablePath), propriétaire SID=$ownerSid, commande=$($phpProcess.CommandLine)"
+    }
+    if ($phpProcesses.Count -eq 0) {
+        Write-Step 'Aucun processus php.exe actif au moment du diagnostic HTTP.'
     }
     $phpLog = Join-Path $logRoot 'php-server.log'
     if (Test-Path -LiteralPath $phpLog -PathType Leaf) {
