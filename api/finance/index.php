@@ -123,6 +123,8 @@ if ($method === 'GET') {
          ORDER BY c.name'
     );
     $tariffsStmt->execute($tariffParams);
+    $classesStmt = $pdo->query("SELECT id, code, name FROM classes WHERE status = 'ACTIVE' ORDER BY name");
+    $classes = $classesStmt->fetchAll();
 
     foreach ($invoices as &$invoice) {
         $invoice['paid_amount'] = (float)$invoice['paid_amount'];
@@ -199,6 +201,7 @@ if ($method === 'GET') {
         'success' => true,
         'invoices' => $invoices,
         'tariffs' => $tariffsStmt->fetchAll(),
+        'classes' => $classes,
         'students' => $students,
     ], JSON_UNESCAPED_UNICODE);
     exit;
@@ -213,15 +216,15 @@ if ($method === 'POST') {
         $schoolYearId = financeUuid((string)($data['school_year_id'] ?? ''), 'school_year_id');
         $classId = financeUuid((string)($data['class_id'] ?? ''), 'class_id');
         $amount = $data['amount'] ?? null;
-        if (!is_numeric($amount) || (float)$amount < 0) apiError(422, 'amount invalide');
+        if (!is_numeric($amount) || (float)$amount <= 0) apiError(422, 'Le tarif total doit être supérieur à zéro.');
         foreach (['installment1_amount','installment2_amount','installment3_amount'] as $field) {
             if (isset($data[$field]) && (!is_numeric($data[$field]) || (float)$data[$field] < 0)) {
                 apiError(422, "$field invalide");
             }
         }
         $installmentTotal = round((float)($data['installment1_amount'] ?? 0) + (float)($data['installment2_amount'] ?? 0) + (float)($data['installment3_amount'] ?? 0), 2);
-        if ($installmentTotal > 0 && abs($installmentTotal - (float)$amount) > 0.01) {
-            apiError(422, 'La somme des trois versements doit être égale au tarif total.');
+        if ($installmentTotal <= 0 || abs($installmentTotal - (float)$amount) > 0.01) {
+            apiError(422, 'La somme des trois versements doit être égale au tarif total et comporter au moins un montant positif.');
         }
         $stmt = $pdo->prepare(
             'INSERT INTO finance_tariffs
