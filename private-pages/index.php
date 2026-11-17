@@ -1017,6 +1017,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 <script>
 
     let students = [];
+    let parentsHorsFormulaire = [];
     let photoActuelle = "";
     let cameraStream = null;
 
@@ -1439,22 +1440,31 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 
     function collecterParentsFormulaire() {
         const slots = [{key:"pere",relationship:"FATHER"},{key:"mere",relationship:"MOTHER"},{key:"tuteur",relationship:"GUARDIAN"}];
-        return slots.map(function(slot) {
+        const entered = slots.map(function(slot) {
             const value = suffix => document.getElementById("parent"+slot.key+suffix).value.trim();
             return {parent_id:document.getElementById("parent"+slot.key+"Existant").value,first_name:value("Prenom"),last_name:value("Nom"),ninu:value("Ninu"),phone:value("Telephone"),email:value("Email"),address:value("Adresse"),relationship_type:slot.relationship,is_primary:document.getElementById("parent"+slot.key+"Principal").checked};
         }).filter(p => p.parent_id || p.first_name || p.last_name || p.ninu || p.phone || p.email || p.address);
+        const hidden = parentsHorsFormulaire.map(p => ({
+            parent_id:p.id || p.parent_id, first_name:p.first_name, last_name:p.last_name,
+            ninu:p.ninu || "", phone:p.phone || "", email:p.email || "", address:p.address || "",
+            relationship_type:p.relationship_type || "OTHER", is_primary:Boolean(p.is_primary)
+        }));
+        return entered.concat(hidden);
     }
 
     function chargerParentsFormulaire(parents) {
         const slots = [{key:"pere",relationship:"FATHER"},{key:"mere",relationship:"MOTHER"},{key:"tuteur",relationship:"GUARDIAN"}];
+        const represented = new Set();
         slots.forEach(function(slot,index) {
-            const p = (parents || []).find(item => item.relationship_type === slot.relationship) || (parents || [])[index] || {};
+            const p = (parents || []).find(item => item.relationship_type === slot.relationship && !represented.has(item.id)) || (parents || []).find(item => !represented.has(item.id)) || {};
+            if (p.id) represented.add(p.id);
             const set = (suffix,value) => document.getElementById("parent"+slot.key+suffix).value = value || "";
             document.getElementById("parent"+slot.key+"Existant").value = p.id || p.parent_id || "";
             set("Prenom",p.first_name); set("Nom",p.last_name); set("Ninu",p.ninu);
             set("Telephone",p.phone); set("Email",p.email); set("Adresse",p.address);
             document.getElementById("parent"+slot.key+"Principal").checked = Boolean(p.is_primary);
         });
+        parentsHorsFormulaire = (parents || []).filter(p => p.id && !represented.has(p.id));
     }
 
     async function chargerParentsDisponibles() {

@@ -16,3 +16,6 @@ grep -Fq 'id="dossierParents"' private-pages/index.php
 grep -Fq 'ADD COLUMN IF NOT EXISTS ninu' database/migrations/20261116193000_student_parent_registration.sql
 grep -Fq 'parents_ninu_unique' database/migrations/20261116193000_student_parent_registration.sql
 echo 'PASS: student-parent registration contract'
+
+grep -Fq 'parentsHorsFormulaire' private-pages/index.php
+grep -Fq 'count($raw) > 100' api/students/index.php

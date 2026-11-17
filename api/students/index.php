@@ -8,7 +8,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 function normalizeStudentParents($raw): array
 {
-    if (!is_array($raw) || !array_is_list($raw) || count($raw) > 3) apiError(422, 'parents doit contenir au maximum trois responsables');
+    if (!is_array($raw) || !array_is_list($raw) || count($raw) > 100) apiError(422, 'parents doit contenir au maximum 100 responsables');
     $result = []; $primary = 0; $relations = ['FATHER','MOTHER','GUARDIAN','OTHER'];
     foreach ($raw as $item) {
         if (!is_array($item)) apiError(422, 'Chaque responsable doit être un objet');
