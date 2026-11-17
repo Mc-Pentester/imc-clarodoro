@@ -94,7 +94,13 @@ php -r '$d=json_decode(file_get_contents($argv[1]),true); if (($d["success"]??tr
 COUNT="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_message_log WHERE idempotency_key='whatsapp-http-key-000001'")"
 test "$COUNT" = "0"
 REVOKE="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_OUT\",\"consent_source\":\"HTTP CI revocation\"}"
+CONSENTED_AT_BEFORE="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT consented_at FROM whatsapp_consents WHERE parent_id='$PARENT_ID' AND purpose='GENERAL' AND status='OPTED_IN'")"
+test -n "$CONSENTED_AT_BEFORE"
 call_api opt_out 200 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$REVOKE" whatsapp-ci-csrf-token
+REVOKED_STATE="$(psql -X -At -F '|' -v ON_ERROR_STOP=1 -c "SELECT status, consented_at IS NOT NULL, revoked_at IS NOT NULL, consent_method, consent_source, evidence_reference FROM whatsapp_consents WHERE parent_id='$PARENT_ID' AND purpose='GENERAL'")"
+test "$REVOKED_STATE" = "OPTED_OUT|t|t|PAPER|PAPER|CI signed consent fixture"
+REVOCATION_AUDIT="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_consent_audit WHERE parent_id='$PARENT_ID' AND purpose='GENERAL' AND previous_status='OPTED_IN' AND new_status='OPTED_OUT' AND consent_method='PAPER' AND evidence_reference='CI signed consent fixture'")"
+test "$REVOCATION_AUDIT" = "1"
 # Exercise the complete parent email confirmation endpoint with a seeded one-time challenge.
 psql -X -v ON_ERROR_STOP=1 <<'SQL'
 INSERT INTO parents (last_name, first_name, email)

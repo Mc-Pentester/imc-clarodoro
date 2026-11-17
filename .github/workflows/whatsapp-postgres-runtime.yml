@@ -74,6 +74,7 @@ jobs:
             database/migrations/20261025120000_whatsapp_manual_preparations.sql \
             database/migrations/20261109170000_f02_l_pdg_payroll_whatsapp_permissions.sql \
             database/migrations/20261117100000_whatsapp_parent_consent_workflow.sql
+            database/migrations/20261117120000_whatsapp_consent_revocation_timestamp.sql
           do
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
