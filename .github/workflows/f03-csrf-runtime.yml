@@ -257,7 +257,10 @@ jobs:
             echo "Internal database detail leaked to HTTP response" >&2
             exit 1
           fi
-          if ! grep -Fq 'Student creation failed [SQLSTATE P0001]: runtime proof failure' /tmp/php-error.log; then
+          # PostgreSQL formats the exception message with driver context, so
+          # assert the stable SQLSTATE prefix and the trigger's message rather
+          # than matching one exact rendering of the complete log line.
+          if ! grep -Eq 'Student creation failed \[SQLSTATE P0001\]: .*runtime proof failure' /tmp/php-error.log; then
             echo "Expected PHP diagnostic was not found."
             echo "--- PHP error log ---"
             if test -f /tmp/php-error.log; then cat /tmp/php-error.log; else echo "MISSING: /tmp/php-error.log"; fi
