@@ -257,7 +257,14 @@ jobs:
             echo "Internal database detail leaked to HTTP response" >&2
             exit 1
           fi
-          grep -Fq 'Student creation failed [SQLSTATE P0001]: runtime proof failure' /tmp/php-error.log
+          if ! grep -Fq 'Student creation failed [SQLSTATE P0001]: runtime proof failure' /tmp/php-error.log; then
+            echo "Expected PHP diagnostic was not found."
+            echo "--- PHP error log ---"
+            if test -f /tmp/php-error.log; then cat /tmp/php-error.log; else echo "MISSING: /tmp/php-error.log"; fi
+            echo "--- PHP server log ---"
+            cat /tmp/php-server.log || true
+            exit 1
+          fi
           REMAINING_STUDENTS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc "SELECT COUNT(*) FROM students WHERE matricule='F03-FAIL-500'")"
           REMAINING_PARENTS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc "SELECT COUNT(*) FROM parents WHERE ninu='1098765432'")"
           test "$REMAINING_STUDENTS" = "0"
