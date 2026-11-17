@@ -61,6 +61,9 @@ jobs:
           ON CONFLICT DO NOTHING;
           SQL
 
+      - name: PDG dashboard resilience contract
+        run: bash tests/pdg-dashboard-resilience-static.sh
+
       - name: PHP syntax check
         run: |
           set -euo pipefail

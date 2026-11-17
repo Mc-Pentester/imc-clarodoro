@@ -19,3 +19,11 @@ echo 'PASS: student-parent registration contract'
 
 grep -Fq 'parentsHorsFormulaire' private-pages/index.php
 grep -Fq 'count($raw) > 100' api/students/index.php
+
+# Le gestionnaire doit être attaché avant les appels réseau asynchrones.
+FORM_BIND_LINE="$(grep -n 'studentForm.addEventListener("submit", enregistrerEleve)' private-pages/index.php | cut -d: -f1)"
+OPTIONS_LINE="$(grep -n 'await chargerOptionsInscription()' private-pages/index.php | cut -d: -f1)"
+test -n "$FORM_BIND_LINE" && test -n "$OPTIONS_LINE"
+test "$FORM_BIND_LINE" -lt "$OPTIONS_LINE"
+grep -Fq 'payload.parents = Array.isArray(eleve.parents) ? eleve.parents : []' private-pages/index.php
+echo 'PASS: student save binding and parent payload preserved'
