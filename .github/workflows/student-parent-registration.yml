@@ -1,0 +1,26 @@
+name: Student parent registration
+on:
+  pull_request:
+    paths:
+      - 'api/students/index.php'
+      - 'private-pages/index.php'
+      - 'database/migrations/*student_parent_registration.sql'
+      - 'tests/student-parent-registration-static.sh'
+      - '.github/workflows/student-parent-registration.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/students/index.php'
+      - 'private-pages/index.php'
+      - 'database/migrations/*student_parent_registration.sql'
+      - 'tests/student-parent-registration-static.sh'
+      - '.github/workflows/student-parent-registration.yml'
+jobs:
+  registration-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP
+        run: sudo apt-get update && sudo apt-get install -y php-cli
+      - name: Validate registration flow
+        run: bash tests/student-parent-registration-static.sh

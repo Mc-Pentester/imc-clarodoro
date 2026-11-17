@@ -698,6 +698,47 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                 </div>
 
 
+                <div class="form-group full">
+                    <h3>Parents et responsables légaux</h3>
+                    <p>Jusqu'à trois responsables. Le NINU permet de retrouver la même fiche parent pour ses autres enfants.</p>
+                </div>
+                <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
+                    <legend>Père</legend>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="parentperePrenom">Prénom</label><input id="parentperePrenom" maxlength="150"></div>
+                        <div class="form-group"><label for="parentpereNom">Nom</label><input id="parentpereNom" maxlength="150"></div>
+                        <div class="form-group"><label for="parentpereNinu">NINU (10 chiffres)</label><input id="parentpereNinu" maxlength="10" inputmode="numeric"></div>
+                        <div class="form-group"><label for="parentpereTelephone">Téléphone</label><input id="parentpereTelephone" type="tel" maxlength="50"></div>
+                        <div class="form-group"><label for="parentpereEmail">Courriel</label><input id="parentpereEmail" type="email" maxlength="255"></div>
+                        <div class="form-group"><label for="parentpereAdresse">Adresse</label><input id="parentpereAdresse" maxlength="2000"></div>
+                        <div class="form-group"><label for="parentperePrincipal">Responsable principal</label><input id="parentperePrincipal" type="checkbox"></div>
+                    </div>
+                </fieldset>
+                <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
+                    <legend>Mère</legend>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="parentmerePrenom">Prénom</label><input id="parentmerePrenom" maxlength="150"></div>
+                        <div class="form-group"><label for="parentmereNom">Nom</label><input id="parentmereNom" maxlength="150"></div>
+                        <div class="form-group"><label for="parentmereNinu">NINU (10 chiffres)</label><input id="parentmereNinu" maxlength="10" inputmode="numeric"></div>
+                        <div class="form-group"><label for="parentmereTelephone">Téléphone</label><input id="parentmereTelephone" type="tel" maxlength="50"></div>
+                        <div class="form-group"><label for="parentmereEmail">Courriel</label><input id="parentmereEmail" type="email" maxlength="255"></div>
+                        <div class="form-group"><label for="parentmereAdresse">Adresse</label><input id="parentmereAdresse" maxlength="2000"></div>
+                        <div class="form-group"><label for="parentmerePrincipal">Responsable principal</label><input id="parentmerePrincipal" type="checkbox"></div>
+                    </div>
+                </fieldset>
+                <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
+                    <legend>Autre responsable / tuteur</legend>
+                    <div class="form-grid">
+                        <div class="form-group"><label for="parenttuteurPrenom">Prénom</label><input id="parenttuteurPrenom" maxlength="150"></div>
+                        <div class="form-group"><label for="parenttuteurNom">Nom</label><input id="parenttuteurNom" maxlength="150"></div>
+                        <div class="form-group"><label for="parenttuteurNinu">NINU (10 chiffres)</label><input id="parenttuteurNinu" maxlength="10" inputmode="numeric"></div>
+                        <div class="form-group"><label for="parenttuteurTelephone">Téléphone</label><input id="parenttuteurTelephone" type="tel" maxlength="50"></div>
+                        <div class="form-group"><label for="parenttuteurEmail">Courriel</label><input id="parenttuteurEmail" type="email" maxlength="255"></div>
+                        <div class="form-group"><label for="parenttuteurAdresse">Adresse</label><input id="parenttuteurAdresse" maxlength="2000"></div>
+                        <div class="form-group"><label for="parenttuteurPrincipal">Responsable principal</label><input id="parenttuteurPrincipal" type="checkbox"></div>
+                    </div>
+                </fieldset>
+
                 <div class="form-group">
 
                     <label for="documentInscription">
@@ -912,8 +953,12 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             </div>
 
             <div class="dossier-item">
-                <strong>NINU du parent :</strong>
+                <strong>NINU du parent (ancienne fiche) :</strong>
                 <span id="dossierNinuParent"></span>
+            </div>
+            <div class="dossier-item">
+                <strong>Parents / responsables :</strong>
+                <span id="dossierParents">Aucun responsable enregistré</span>
             </div>
 
             <div class="dossier-item">
@@ -1108,6 +1153,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             nisu: profile.nisu || student.matricule || "",
             contact: profile.contact || student.phone || "",
             ninuParent: profile.ninuParent || "",
+            parents: Array.isArray(student.parents) ? student.parents : [],
             documentInscription: profile.documentInscription || "",
             photo: profile.photo || student.photo || "",
             anneeScolaire: student.school_year_label || profile.anneeScolaire || anneeActuelle(),
@@ -1142,6 +1188,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             address: "",
             phone: eleve.contact || "",
             status: eleve.status || "ACTIVE",
+            parents: eleve.parents || [],
             profile_data: {
                 lieuNaissance: eleve.lieuNaissance,
                 departement: eleve.departement,
@@ -1372,6 +1419,25 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
        ENREGISTRER — F-02-A
     ================================================== */
 
+    function collecterParentsFormulaire() {
+        const slots = [{key:"pere",relationship:"FATHER"},{key:"mere",relationship:"MOTHER"},{key:"tuteur",relationship:"GUARDIAN"}];
+        return slots.map(function(slot) {
+            const value = suffix => document.getElementById("parent"+slot.key+suffix).value.trim();
+            return {first_name:value("Prenom"),last_name:value("Nom"),ninu:value("Ninu"),phone:value("Telephone"),email:value("Email"),address:value("Adresse"),relationship_type:slot.relationship,is_primary:document.getElementById("parent"+slot.key+"Principal").checked};
+        }).filter(p => p.first_name || p.last_name || p.ninu || p.phone || p.email || p.address);
+    }
+
+    function chargerParentsFormulaire(parents) {
+        const slots = [{key:"pere",relationship:"FATHER"},{key:"mere",relationship:"MOTHER"},{key:"tuteur",relationship:"GUARDIAN"}];
+        slots.forEach(function(slot,index) {
+            const p = (parents || []).find(item => item.relationship_type === slot.relationship) || (parents || [])[index] || {};
+            const set = (suffix,value) => document.getElementById("parent"+slot.key+suffix).value = value || "";
+            set("Prenom",p.first_name); set("Nom",p.last_name); set("Ninu",p.ninu);
+            set("Telephone",p.phone); set("Email",p.email); set("Adresse",p.address);
+            document.getElementById("parent"+slot.key+"Principal").checked = Boolean(p.is_primary);
+        });
+    }
+
     async function enregistrerEleve(event) {
         event.preventDefault();
 
@@ -1405,6 +1471,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             nisu: nisu,
             contact: document.getElementById("contact").value.trim(),
             ninuParent: document.getElementById("ninuParent").value.trim(),
+            parents: collecterParentsFormulaire(),
             documentInscription: document.getElementById("documentInscription").value,
             photo: photoActuelle,
             anneeScolaire: anneeActuelle() || (existing && existing.anneeScolaire) || "",
@@ -1463,6 +1530,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
         document.getElementById("nisu").value = student.nisu || "";
         document.getElementById("contact").value = student.contact || "";
         document.getElementById("ninuParent").value = student.ninuParent || "";
+        chargerParentsFormulaire(student.parents || []);
         document.getElementById("documentInscription").value = student.documentInscription || "";
 
         photoActuelle = student.photo || "";
@@ -1892,6 +1960,15 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             "dossierNinuParent"
         ).textContent =
             student.ninuParent || "";
+
+        document.getElementById("dossierParents").textContent =
+            (student.parents || []).map(function(parent) {
+                const relation = {FATHER:"Père",MOTHER:"Mère",GUARDIAN:"Tuteur",OTHER:"Autre"}[parent.relationship_type] || "Responsable";
+                return relation + " : " + parent.first_name + " " + parent.last_name
+                    + (parent.phone ? " — " + parent.phone : "")
+                    + (parent.email ? " — " + parent.email : "")
+                    + (parent.is_primary ? " (principal)" : "");
+            }).join("\n") || "Aucun responsable enregistré";
 
 
         document.getElementById(

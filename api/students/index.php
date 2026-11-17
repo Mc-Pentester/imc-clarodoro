@@ -6,6 +6,56 @@ require_once __DIR__ . '/../../config/auth.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+function normalizeStudentParents($raw): array
+{
+    if (!is_array($raw) || !array_is_list($raw) || count($raw) > 3) apiError(422, 'parents doit contenir au maximum trois responsables');
+    $result = []; $primary = 0; $relations = ['FATHER','MOTHER','GUARDIAN','OTHER'];
+    foreach ($raw as $item) {
+        if (!is_array($item)) apiError(422, 'Chaque responsable doit être un objet');
+        $p = [];
+        foreach (['first_name','last_name','phone','email','address','ninu','relationship_type'] as $f) {
+            if (isset($item[$f]) && !is_string($item[$f])) apiError(422, "Champ parent invalide: $f");
+            $p[$f] = trim((string)($item[$f] ?? ''));
+        }
+        $p['is_primary'] = filter_var($item['is_primary'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $hasData = false;
+        foreach (['first_name','last_name','phone','email','address','ninu'] as $f) if ($p[$f] !== '') $hasData = true;
+        if (!$hasData) continue;
+        if ($p['first_name'] === '' || $p['last_name'] === '') apiError(422, 'Le nom et le prénom sont requis pour chaque responsable renseigné');
+        if (strlen($p['first_name']) > 150 || strlen($p['last_name']) > 150 || strlen($p['phone']) > 50 || strlen($p['email']) > 255 || strlen($p['address']) > 2000) apiError(422, 'Coordonnées du responsable trop longues');
+        if ($p['email'] !== '' && !filter_var($p['email'], FILTER_VALIDATE_EMAIL)) apiError(422, 'Adresse courriel du responsable invalide');
+        if ($p['ninu'] !== '' && !preg_match('/^\d{10}$/', $p['ninu'])) apiError(422, 'Le NINU du responsable doit contenir exactement 10 chiffres');
+        if (!in_array($p['relationship_type'], $relations, true)) apiError(422, 'Lien de parenté invalide');
+        if ($p['is_primary']) $primary++;
+        $result[] = $p;
+    }
+    if ($primary > 1) apiError(422, 'Un seul responsable principal peut être sélectionné');
+    return $result;
+}
+
+function saveStudentParents(PDO $pdo, string $studentId, array $parents): void
+{
+    $pdo->prepare('DELETE FROM student_parents WHERE student_id = :id')->execute([':id' => $studentId]);
+    foreach ($parents as $p) {
+        $parentId = null;
+        if ($p['ninu'] !== '') {
+            $find = $pdo->prepare('SELECT id FROM parents WHERE ninu = :ninu FOR UPDATE');
+            $find->execute([':ninu' => $p['ninu']]);
+            $parentId = $find->fetchColumn() ?: null;
+        }
+        if ($parentId) {
+            $stmt = $pdo->prepare('UPDATE parents SET first_name=:first_name,last_name=:last_name,phone=:phone,email=:email,address=:address,updated_at=NOW() WHERE id=:id');
+            $stmt->execute([':first_name'=>$p['first_name'],':last_name'=>$p['last_name'],':phone'=>$p['phone'] ?: null,':email'=>$p['email'] ?: null,':address'=>$p['address'] ?: null,':id'=>$parentId]);
+        } else {
+            $stmt = $pdo->prepare('INSERT INTO parents(last_name,first_name,phone,email,address,ninu) VALUES(:last_name,:first_name,:phone,:email,:address,:ninu) RETURNING id');
+            $stmt->execute([':last_name'=>$p['last_name'],':first_name'=>$p['first_name'],':phone'=>$p['phone'] ?: null,':email'=>$p['email'] ?: null,':address'=>$p['address'] ?: null,':ninu'=>$p['ninu'] ?: null]);
+            $parentId = $stmt->fetchColumn();
+        }
+        $link = $pdo->prepare('INSERT INTO student_parents(student_id,parent_id,relationship_type,is_primary) VALUES(:student_id,:parent_id,:relationship_type,:is_primary)');
+        $link->execute([':student_id'=>$studentId,':parent_id'=>$parentId,':relationship_type'=>$p['relationship_type'],':is_primary'=>$p['is_primary']]);
+    }
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method === 'GET') {
@@ -103,11 +153,14 @@ if ($method === 'GET') {
 
     $stmt->execute();
     $students = $stmt->fetchAll();
+    $parentStmt = $pdo->prepare('SELECT p.id,p.first_name,p.last_name,p.ninu,p.phone,p.email,p.address,sp.relationship_type,sp.is_primary FROM student_parents sp INNER JOIN parents p ON p.id=sp.parent_id WHERE sp.student_id=:student_id ORDER BY sp.is_primary DESC,p.last_name,p.first_name');
     foreach ($students as &$student) {
         if (isset($student['profile_data']) && is_string($student['profile_data'])) {
             $decoded = json_decode($student['profile_data'], true);
             $student['profile_data'] = is_array($decoded) ? $decoded : [];
         }
+        $parentStmt->execute([':student_id'=>$student['id']]);
+        $student['parents'] = $parentStmt->fetchAll();
     }
     unset($student);
 
@@ -233,6 +286,7 @@ elseif ($method === 'POST') {
         $profileData = $data['profile_data'];
     }
 
+    $parents = array_key_exists('parents', $data) ? normalizeStudentParents($data['parents']) : [];
     $classId = isset($data['class_id']) && is_string($data['class_id']) ? trim($data['class_id']) : '';
     $schoolYearId = isset($data['school_year_id']) && is_string($data['school_year_id']) ? trim($data['school_year_id']) : '';
     if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $classId)) {
@@ -251,7 +305,7 @@ elseif ($method === 'POST') {
     }
 
     // Refuser les champs inconnus
-    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data', 'class_id', 'school_year_id'];
+    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data', 'class_id', 'school_year_id', 'parents'];
     foreach (array_keys($data) as $field) {
         if (!in_array($field, $allowedFields, true)) {
             apiError(422, "Champ inconnu: $field");
@@ -324,6 +378,7 @@ elseif ($method === 'POST') {
         ]);
 
         $student = $stmt->fetch();
+        saveStudentParents($pdo, $student['id'], $parents);
         $enrollmentStmt = $pdo->prepare(
             "INSERT INTO enrollments (student_id, class_id, school_year_id, status)
              VALUES (:student_id, :class_id, :school_year_id, 'ACTIVE')"
@@ -399,6 +454,8 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
         $profileData = $data['profile_data'];
     }
 
+    $parents = array_key_exists('parents', $data) ? normalizeStudentParents($data['parents']) : null;
+
     // Refuser les champs générés par le serveur
     $forbiddenFields = ['id', 'created_at', 'updated_at'];
     foreach ($forbiddenFields as $field) {
@@ -408,7 +465,7 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
     }
 
     // Refuser les champs inconnus
-    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data', 'class_id'];
+    $allowedFields = ['matricule', 'last_name', 'first_name', 'date_of_birth', 'sex', 'address', 'phone', 'status', 'profile_data', 'class_id', 'parents'];
     foreach (array_keys($data) as $field) {
         if (!in_array($field, $allowedFields, true)) {
             apiError(422, "Champ inconnu: $field");
@@ -547,7 +604,7 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
     }
 
     // PATCH requires at least one field to update
-    if ($method === 'PATCH' && count($updateFields) === 0 && $newClassId === null) {
+    if ($method === 'PATCH' && count($updateFields) === 0 && $newClassId === null && $parents === null) {
         apiError(422, 'Aucun champ à modifier pour PATCH');
     }
 
@@ -607,6 +664,8 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
     // Les changements de dossier et d'inscription sont atomiques.
     try {
         $pdo->beginTransaction();
+
+        if ($parents !== null) saveStudentParents($pdo, $id, $parents);
 
         if ($newClassId !== null) {
             $classStmt = $pdo->prepare("SELECT id FROM classes WHERE id = :class_id AND status = 'ACTIVE' LIMIT 1");
@@ -697,6 +756,9 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
             $decoded = json_decode($student['profile_data'], true);
             $student['profile_data'] = is_array($decoded) ? $decoded : [];
         }
+        $responseParents = $pdo->prepare('SELECT p.id,p.first_name,p.last_name,p.ninu,p.phone,p.email,p.address,sp.relationship_type,sp.is_primary FROM student_parents sp INNER JOIN parents p ON p.id=sp.parent_id WHERE sp.student_id=:student_id ORDER BY sp.is_primary DESC,p.last_name,p.first_name');
+        $responseParents->execute([':student_id'=>$id]);
+        $student['parents'] = $responseParents->fetchAll();
 
         http_response_code(200);
         echo json_encode(['success' => true, 'student' => $student], JSON_UNESCAPED_UNICODE);
