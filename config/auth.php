@@ -205,6 +205,28 @@ function requireAuthenticatedUser(PDO $pdo): array
     ];
 }
 
+/** Check a permission without terminating the current page/API response. */
+function userHasPermission(PDO $pdo, array $user, string $permissionName): bool
+{
+    if (strcasecmp((string) ($user['role_name'] ?? ''), 'PDG') === 0) {
+        return true;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT 1
+         FROM role_permissions rp
+         INNER JOIN permissions p ON p.id = rp.permission_id
+         WHERE rp.role_id = :role_id AND p.name = :permission
+         LIMIT 1'
+    );
+    $stmt->execute([
+        ':role_id' => $user['role_id'],
+        ':permission' => $permissionName,
+    ]);
+
+    return (bool) $stmt->fetchColumn();
+}
+
 function requirePermission(PDO $pdo, string $permissionName): array
 {
     $user = requireAuthenticatedUser($pdo);
@@ -216,22 +238,7 @@ function requirePermission(PDO $pdo, string $permissionName): array
         return $user;
     }
 
-    $stmt = $pdo->prepare(
-        'SELECT 1
-         FROM role_permissions rp
-         INNER JOIN permissions p
-             ON p.id = rp.permission_id
-         WHERE rp.role_id = :role_id
-           AND p.name = :permission
-         LIMIT 1'
-    );
-
-    $stmt->execute([
-        ':role_id' => $user['role_id'],
-        ':permission' => $permissionName,
-    ]);
-
-    if (!$stmt->fetchColumn()) {
+    if (!userHasPermission($pdo, $user, $permissionName)) {
         apiError(403, 'Permission insuffisante');
     }
 

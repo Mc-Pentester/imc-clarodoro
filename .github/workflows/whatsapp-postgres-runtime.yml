@@ -72,7 +72,9 @@ jobs:
             database/migrations/20261023103000_whatsapp_consent_audit.sql \
             database/migrations/20261023110000_whatsapp_message_log.sql \
             database/migrations/20261025120000_whatsapp_manual_preparations.sql \
-            database/migrations/20261109170000_f02_l_pdg_payroll_whatsapp_permissions.sql
+            database/migrations/20261109170000_f02_l_pdg_payroll_whatsapp_permissions.sql \
+            database/migrations/20261117100000_whatsapp_parent_consent_workflow.sql \
+            database/migrations/20261117120000_whatsapp_consent_revocation_timestamp.sql
           do
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
@@ -177,13 +179,56 @@ jobs:
           END $$;
           SQL
 
+      - name: Verify parent consent workflow schema
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          DO $verify$
+          BEGIN
+            IF to_regclass('public.whatsapp_consent_email_challenges') IS NULL THEN RAISE EXCEPTION 'email challenge table missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_consents' AND column_name='consent_method') THEN RAISE EXCEPTION 'consent method column missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_consent_audit' AND column_name='actor_type') THEN RAISE EXCEPTION 'audit actor type missing'; END IF;
+            IF (SELECT is_nullable FROM information_schema.columns WHERE table_name='whatsapp_consent_audit' AND column_name='actor_user_id') <> 'YES' THEN RAISE EXCEPTION 'parent audit actor must support a non-user actor'; END IF;
+          END $verify$;
+          SQL
+
       - name: Verify WhatsApp endpoint PHP syntax
         run: |
+          php -l config/email.php
           php -l api/whatsapp/consents.php
+          php -l api/whatsapp/consent-invitations.php
+          php -l api/whatsapp/consent-public.php
+          php -l api/whatsapp/consent-parents-search.php
+          php -l private-pages/whatsapp-consent.php
           php -l api/whatsapp/send.php
           php -l api/whatsapp/manual-preparations.php
           php -l private-pages/whatsapp-send.php
 
+      - name: Verify SMTP encryption and credential policy
+        run: |
+          php -r '
+          require "config/email.php";
+          putenv("SMTP_HOST=127.0.0.1");
+          putenv("SMTP_FROM_EMAIL=clarodaro@example.test");
+          putenv("SMTP_SECURITY=none");
+          try {
+              imcSendSmtpEmail("parent@example.test", "test", "test");
+              fwrite(STDERR, "Unencrypted SMTP was unexpectedly accepted.\\n");
+              exit(1);
+          } catch (RuntimeException $e) {
+              if (!str_contains($e->getMessage(), "TLS ou SSL")) throw $e;
+          }
+          putenv("SMTP_SECURITY=tls");
+          putenv("SMTP_USERNAME=test-user");
+          putenv("SMTP_PASSWORD=");
+          try {
+              imcSendSmtpEmail("parent@example.test", "test", "test");
+              fwrite(STDERR, "Incomplete SMTP credentials were unexpectedly accepted.\\n");
+              exit(1);
+          } catch (RuntimeException $e) {
+              if (!str_contains($e->getMessage(), "fournis ensemble")) throw $e;
+          }
+          echo "PASS SMTP encryption and credential policy\\n";
+          '
       - name: Verify unauthenticated HTTP requests are rejected
         shell: bash
         run: |
@@ -221,6 +266,10 @@ jobs:
           }
 
           check_unauthenticated consent_read GET '/api/whatsapp/consents.php?parent_id=00000000-0000-4000-8000-000000000001' '' 401
+          check_unauthenticated consent_invitation POST '/api/whatsapp/consent-invitations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
+          check_unauthenticated consent_parent_search GET '/api/whatsapp/consent-parents-search.php?q=parent' '' 401
+          check_unauthenticated consent_invitation POST '/api/whatsapp/consent-invitations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
+          check_unauthenticated consent_parent_search GET '/api/whatsapp/consent-parents-search.php?q=parent' '' 401
           check_unauthenticated consent_write POST '/api/whatsapp/consents.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
           check_unauthenticated message_send POST '/api/whatsapp/send.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
           check_unauthenticated manual_preparation POST '/api/whatsapp/manual-preparations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001","purpose":"GENERAL","message":"test"}' 401
