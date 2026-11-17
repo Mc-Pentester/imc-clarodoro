@@ -1038,6 +1038,15 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
     ================================================== */
 
     document.addEventListener("DOMContentLoaded", async function () {
+        // Brancher le formulaire avant toute opération asynchrone (session,
+        // stockage sécurisé, listes). Un échec de préparation ne doit jamais
+        // laisser le bouton Enregistrer sans gestionnaire.
+        const studentForm = document.getElementById("studentForm");
+        if (studentForm && studentForm.dataset.submitBound !== "true") {
+            studentForm.addEventListener("submit", enregistrerEleve);
+            studentForm.dataset.submitBound = "true";
+        }
+
         const authenticated = await IMCAuth.verifySession();
         if (!authenticated) {
             window.location.replace("/index.html");
@@ -1049,15 +1058,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             afficherMessage("Le stockage sécurisé n'est pas disponible.");
             return;
         }
-
-            // Attacher immédiatement le gestionnaire du formulaire : une erreur de
-            // chargement des listes (classes/années/parents) ne doit jamais rendre
-            // le bouton Enregistrer inerte.
-            const studentForm = document.getElementById("studentForm");
-            if (studentForm && studentForm.dataset.submitBound !== "true") {
-                studentForm.addEventListener("submit", enregistrerEleve);
-                studentForm.dataset.submitBound = "true";
-            }
 
             try {
                 await chargerParentsDisponibles();

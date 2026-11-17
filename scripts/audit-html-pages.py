@@ -16,6 +16,7 @@ PAGES = {
     "resultats.html": "private-pages/resultats.php",
     "finances.html": "private-pages/finances.php",
     "personnel.html": "private-pages/personnel.php",
+    "parents.html": "private-pages/parents.php",
     "annees-scolaires.html": None,
     "Vacances.html": None,
     "badge.html": "private-pages/badge.php",
