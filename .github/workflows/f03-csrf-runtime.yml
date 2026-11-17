@@ -167,7 +167,7 @@ jobs:
           test -n "$CSRF2"
           test "$CSRF1" != "$CSRF2"
 
-          BODY='{"matricule":"F03-CSRF-001","last_name":"CSRF","first_name":"Proof","class_id":"00000000-0000-0000-0000-000000000306","school_year_id":"00000000-0000-0000-0000-000000000307"}'
+          BODY='{"matricule":"F03-CSRF-001","last_name":"CSRF","first_name":"Proof","class_id":"00000000-0000-0000-0000-000000000306","school_year_id":"00000000-0000-0000-0000-000000000307","parents":[{"first_name":"Marie","last_name":"Parent","ninu":"1234567890","phone":"+50937000001","email":"marie.parent@example.test","address":"Delmas","relationship_type":"MOTHER","is_primary":true}]}'
 
           STATUS="$(status_with_body /tmp/cookie1.txt __NONE__ "$BODY" /tmp/no-token.json)"
           test "$STATUS" = "403"
@@ -185,10 +185,31 @@ jobs:
           test "$STATUS" = "201"
           echo "Mutation with valid CSRF token -> 201: PASS"
 
+          # Vérifier la persistance relationnelle réelle, pas seulement profile_data.
+          PARENT_ROWS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc \
+            "SELECT COUNT(*) FROM parents WHERE ninu='1234567890' AND first_name='Marie' AND last_name='Parent'")"
+          LINK_ROWS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc \
+            "SELECT COUNT(*) FROM student_parents sp JOIN students s ON s.id=sp.student_id JOIN parents p ON p.id=sp.parent_id WHERE s.matricule='F03-CSRF-001' AND p.ninu='1234567890' AND sp.relationship_type='MOTHER' AND sp.is_primary=TRUE")"
+          test "$PARENT_ROWS" = "1"
+          test "$LINK_ROWS" = "1"
+          echo "Parent inserted in parents + linked in student_parents: PASS"
+
+          # Un deuxième élève avec le même NINU doit réutiliser la fiche parent.
+          BODY2='{"matricule":"F03-CSRF-002","last_name":"Second","first_name":"Student","class_id":"00000000-0000-0000-0000-000000000306","school_year_id":"00000000-0000-0000-0000-000000000307","parents":[{"first_name":"Marie","last_name":"Parent","ninu":"1234567890","phone":"+50937000001","email":"marie.parent@example.test","address":"Delmas","relationship_type":"MOTHER","is_primary":true}]}'
+          STATUS="$(status_with_body /tmp/cookie1.txt "$CSRF1" "$BODY2" /tmp/valid-second.json)"
+          test "$STATUS" = "201"
+          PARENT_ROWS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc "SELECT COUNT(*) FROM parents WHERE ninu='1234567890'")"
+          LINK_ROWS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc "SELECT COUNT(*) FROM student_parents sp JOIN parents p ON p.id=sp.parent_id WHERE p.ninu='1234567890'")"
+          test "$PARENT_ROWS" = "1"
+          test "$LINK_ROWS" = "2"
+          echo "Same parent NINU reused across two students: PASS"
+
           STATUS="$(curl -sS -o /tmp/get.json -w '%{http_code}' \
             -b /tmp/cookie1.txt \
             http://127.0.0.1:8080/api/students/index.php)"
           test "$STATUS" = "200"
+          grep -Fq '"ninu":"1234567890"' /tmp/get.json
+          echo "GET returns parent record and NINU: PASS"
           echo "GET without CSRF token -> 200: PASS"
 
           STATUS="$(curl -sS -o /tmp/logout-no-token.json -w '%{http_code}' \
