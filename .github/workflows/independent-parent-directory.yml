@@ -8,6 +8,7 @@ on:
       - 'private-pages/PDG.php'
       - 'private-pages/personnel.php'
       - 'secure-page.php'
+      - 'router.php'
       - 'parents.html'
       - 'database/migrations/*independent_parent_directory.sql'
       - 'tests/independent-parent-directory-static.sh'

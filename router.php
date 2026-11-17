@@ -21,6 +21,7 @@ $protected = [
     '/pdg.html' => 'PDG.html',
     '/finances.html' => 'finances.html',
     '/personnel.html' => 'personnel.html',
+    '/parents.html' => 'parents.html',
     '/badge.html' => 'badge.html',
     '/payroll-recovery.html' => 'payroll-recovery.html',
     '/expense-recovery.html' => 'expense-recovery.html',

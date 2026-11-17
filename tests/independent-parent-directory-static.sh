@@ -6,6 +6,7 @@ php -l private-pages/index.php
 php -l private-pages/PDG.php
 php -l private-pages/personnel.php
 grep -q "'parents.html'.*parents.php.*parents.read" secure-page.php
+grep -Fq "'/parents.html' => 'parents.html'" router.php
 grep -q "parents.read" database/migrations/20261117130000_independent_parent_directory.sql
 grep -q "student_parents" api/parents/index.php
 grep -q "parent_preserved" api/parents/index.php
