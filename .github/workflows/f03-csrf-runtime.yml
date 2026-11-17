@@ -112,7 +112,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nohup php -S 127.0.0.1:8080 -t . > /tmp/imc-php.log 2>&1 &
+          nohup php -d log_errors=1 -d error_log=/tmp/php-error.log -S 127.0.0.1:8080 -t . > /tmp/php-server.log 2>&1 &
           echo $! > /tmp/imc-php.pid
           for i in {1..20}; do
             if curl -sS -o /dev/null http://127.0.0.1:8080/api/auth/me.php; then
@@ -226,5 +226,52 @@ jobs:
             http://127.0.0.1:8080/api/auth/logout.php)"
           test "$STATUS" = "200"
           echo "Logout with valid CSRF token -> 200: PASS"
+
+          # Prove that a database failure during enrollment is logged safely and
+          # that the student + parent writes are rolled back as one transaction.
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE OR REPLACE FUNCTION f03_force_student_enrollment_failure()
+          RETURNS trigger LANGUAGE plpgsql AS $function$
+          DECLARE
+            student_matricule TEXT;
+          BEGIN
+            SELECT matricule INTO student_matricule
+            FROM students WHERE id = NEW.student_id;
+            IF student_matricule = 'F03-FAIL-500' THEN
+              RAISE EXCEPTION 'runtime proof failure' USING ERRCODE = 'P0001';
+            END IF;
+            RETURN NEW;
+          END;
+          $function$;
+          CREATE TRIGGER f03_force_student_enrollment_failure
+          BEFORE INSERT ON enrollments
+          FOR EACH ROW EXECUTE FUNCTION f03_force_student_enrollment_failure();
+          SQL
+
+          FAIL_BODY='{"matricule":"F03-FAIL-500","last_name":"Rollback","first_name":"Proof","class_id":"00000000-0000-0000-0000-000000000306","school_year_id":"00000000-0000-0000-0000-000000000307","parents":[{"first_name":"Rollback","last_name":"Parent","ninu":"1098765432","relationship_type":"MOTHER","is_primary":true}]}'
+          STATUS="$(status_with_body /tmp/cookie1.txt "$CSRF1" "$FAIL_BODY" /tmp/failure-500.json)"
+          test "$STATUS" = "500"
+          grep -Fq '"error":"Erreur interne du serveur"' /tmp/failure-500.json
+          if grep -Fq 'runtime proof failure' /tmp/failure-500.json; then
+            echo "Internal database detail leaked to HTTP response" >&2
+            exit 1
+          fi
+          # PostgreSQL formats the exception message with driver context, so
+          # assert the stable SQLSTATE prefix and the trigger's message rather
+          # than matching one exact rendering of the complete log line.
+          if ! grep -Eq 'Student creation failed \[SQLSTATE P0001\]: .*runtime proof failure' /tmp/php-error.log; then
+            echo "Expected PHP diagnostic was not found."
+            echo "--- PHP error log ---"
+            if test -f /tmp/php-error.log; then cat /tmp/php-error.log; else echo "MISSING: /tmp/php-error.log"; fi
+            echo "--- PHP server log ---"
+            cat /tmp/php-server.log || true
+            exit 1
+          fi
+          REMAINING_STUDENTS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc "SELECT COUNT(*) FROM students WHERE matricule='F03-FAIL-500'")"
+          REMAINING_PARENTS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc "SELECT COUNT(*) FROM parents WHERE ninu='1098765432'")"
+          test "$REMAINING_STUDENTS" = "0"
+          test "$REMAINING_PARENTS" = "0"
+          echo "Failed enrollment logs SQLSTATE, hides details, and rolls back student + parent: PASS"
 
           echo "F-03 CSRF RUNTIME PROOF: PASS"

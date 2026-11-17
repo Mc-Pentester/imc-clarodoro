@@ -6,6 +6,34 @@ require_once __DIR__ . '/../../config/auth.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+/**
+ * Journalise les erreurs SQL de création sans exposer les données personnelles
+ * éventuellement incluses dans le DETAIL PostgreSQL (NINU, téléphone, etc.).
+ */
+function logStudentCreationDatabaseFailure(PDOException $exception): void
+{
+    $sqlState = 'unknown';
+    if (isset($exception->errorInfo) && is_array($exception->errorInfo) && isset($exception->errorInfo[0])) {
+        $sqlState = (string) $exception->errorInfo[0];
+    } elseif ($exception->getCode() !== '') {
+        $sqlState = (string) $exception->getCode();
+    }
+
+    $message = $exception->getMessage();
+    $message = preg_replace(
+        '/(DETAIL:\\s*Key\\s*\\([^)]*\\)\\s*=\\s*)\\([^)]*\\)/i',
+        '$1([redacted])',
+        $message
+    ) ?? 'Database error';
+    $message = preg_replace(
+        "/(invalid input syntax for type [^:]+:\\s*)'[^']*'/i",
+        '$1[redacted]',
+        $message
+    ) ?? 'Database error';
+
+    error_log('Student creation failed [SQLSTATE ' . $sqlState . ']: ' . substr($message, 0, 1500));
+}
+
 function normalizeStudentParents($raw): array
 {
     if (!is_array($raw) || !array_is_list($raw) || count($raw) > 100) apiError(422, 'parents doit contenir au maximum 100 responsables');
@@ -412,7 +440,16 @@ elseif ($method === 'POST') {
             'student' => $student,
         ], JSON_UNESCAPED_UNICODE);
     } catch (PDOException $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        // Journaliser avant le rollback : une erreur pendant celui-ci ne doit
+        // jamais empêcher la trace de l'échec initial de création.
+        logStudentCreationDatabaseFailure($e);
+        if ($pdo->inTransaction()) {
+            try {
+                $pdo->rollBack();
+            } catch (Throwable $rollbackError) {
+                error_log('Student creation rollback failed: ' . substr($rollbackError->getMessage(), 0, 500));
+            }
+        }
         if (str_contains($e->getMessage(), 'students_matricule_unique')) {
             apiError(409, 'Matricule déjà utilisé');
         }
