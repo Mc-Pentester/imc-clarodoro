@@ -71,12 +71,15 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function message(text,isError){const el=$('message');el.textContent=text;el.className='message '+(isError?'error':'success');el.style.display='block';}
 async function request(url,options){const response=await fetch(url,Object.assign({credentials:'same-origin',headers:{'Accept':'application/json'}},options||{}));const data=await response.json();if(!response.ok||!data.success)throw new Error(data.error||data.message||'Opération impossible');return data;}
 function reset(){ $('parentForm').reset();$('parentId').value='';$('formTitle').textContent='Créer une fiche parent';}
+function relationshipLabel(type){
+ switch(type){case 'FATHER':return 'Père';case 'MOTHER':return 'Mère';case 'GUARDIAN':return 'Tuteur';case 'OTHER':return 'Autre';default:return 'Responsable';}
+}
 function render(){
  const term=$('search').value.trim().toLocaleLowerCase('fr');
  const rows=parents.filter(p=>[p.first_name,p.last_name,p.phone,p.email,p.ninu].join(' ').toLocaleLowerCase('fr').includes(term));
  $('parentsRows').innerHTML=rows.length?rows.map(p=>{
  const children=(p.children||[]).length
-  ? (p.children||[]).map(c=>'<div class="child">'+esc(c.first_name+' '+c.last_name)+' <span class="muted">('+esc(({FATHER:'Père',MOTHER:'Mère',GUARDIAN:'Tuteur',OTHER:'Autre'}[c.relationship_type]||'Responsable'))+(c.is_primary?', principal':'')+')</span><button class="btn danger" type="button" data-unlink="'+esc(p.id)+'" data-student="'+esc(c.student_id)+'">Dissocier</button></div>').join('')
+  ? (p.children||[]).map(c=>'<div class="child">'+esc(c.first_name+' '+c.last_name)+' <span class="muted">('+esc(relationshipLabel(c.relationship_type))+(c.is_primary?', principal':'')+')</span><button class="btn danger" type="button" data-unlink="'+esc(p.id)+'" data-student="'+esc(c.student_id)+'">Dissocier</button></div>').join('')
   : '<span class="muted">Aucun élève associé</span>';
  return '<tr><td><strong>'+esc(p.first_name+' '+p.last_name)+'</strong><br><span class="muted">NINU : '+esc(p.ninu||'—')+'</span></td><td>'+esc(p.phone||'—')+'<br>'+esc(p.email||'—')+'<br>'+esc(p.address||'')+'</td><td>'+children+'</td><td><div class="actions"><button class="btn secondary" type="button" data-edit="'+esc(p.id)+'">Modifier</button></div></td></tr>';
  }).join(''):'<tr><td colspan="4" class="empty">Aucune fiche parent trouvée.</td></tr>';
