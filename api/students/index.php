@@ -440,14 +440,22 @@ elseif ($method === 'POST') {
             'student' => $student,
         ], JSON_UNESCAPED_UNICODE);
     } catch (PDOException $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        // Journaliser avant le rollback : une erreur pendant celui-ci ne doit
+        // jamais empêcher la trace de l'échec initial de création.
+        logStudentCreationDatabaseFailure($e);
+        if ($pdo->inTransaction()) {
+            try {
+                $pdo->rollBack();
+            } catch (Throwable $rollbackError) {
+                error_log('Student creation rollback failed: ' . substr($rollbackError->getMessage(), 0, 500));
+            }
+        }
         if (str_contains($e->getMessage(), 'students_matricule_unique')) {
             apiError(409, 'Matricule déjà utilisé');
         }
         if (str_contains($e->getMessage(), 'enrollments_one_active_per_student_year')) {
             apiError(409, 'Cet élève possède déjà une inscription active pour cette année scolaire');
         }
-        logStudentCreationDatabaseFailure($e);
         apiError(500, 'Erreur interne du serveur');
     }
 }
