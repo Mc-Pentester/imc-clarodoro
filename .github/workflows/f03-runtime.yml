@@ -61,6 +61,13 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -f database/migrations/20261006190000_add_login_rate_limit.sql
 
+          # Le schéma historique ne contient pas parents.ninu.
+          # Cette migration additive doit être appliquée avant l'API étudiants,
+          # qui retourne le NINU des responsables associés.
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \
+            -v ON_ERROR_STOP=1 \
+            -f database/migrations/20261116193000_student_parent_registration.sql
+
       - name: Seed isolated F-03 runtime dataset
         shell: bash
         run: |
@@ -118,6 +125,12 @@ jobs:
           INSERT INTO enrollments (id, student_id, class_id, school_year_id) VALUES
             ('00000000-0000-0000-0000-000000000901', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000301', '00000000-0000-0000-0000-000000000501'),
             ('00000000-0000-0000-0000-000000000902', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000302', '00000000-0000-0000-0000-000000000501');
+
+          INSERT INTO parents (id, last_name, first_name, ninu) VALUES
+            ('00000000-0000-0000-0000-000000000951', 'Parent', 'A', '1234567890');
+
+          INSERT INTO student_parents (student_id, parent_id, relationship_type, is_primary) VALUES
+            ('00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000951', 'FATHER', TRUE);
           SQL
 
       - name: Start PHP runtime
@@ -185,6 +198,7 @@ jobs:
           check_contains 'Teacher A own student' "$A" '"matricule":"ST-A"'
           check_not_contains 'Teacher A cross-class student' "$A" '"matricule":"ST-B"'
           check_contains 'Teacher A HTTP status' "$A" 'HTTP_STATUS:200'
+          check_contains 'Teacher A parent NINU preserved' "$A" '"ninu":"1234567890"'
 
           echo '=== Teacher B: own class only ==='
           login teacher_b TeacherPass123! /tmp/b.cookies
