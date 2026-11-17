@@ -50,6 +50,19 @@ function financeInvoice(PDO $pdo, string $invoiceId, array $user, bool $forUpdat
     $paid = (float)$paidStmt->fetchColumn();
     $row['paid_amount'] = $paid;
     $row['balance'] = max(0, (float)$row['amount'] - (float)$row['reduction'] - $paid);
+    $installments = $pdo->prepare(
+        'SELECT ii.id, ii.installment_number, ii.label, ii.due_amount, ii.reduction_amount,
+                COALESCE(SUM(p.amount), 0) AS paid_amount,
+                GREATEST(0, ii.due_amount - ii.reduction_amount - COALESCE(SUM(p.amount), 0)) AS balance
+         FROM invoice_installments ii LEFT JOIN payments p ON p.installment_id = ii.id
+         WHERE ii.invoice_id = :invoice_id GROUP BY ii.id ORDER BY ii.installment_number'
+    );
+    $installments->execute([':invoice_id' => $invoiceId]);
+    $row['installments'] = $installments->fetchAll();
+    foreach ($row['installments'] as &$part) {
+        foreach (['due_amount','reduction_amount','paid_amount','balance'] as $field) $part[$field] = (float)$part[$field];
+    }
+    unset($part);
     return $row;
 }
 
@@ -115,13 +128,26 @@ if ($method === 'GET') {
         $invoice['paid_amount'] = (float)$invoice['paid_amount'];
         $invoice['balance'] = (float)$invoice['balance'];
         $paymentStmt = $pdo->prepare(
-            'SELECT id, amount, payment_date, method, reference
+            'SELECT id, invoice_id, installment_id, amount, payment_date, method, reference
              FROM payments
              WHERE invoice_id = :invoice_id
              ORDER BY payment_date ASC, id ASC'
         );
         $paymentStmt->execute([':invoice_id' => $invoice['id']]);
         $invoice['payments'] = $paymentStmt->fetchAll();
+        $installmentStmt = $pdo->prepare(
+            'SELECT ii.id, ii.installment_number, ii.label, ii.due_amount, ii.reduction_amount,
+                    COALESCE(SUM(p.amount), 0) AS paid_amount,
+                    GREATEST(0, ii.due_amount - ii.reduction_amount - COALESCE(SUM(p.amount), 0)) AS balance
+             FROM invoice_installments ii LEFT JOIN payments p ON p.installment_id = ii.id
+             WHERE ii.invoice_id = :invoice_id GROUP BY ii.id ORDER BY ii.installment_number'
+        );
+        $installmentStmt->execute([':invoice_id' => $invoice['id']]);
+        $invoice['installments'] = $installmentStmt->fetchAll();
+        foreach ($invoice['installments'] as &$part) {
+            foreach (['due_amount','reduction_amount','paid_amount','balance'] as $field) $part[$field] = (float)$part[$field];
+        }
+        unset($part);
         $reductionAuditStmt = $pdo->prepare(
             'SELECT a.id, a.old_reduction, a.new_reduction, a.old_reduction_type, a.new_reduction_type,
                     a.old_reduction_percent, a.new_reduction_percent, a.old_reason, a.new_reason,
@@ -193,6 +219,10 @@ if ($method === 'POST') {
                 apiError(422, "$field invalide");
             }
         }
+        $installmentTotal = round((float)($data['installment1_amount'] ?? 0) + (float)($data['installment2_amount'] ?? 0) + (float)($data['installment3_amount'] ?? 0), 2);
+        if ($installmentTotal > 0 && abs($installmentTotal - (float)$amount) > 0.01) {
+            apiError(422, 'La somme des trois versements doit être égale au tarif total.');
+        }
         $stmt = $pdo->prepare(
             'INSERT INTO finance_tariffs
                 (school_year_id, class_id, amount,
@@ -235,28 +265,49 @@ if ($method === 'POST') {
         requireCsrfToken();
 
         $studentId = financeUuid((string)($data['student_id'] ?? ''), 'student_id');
-        $amount = $data['amount'] ?? null;
         $reduction = $data['reduction'] ?? 0;
         $reductionType = strtoupper((string)($data['reduction_type'] ?? 'FIXED'));
         $reductionPercent = $data['reduction_percent'] ?? 0;
         $schoolYearId = isset($data['school_year_id']) ? financeUuid((string)$data['school_year_id'], 'school_year_id') : null;
 
-        if (!is_numeric($amount) || (float)$amount <= 0) apiError(422, 'amount doit être supérieur à 0');
         if (!in_array($reductionType, ['FIXED', 'PERCENT'], true)) apiError(422, 'reduction_type invalide');
         if (!is_numeric($reductionPercent) || (float)$reductionPercent < 0 || (float)$reductionPercent > 100) apiError(422, 'reduction_percent invalide');
+        if ($schoolYearId === null) apiError(422, 'Année scolaire requise');
+        $scope = financeScopeSql($user, 's.id');
+        $check = $pdo->prepare(
+            "SELECT s.id, e.class_id FROM students s
+             INNER JOIN enrollments e ON e.student_id=s.id AND e.status='ACTIVE'
+             WHERE s.id=:student_id AND e.school_year_id=:school_year_id" . $scope[0] . " LIMIT 1"
+        );
+        $check->execute([':student_id'=>$studentId, ':school_year_id'=>$schoolYearId] + $scope[1]);
+        $enrollment = $check->fetch();
+        if (!$enrollment) apiError(404, 'Inscription active introuvable pour cet élève et cette année.');
+        $tariffStmt = $pdo->prepare(
+            'SELECT amount, installment1_amount, installment1_label, installment2_amount, installment2_label,
+                    installment3_amount, installment3_label
+             FROM finance_tariffs WHERE school_year_id=:year AND class_id=:class LIMIT 1'
+        );
+        $tariffStmt->execute([':year'=>$schoolYearId, ':class'=>$enrollment['class_id']]);
+        $tariff = $tariffStmt->fetch();
+        if (!$tariff || (float)$tariff['amount'] <= 0) apiError(422, 'Aucun tarif configuré pour la classe de cet élève.');
+        $amount = round((float)$tariff['amount'], 2);
+        $parts = [];
+        foreach ([1,2,3] as $n) {
+            $v = round((float)$tariff['installment'.$n.'_amount'], 2);
+            if ($v > 0) $parts[] = ['number'=>$n, 'label'=>$tariff['installment'.$n.'_label'], 'amount'=>$v];
+        }
+        if (!$parts) $parts[] = ['number'=>1, 'label'=>'Versement unique', 'amount'=>$amount];
+        if (abs(round(array_sum(array_column($parts,'amount')),2)-$amount)>0.01) {
+            apiError(422, 'La somme des versements configurés doit être égale au tarif total de la classe.');
+        }
         if ($reductionType === 'PERCENT') {
-            $reduction = round((float)$amount * (float)$reductionPercent / 100, 2);
+            $reduction = round($amount * (float)$reductionPercent / 100, 2);
         } else {
             $reductionPercent = 0;
         }
-        if (!is_numeric($reduction) || (float)$reduction < 0 || (float)$reduction > (float)$amount) apiError(422, 'reduction invalide');
-
-        $scope = financeScopeSql($user, 's.id');
-        $check = $pdo->prepare(
-            'SELECT s.id FROM students s WHERE s.id = :student_id' . $scope[0] . ' LIMIT 1'
-        );
-        $check->execute([':student_id' => $studentId] + $scope[1]);
-        if (!$check->fetch()) apiError(404, 'Élève hors périmètre');
+        if (!is_numeric($reduction) || (float)$reduction < 0 || (float)$reduction > $amount) {
+            apiError(422, 'reduction invalide');
+        }
 
         $stmt = $pdo->prepare(
             'INSERT INTO invoices
@@ -278,6 +329,21 @@ if ($method === 'POST') {
             ':description' => isset($data['description']) && is_string($data['description']) ? trim($data['description']) : null,
         ]);
         $createdInvoiceId = (string)$stmt->fetchColumn();
+        $allocatedReduction = 0.0;
+        foreach ($parts as $index => $part) {
+            $share = $index === count($parts)-1
+                ? round((float)$reduction - $allocatedReduction, 2)
+                : round((float)$reduction * $part['amount'] / $amount, 2);
+            $allocatedReduction = round($allocatedReduction + $share, 2);
+            $insertPart = $pdo->prepare(
+                'INSERT INTO invoice_installments(invoice_id, installment_number, label, due_amount, reduction_amount)
+                 VALUES(:invoice_id, :number, :label, :due, :reduction)'
+            );
+            $insertPart->execute([
+                ':invoice_id'=>$createdInvoiceId, ':number'=>$part['number'], ':label'=>$part['label'],
+                ':due'=>number_format($part['amount'],2,'.',''), ':reduction'=>number_format($share,2,'.','')
+            ]);
+        }
         if ((float)$reduction > 0) {
             $audit = $pdo->prepare(
                 'INSERT INTO invoice_reduction_audit
@@ -305,13 +371,22 @@ if ($method === 'POST') {
         requireCsrfToken();
 
         $invoiceId = financeUuid((string)($data['invoice_id'] ?? ''), 'invoice_id');
+        $installmentId = financeUuid((string)($data['installment_id'] ?? ''), 'installment_id');
         $amount = $data['amount'] ?? null;
         if (!is_numeric($amount) || (float)$amount <= 0) apiError(422, 'amount doit être supérieur à 0');
 
         $pdo->beginTransaction();
         try {
             $invoice = financeInvoice($pdo, $invoiceId, $user, true);
-            $balance = (float)$invoice['balance'];
+            $partStmt = $pdo->prepare(
+                'SELECT ii.id, ii.due_amount, ii.reduction_amount, COALESCE(SUM(p.amount),0) AS paid_amount
+                 FROM invoice_installments ii LEFT JOIN payments p ON p.installment_id=ii.id
+                 WHERE ii.id=:part AND ii.invoice_id=:invoice GROUP BY ii.id'
+            );
+            $partStmt->execute([':part'=>$installmentId, ':invoice'=>$invoiceId]);
+            $part = $partStmt->fetch();
+            if (!$part) { $pdo->rollBack(); apiError(404, 'Versement scolaire introuvable.'); }
+            $balance = max(0, (float)$part['due_amount']-(float)$part['reduction_amount']-(float)$part['paid_amount']);
             $paymentAmount = (float)$amount;
             if ($paymentAmount > $balance + 0.00001) {
                 $pdo->rollBack();
@@ -320,13 +395,14 @@ if ($method === 'POST') {
 
             $stmt = $pdo->prepare(
                 'INSERT INTO payments
-                    (invoice_id, amount, payment_date, method, reference)
+                    (invoice_id, installment_id, amount, payment_date, method, reference)
                  VALUES
-                    (:invoice_id, :amount, :payment_date, :method, :reference)
+                    (:invoice_id, :installment_id, :amount, :payment_date, :method, :reference)
                  RETURNING id'
             );
             $stmt->execute([
                 ':invoice_id' => $invoiceId,
+                ':installment_id' => $installmentId,
                 ':amount' => number_format($paymentAmount, 2, '.', ''),
                 ':payment_date' => isset($data['payment_date']) && is_string($data['payment_date']) ? $data['payment_date'] : date('Y-m-d'),
                 ':method' => isset($data['method']) && is_string($data['method']) ? trim($data['method']) : '',
@@ -407,6 +483,26 @@ if ($method === 'PUT' || $method === 'PATCH') {
             if ($newReduction + (float)$current['paid_amount'] > (float)$current['amount'] + 0.00001) {
                 $pdo->rollBack();
                 apiError(422, 'La réduction ne peut pas annuler un montant déjà encaissé');
+            }
+            $partsStmt = $pdo->prepare(
+                'SELECT ii.id, ii.due_amount, COALESCE(SUM(p.amount),0) AS paid_amount
+                 FROM invoice_installments ii LEFT JOIN payments p ON p.installment_id=ii.id
+                 WHERE ii.invoice_id=:invoice_id GROUP BY ii.id ORDER BY ii.installment_number'
+            );
+            $partsStmt->execute([':invoice_id'=>$invoiceId]);
+            $partsToUpdate = $partsStmt->fetchAll();
+            $allocated = 0.0;
+            foreach ($partsToUpdate as $index=>$part) {
+                $share = $index===count($partsToUpdate)-1
+                    ? round($newReduction-$allocated,2)
+                    : round($newReduction*(float)$part['due_amount']/(float)$current['amount'],2);
+                $allocated = round($allocated+$share,2);
+                if ((float)$part['paid_amount'] > (float)$part['due_amount']-$share+0.00001) {
+                    $pdo->rollBack();
+                    apiError(422, 'La réduction ne peut pas diminuer un versement sous les sommes déjà encaissées.');
+                }
+                $updPart=$pdo->prepare('UPDATE invoice_installments SET reduction_amount=:reduction WHERE id=:id');
+                $updPart->execute([':reduction'=>number_format($share,2,'.',''), ':id'=>$part['id']]);
             }
             $newReason = array_key_exists('reduction_reason', $data)
                 ? (is_string($data['reduction_reason']) ? trim($data['reduction_reason']) : null)

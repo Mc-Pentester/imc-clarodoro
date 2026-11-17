@@ -2,7 +2,7 @@ name: F-02-F finance runtime proof
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/finance-installment-level-payments]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -122,9 +122,11 @@ jobs:
           printf '%s' "$INVOICE" | grep -q '"balance":2800'
 
           INVOICE_ID="$(printf '%s' "$INVOICE" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["invoice"]["id"]??"";')"
+          PART_ID="$(printf '%s' "$INVOICE" | php -r '$d=json_decode(stream_get_contents(STDIN),true); echo $d["invoice"]["installments"][0]["id"]??"";')"
           test -n "$INVOICE_ID"
+          test -n "$PART_ID"
 
-          PAYMENT="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{\"resource\":\"payment\",\"invoice_id\":\"$INVOICE_ID\",\"amount\":1000,\"payment_date\":\"2026-10-08\",\"method\":\"Espèces\"}" "$BASE/api/finance/index.php")"
+          PAYMENT="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{\"resource\":\"payment\",\"invoice_id\":\"$INVOICE_ID\",\"installment_id\":\"$PART_ID\",\"amount\":1000,\"payment_date\":\"2026-10-08\",\"method\":\"Espèces\"}" "$BASE/api/finance/index.php")"
           printf '%s' "$PAYMENT" | grep -q '"balance":1800'
 
           DB_PAID="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COALESCE(SUM(amount),0) FROM payments WHERE invoice_id='$INVOICE_ID';")"
@@ -135,26 +137,26 @@ jobs:
           set -e
           test "$DISCOUNT_TOO_HIGH" = "422"
 
-          DISCOUNT_OK="$(curl -fsS -X PATCH -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"reduction_type":"PERCENT","reduction_percent":60,"reduction_reason":"Bourse partielle"}' "$BASE/api/finance/index.php?invoice_id=$INVOICE_ID")"
+          DISCOUNT_OK="$(curl -fsS -X PATCH -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"reduction_type":"PERCENT","reduction_percent":30,"reduction_reason":"Bourse partielle"}' "$BASE/api/finance/index.php?invoice_id=$INVOICE_ID")"
           printf '%s' "$DISCOUNT_OK" | grep -q '"reduction_type":"PERCENT"'
-          printf '%s' "$DISCOUNT_OK" | grep -q '"reduction_percent":"60.00"'
-          printf '%s' "$DISCOUNT_OK" | grep -q '"balance":200'
+          printf '%s' "$DISCOUNT_OK" | grep -q '"reduction_percent":"30.00"'
+          printf '%s' "$DISCOUNT_OK" | grep -q '"balance":1100'
 
-          PERCENT_INVOICE="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"invoice","student_id":"00000000-0000-0000-0000-000000005071","school_year_id":"00000000-0000-0000-0000-000000005051","amount":1000,"reduction_type":"PERCENT","reduction_percent":10,"reduction_reason":"Réduction 10%"}' "$BASE/api/finance/index.php")"
-          printf '%s' "$PERCENT_INVOICE" | grep -q '"reduction":"100.00"'
-          printf '%s' "$PERCENT_INVOICE" | grep -q '"balance":900'
+          PERCENT_INVOICE="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"invoice","student_id":"00000000-0000-0000-0000-000000005071","school_year_id":"00000000-0000-0000-0000-000000005051","reduction_type":"PERCENT","reduction_percent":10,"reduction_reason":"Réduction 10%"}' "$BASE/api/finance/index.php")"
+          printf '%s' "$PERCENT_INVOICE" | grep -q '"reduction":"300.00"'
+          printf '%s' "$PERCENT_INVOICE" | grep -q '"balance":2700'
 
           AUDIT_COUNT="$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d imc_clarodoro -Atc "SELECT COUNT(*) FROM invoice_reduction_audit WHERE invoice_id='$INVOICE_ID';")"
           test "$AUDIT_COUNT" = "2"
 
           set +e
-          OVER="$(curl -sS -o /tmp/f02f-over.json -w '%{http_code}' -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{\"resource\":\"payment\",\"invoice_id\":\"$INVOICE_ID\",\"amount\":1900,\"method\":\"Espèces\"}" "$BASE/api/finance/index.php")"
+          OVER="$(curl -sS -o /tmp/f02f-over.json -w '%{http_code}' -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d "{\"resource\":\"payment\",\"invoice_id\":\"$INVOICE_ID\",\"installment_id\":\"$PART_ID\",\"amount\":1900,\"method\":\"Espèces\"}" "$BASE/api/finance/index.php")"
           set -e
           echo "F02F OVERPAY STATUS: [$OVER]"
           test "$OVER" = "409"
 
           GET="$(curl -fsS -b "$COOKIE" "$BASE/api/finance/index.php?student_id=00000000-0000-0000-0000-000000005071&school_year_id=00000000-0000-0000-0000-000000005051")"
-          printf '%s' "$GET" | grep -q '"balance":200'
+          printf '%s' "$GET" | grep -q '"balance":1100'
           printf '%s' "$GET" | grep -q '"amount":"3000.00"'
           printf '%s' "$GET" | grep -q '"students":'
           printf '%s' "$GET" | grep -q '"payments":'
