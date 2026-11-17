@@ -1532,7 +1532,9 @@ function chargerFicheEleve(){
 
 async function enregistrerSituation(){
   if(!eleveSelectionne) return;
-  if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
+  const factureExistante=factureEleve(eleveSelectionne.id);
+  const permissionRequise=factureExistante?"finances.update":"finances.create";
+  if(!IMCAuth.requirePermission(permissionRequise)) return afficherMessage("Permission refusée.","error");
   const reductionType=document.getElementById("reductionType").value;
   const reductionValue=Number(document.getElementById("reduction").value||0);
   const reductionPayload=reductionType==="PERCENT"
