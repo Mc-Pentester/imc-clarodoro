@@ -649,11 +649,11 @@ Tableau financier de l'élève
 
 <th>Montant à payer</th>
 
-<th>1er Versement</th>
+<th>1er versement payé / dû</th>
 
-<th>2ème Versement</th>
+<th>2e versement payé / dû</th>
 
-<th>3ème Versement</th>
+<th>3e versement payé / dû</th>
 
 <th>Total</th>
 
@@ -704,7 +704,9 @@ Le <strong>Total versé</strong> et le <strong>Reste à payer</strong> sont reca
 id="tarifNormal"
 type="number"
 min="0"
-step="0.01">
+step="0.01"
+readonly
+aria-readonly="true">
 
 </div>
 
@@ -1193,6 +1195,11 @@ Ajouter un versement
 
 
 <label>
+Versement scolaire à régler
+</label>
+<select id="versementInstallment"></select>
+
+<label style="margin-top:10px">
 Date
 </label>
 
@@ -1314,7 +1321,7 @@ async function apiJson(url, options={}){
   let payload=null;
   try{ payload=await response.json(); }catch(_){}
   if(!response.ok || !payload || payload.success!==true){
-    throw new Error((payload&&payload.message)||("Erreur HTTP "+response.status));
+    throw new Error((payload&&(payload.message||payload.error))||("Erreur HTTP "+response.status));
   }
   return payload;
 }
@@ -1494,8 +1501,10 @@ function afficherTableauResumeEleve(e,f){
   tb.innerHTML="";
   const x=obtenirLigneFinance(e);
   const payments=(f?.payments||[]).sort((a,b)=>String(a.payment_date||"").localeCompare(String(b.payment_date||"")));
-  const byNumber=[1,2,3].map(n=>payments[n-1]||null);
-  const cells=byNumber.map(p=>`<td>${p?formatMontant(p.amount):"—"}</td>`).join("");
+  const tariff=tarifEleve(e);
+  const parts=f?.installments||(tariff?[1,2,3].map(n=>({installment_number:n,due_amount:Number(tariff["installment"+n+"_amount"]||0),reduction_amount:0,paid_amount:0})).filter(part=>part.due_amount>0):[]);
+  const byNumber=[1,2,3].map(n=>parts.find(part=>Number(part.installment_number)===n)||null);
+  const cells=byNumber.map(part=>`<td>${part?formatMontant(part.paid_amount)+" / "+formatMontant(Number(part.due_amount)-Number(part.reduction_amount)):"—"}</td>`).join("");
   const last=payments[payments.length-1];
   const tr=document.createElement("tr");
   tr.innerHTML=`<td>1</td><td>${escapeHtml(e.last_name+" "+e.first_name)}</td><td>${escapeHtml(e.class_name||"")}</td><td class="money">${formatMontant(x.ap)}</td>${cells}<td id="totalAutoEleve" class="money total-auto">${formatMontant(x.tv)}</td><td id="balanceAutoEleve" class="money balance-auto">${formatMontant(x.r)}</td><td>${last?escapeHtml(last.payment_date||"—"):"—"}</td><td>${last?escapeHtml(last.method||"—"):"—"}</td>`;
@@ -1524,8 +1533,9 @@ function chargerFicheEleve(){
   const payments=f?.payments||[];
   if(!payments.length){ tb.innerHTML="<tr><td colspan='7'>Aucun versement enregistré.</td></tr>"; return; }
   payments.forEach((p,i)=>{
+    const part=(f?.installments||[]).find(x=>x.id===p.installment_id);
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${i+1}</td><td>📅 ${escapeHtml(p.payment_date||"—")}</td><td>${i+1}e</td><td class="money">${formatMontant(p.amount)}</td><td>${escapeHtml(p.method||"")}</td><td>${escapeHtml(p.reference||"")}</td><td class="no-print"><button class="action btn-delete" onclick="supprimerVersement('${escapeHtml(p.id)}')">Supprimer</button></td>`;
+    tr.innerHTML=`<td>${i+1}</td><td>📅 ${escapeHtml(p.payment_date||"—")}</td><td>${part?Number(part.installment_number)+"e":"Historique"}</td><td class="money">${formatMontant(p.amount)}</td><td>${escapeHtml(p.method||"")}</td><td>${escapeHtml(p.reference||"")}</td><td class="no-print"><button class="action btn-delete" onclick="supprimerVersement('${escapeHtml(p.id)}')">Supprimer</button></td>`;
     tb.appendChild(tr);
   });
 }
@@ -1597,8 +1607,17 @@ function ouvrirVersement(){
   if(!eleveSelectionne) return afficherMessage("Sélectionnez un élève.","error");
   const f=factureEleve(eleveSelectionne.id);
   if(!f) return afficherMessage("Enregistrez d'abord la situation financière.","error");
+  const select=document.getElementById("versementInstallment");
+  select.innerHTML="";
+  (f.installments||[]).filter(part=>Number(part.balance)>0.00001).forEach(part=>{
+    const option=document.createElement("option"); option.value=part.id;
+    option.textContent=Number(part.installment_number)+"e versement — reste "+formatMontant(part.balance);
+    select.appendChild(option);
+  });
+  if(!select.options.length) return afficherMessage("Tous les versements sont déjà réglés.","error");
+  document.getElementById("versementNumero").value=(f.installments.find(part=>part.id===select.value)?.installment_number)||"";
+  select.onchange=()=>{document.getElementById("versementNumero").value=(f.installments.find(part=>part.id===select.value)?.installment_number)||"";};
   document.getElementById("versementDate").value=new Date().toISOString().slice(0,10);
-  document.getElementById("versementNumero").value=(f.payments||[]).length+1;
   document.getElementById("versementMontant").value="";
   document.getElementById("versementObservation").value="";
   document.getElementById("modalVersement").style.display="flex";
@@ -1611,7 +1630,9 @@ async function enregistrerVersement(){
   const amount=Number(document.getElementById("versementMontant").value||0);
   if(!f||amount<=0) return afficherMessage("Versement invalide.","error");
   try{
-    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,amount,payment_date:document.getElementById("versementDate").value,method:document.getElementById("versementMode").value,reference:document.getElementById("versementObservation").value.trim()})});
+    const installmentId=document.getElementById("versementInstallment").value;
+    if(!installmentId) return afficherMessage("Sélectionnez le versement scolaire à régler.","error");
+    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,installment_id:installmentId,amount,payment_date:document.getElementById("versementDate").value,method:document.getElementById("versementMode").value,reference:document.getElementById("versementObservation").value.trim()})});
     fermerModals(); await chargerFinance(); afficherMessage("Versement enregistré.");
   }catch(e){ afficherMessage(e.message,"error"); }
 }
@@ -1622,8 +1643,10 @@ async function enregistrerVersementDirect(numero,valeur){
   const amount=Number(valeur||0);
   if(!f) return afficherMessage("Enregistrez d'abord la situation financière.","error");
   if(amount<=0) return afficherMessage("Le montant doit être supérieur à 0.","error");
+  const part=(f.installments||[]).find(x=>Number(x.balance)>0.00001);
+  if(!part) return afficherMessage("Tous les versements sont réglés.","error");
   try{
-    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,amount,payment_date:new Date().toISOString().slice(0,10),method:"Espèces",reference:"Versement "+numero})});
+    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,installment_id:part.id,amount,payment_date:new Date().toISOString().slice(0,10),method:"Espèces",reference:"Versement "+numero})});
     await chargerFinance(); afficherMessage("Versement enregistré.");
   }catch(e){ afficherMessage(e.message,"error"); }
 }
