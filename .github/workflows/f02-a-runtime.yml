@@ -62,6 +62,7 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261006200000_normalize_rbac_role_names.sql
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261007100000_add_student_profile_data.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -v ON_ERROR_STOP=1 -f database/migrations/20261116193000_student_parent_registration.sql
 
       - name: Seed isolated fixture
         shell: bash

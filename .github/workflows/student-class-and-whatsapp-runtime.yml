@@ -78,6 +78,7 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/schema.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261006170000_add_user_teacher_scope.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261006190000_add_login_rate_limit.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f database/migrations/20261116193000_student_parent_registration.sql
 
       - name: Seed isolated school and historical records
         run: |
