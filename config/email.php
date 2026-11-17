@@ -16,14 +16,19 @@ function imcSendSmtpEmail(string $to, string $subject, string $body): void
 
     if ($host === '' || !ctype_digit((string) $portRaw) || $from === '' ||
         !filter_var($from, FILTER_VALIDATE_EMAIL) || !filter_var($to, FILTER_VALIDATE_EMAIL) ||
-        !in_array($security, ['tls', 'ssl', 'none'], true)) {
-        throw new RuntimeException('Configuration SMTP incomplète ou invalide.');
+        !in_array($security, ['tls', 'ssl'], true)) {
+        throw new RuntimeException('Configuration SMTP incomplète ou invalide. TLS ou SSL est obligatoire.');
     }
+    if (($username === '') !== ($password === '')) {
+        throw new RuntimeException('Les identifiants SMTP doivent être fournis ensemble.');
+    }
+
     $port = (int) $portRaw;
     if ($port < 1 || $port > 65535) {
         throw new RuntimeException('Port SMTP invalide.');
     }
 
+    // SMTP is always encrypted: STARTTLS or implicit TLS.
     $remote = ($security === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port;
     $socket = @stream_socket_client($remote, $errno, $error, 10, STREAM_CLIENT_CONNECT);
     if (!is_resource($socket)) {
@@ -66,9 +71,6 @@ function imcSendSmtpEmail(string $to, string $subject, string $body): void
             $read([250]);
         }
         if ($username !== '') {
-            if ($password === '') {
-                throw new RuntimeException('Mot de passe SMTP manquant.');
-            }
             $write('AUTH LOGIN');
             $read([334]);
             $write(base64_encode($username));

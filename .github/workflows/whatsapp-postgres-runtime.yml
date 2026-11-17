@@ -202,6 +202,32 @@ jobs:
           php -l api/whatsapp/manual-preparations.php
           php -l private-pages/whatsapp-send.php
 
+      - name: Verify SMTP encryption and credential policy
+        run: |
+          php -r '
+          require "config/email.php";
+          putenv("SMTP_HOST=127.0.0.1");
+          putenv("SMTP_FROM_EMAIL=clarodaro@example.test");
+          putenv("SMTP_SECURITY=none");
+          try {
+              imcSendSmtpEmail("parent@example.test", "test", "test");
+              fwrite(STDERR, "Unencrypted SMTP was unexpectedly accepted.\\n");
+              exit(1);
+          } catch (RuntimeException $e) {
+              if (!str_contains($e->getMessage(), "TLS ou SSL")) throw $e;
+          }
+          putenv("SMTP_SECURITY=tls");
+          putenv("SMTP_USERNAME=test-user");
+          putenv("SMTP_PASSWORD=");
+          try {
+              imcSendSmtpEmail("parent@example.test", "test", "test");
+              fwrite(STDERR, "Incomplete SMTP credentials were unexpectedly accepted.\\n");
+              exit(1);
+          } catch (RuntimeException $e) {
+              if (!str_contains($e->getMessage(), "fournis ensemble")) throw $e;
+          }
+          echo "PASS SMTP encryption and credential policy\\n";
+          '
       - name: Verify unauthenticated HTTP requests are rejected
         shell: bash
         run: |
