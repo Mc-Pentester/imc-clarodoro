@@ -232,7 +232,7 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" \\
             -v ON_ERROR_STOP=1 <<'SQL'
           CREATE OR REPLACE FUNCTION f03_force_student_enrollment_failure()
-          RETURNS trigger LANGUAGE plpgsql AS $
+          RETURNS trigger LANGUAGE plpgsql AS $function$
           DECLARE
             student_matricule TEXT;
           BEGIN
@@ -243,7 +243,7 @@ jobs:
             END IF;
             RETURN NEW;
           END;
-          $;
+          $function$;
           CREATE TRIGGER f03_force_student_enrollment_failure
           BEFORE INSERT ON enrollments
           FOR EACH ROW EXECUTE FUNCTION f03_force_student_enrollment_failure();
