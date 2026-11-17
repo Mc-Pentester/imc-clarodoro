@@ -17,7 +17,7 @@
     }
 
     if (!window.IMCAuth.isAuthenticated()) return;
-    if (!window.IMCAuth.hasPermission("whatsapp.message.send")) return;
+    if (!window.IMCAuth.hasPermission("whatsapp.message.send") && !window.IMCAuth.hasPermission("whatsapp.consent.read")) return;
 
     document.querySelectorAll(".menu-principal").forEach(function (menu) {
       if (menu.querySelector('[data-imc-whatsapp-send="true"]')) return;
@@ -31,6 +31,16 @@
         window.location.href = "/whatsapp-send.html";
       });
       menu.appendChild(button);
+      if (window.IMCAuth.hasPermission("whatsapp.consent.read") && !menu.querySelector('[data-imc-whatsapp-consent="true"]')) {
+        var consentButton = document.createElement("button");
+        consentButton.type = "button";
+        consentButton.dataset.imcWhatsappConsent = "true";
+        consentButton.className = "pdg";
+        consentButton.textContent = "Gérer les consentements WhatsApp";
+        consentButton.setAttribute("aria-label", "Gérer les consentements WhatsApp des parents");
+        consentButton.addEventListener("click", function () { window.location.href = "/whatsapp-consent.html"; });
+        menu.appendChild(consentButton);
+      }
     });
   }
 
