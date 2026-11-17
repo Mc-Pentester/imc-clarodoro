@@ -756,7 +756,8 @@ readonly>
 
 <label>Reste à payer</label>
 
-<inputid="reste"
+<input
+id="reste"
 type="number"
 readonly>
 
