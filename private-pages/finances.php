@@ -679,8 +679,8 @@ Tableau financier de l'élève
 
 <div class="info-calcul">
 
-💡 Les montants des versements sont saisissables directement.
-Le <strong>Total</strong> et la <strong>Balance</strong> sont calculés automatiquement.
+💡 Pour enregistrer un paiement, utilisez le bouton <strong>« + Ajouter un versement »</strong> après avoir enregistré la situation financière.
+Le <strong>Total versé</strong> et le <strong>Reste à payer</strong> sont recalculés automatiquement.
 
 </div>
 
@@ -1214,7 +1214,7 @@ readonly>
 
 <label style="margin-top:10px">
 
-Montant ($ HT)
+Montant (HTG)
 
 </label>
 
