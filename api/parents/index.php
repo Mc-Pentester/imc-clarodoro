@@ -134,6 +134,7 @@ if ($method === 'POST') {
         foreach ($parent as $field => $value) $parentParams[':' . $field] = $value;
         if ($parentId !== null) {
             $update = $pdo->prepare('UPDATE parents SET first_name=:first_name,last_name=:last_name,phone=:phone,email=:email,address=:address,updated_at=NOW() WHERE id=:id');
+            unset($parentParams[':ninu']);
             $update->execute($parentParams + [':id'=>$parentId]);
         } else {
             $insert = $pdo->prepare('INSERT INTO parents(first_name,last_name,phone,email,address,ninu) VALUES(:first_name,:last_name,:phone,:email,:address,:ninu) RETURNING id');

@@ -12,6 +12,7 @@ grep -q "student_parents" api/parents/index.php
 grep -q "parent_preserved" api/parents/index.php
 grep -q "ON CONFLICT(student_id,parent_id)" api/parents/index.php
 grep -q "action:'link'" private-pages/parents.php
+grep -Fq "unset($parentParams[':ninu'])" api/parents/index.php
 grep -q "parents" private-pages/index.php
 grep -q 'parentpereExistant' private-pages/index.php
 grep -q 'parent_id' api/students/index.php
