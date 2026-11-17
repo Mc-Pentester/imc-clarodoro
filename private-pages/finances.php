@@ -679,8 +679,8 @@ Tableau financier de l'élève
 
 <div class="info-calcul">
 
-💡 Les montants des versements sont saisissables directement.
-Le <strong>Total</strong> et la <strong>Balance</strong> sont calculés automatiquement.
+💡 Pour enregistrer un paiement, utilisez le bouton <strong>« + Ajouter un versement »</strong> après avoir enregistré la situation financière.
+Le <strong>Total versé</strong> et le <strong>Reste à payer</strong> sont recalculés automatiquement.
 
 </div>
 
@@ -756,7 +756,8 @@ readonly>
 
 <label>Reste à payer</label>
 
-<inputid="reste"
+<input
+id="reste"
 type="number"
 readonly>
 
@@ -1213,7 +1214,7 @@ readonly>
 
 <label style="margin-top:10px">
 
-Montant ($ HT)
+Montant (HTG)
 
 </label>
 
@@ -1531,7 +1532,9 @@ function chargerFicheEleve(){
 
 async function enregistrerSituation(){
   if(!eleveSelectionne) return;
-  if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
+  const factureExistante=factureEleve(eleveSelectionne.id);
+  const permissionRequise=factureExistante?"finances.update":"finances.create";
+  if(!IMCAuth.requirePermission(permissionRequise)) return afficherMessage("Permission refusée.","error");
   const reductionType=document.getElementById("reductionType").value;
   const reductionValue=Number(document.getElementById("reduction").value||0);
   const reductionPayload=reductionType==="PERCENT"
