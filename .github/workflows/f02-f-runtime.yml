@@ -80,6 +80,11 @@ jobs:
           fi
           grep -Fq 'const FINANCE_API = "/api/finance/index.php";' "$FINANCE_PAGE"
           grep -Fq 'apiJson(FINANCE_API' "$FINANCE_PAGE"
+          grep -Fq 'id="btnCreerTarif"' "$FINANCE_PAGE"
+          grep -Fq 'function ouvrirCreationTarif' "$FINANCE_PAGE"
+          grep -Fq 'classesServeur=data.classes||[];' "$FINANCE_PAGE"
+          grep -Fq 'function recalculerTotalTarif' "$FINANCE_PAGE"
+          grep -Fq "'classes' => \$classes" api/finance/index.php
           grep -Fq 'id="reductionType"' "$FINANCE_PAGE"
           grep -Fq 'id="reste"' "$FINANCE_PAGE"
           grep -Fq 'const permissionRequise=factureExistante?"finances.update":"finances.create";' "$FINANCE_PAGE"
@@ -117,6 +122,10 @@ jobs:
 
           TARIFF="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"tariff","school_year_id":"00000000-0000-0000-0000-000000005051","class_id":"00000000-0000-0000-0000-000000005041","amount":3000,"installment1_amount":1500,"installment1_label":"1er","installment2_amount":1000,"installment2_label":"2e","installment3_amount":500,"installment3_label":"3e"}' "$BASE/api/finance/index.php")"
           printf '%s' "$TARIFF" | grep -q '"amount":"3000.00"'
+          FINANCE_DATA="$(curl -fsS -b "$COOKIE" "$BASE/api/finance/index.php?school_year_id=00000000-0000-0000-0000-000000005051")"
+          printf '%s' "$FINANCE_DATA" | grep -q '"classes":'
+          printf '%s' "$FINANCE_DATA" | grep -q '"name":"F02F Class"'
+          printf '%s' "$FINANCE_DATA" | grep -q '"class_name":"F02F Class"'
 
           INVOICE="$(curl -fsS -X POST -c "$COOKIE" -b "$COOKIE" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' -d '{"resource":"invoice","student_id":"00000000-0000-0000-0000-000000005071","school_year_id":"00000000-0000-0000-0000-000000005051","amount":3000,"reduction":200,"reduction_reason":"Bourse","invoice_date":"2026-10-08"}' "$BASE/api/finance/index.php")"
           printf '%s' "$INVOICE" | grep -q '"balance":2800'

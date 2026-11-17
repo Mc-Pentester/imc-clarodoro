@@ -875,11 +875,13 @@ Action
 <h2>Tarifs par classe</h2>
 
 <p class="small no-print">
-
-Les montants et les dates des versements sont modifiables pour chaque année.
-Le total est calculé automatiquement.
-
+Configure ici le tarif de chaque classe pour l'année scolaire sélectionnée. Les montants saisis pour les versements déterminent automatiquement le total.
 </p>
+
+<div class="no-print" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0">
+<button type="button" id="btnCreerTarif" class="action btn-save" onclick="ouvrirCreationTarif()">+ Créer un tarif</button>
+<span class="small">Un tarif est défini par année scolaire et par classe.</span>
+</div>
 
 
 <div class="table-wrap">
@@ -1053,21 +1055,12 @@ Situation de tous les élèves
 <div class="modal-content">
 
 
-<h2>
-Modifier le tarif de la classe
-</h2>
-
-
-<input
-type="hidden"
-id="tarifClasseOriginal">
-
+<h2 id="titreModalTarif">Créer un tarif de classe</h2>
 
 <label>Classe</label>
-
-<input
-id="tarifClasseNom"
-readonly>
+<select id="tarifClasseId" required>
+<option value="">Sélectionner une classe</option>
+</select>
 
 
 <label style="margin-top:10px">
@@ -1080,7 +1073,9 @@ Montant total de la classe ($ HT)
 id="montantTotal"
 type="number"
 min="0"
-step="0.01">
+step="0.01"
+readonly
+aria-readonly="true">
 
 
 <p class="small">
@@ -1294,6 +1289,7 @@ let anneeServeurId = "";
 let etudiants = [];
 let factures = [];
 let tarifs = [];
+let classesServeur = [];
 let eleveSelectionne = null;
 let classeSelectionnee = "";
 
@@ -1378,6 +1374,7 @@ async function chargerFinance(){
   etudiants=data.students||[];
   factures=data.invoices||[];
   tarifs=data.tariffs||[];
+  classesServeur=data.classes||[];
   renderAll();
 }
 
@@ -1386,6 +1383,7 @@ function renderAll(){
   afficherEleves();
   afficherSituations();
   afficherResume();
+  remplirSelectClassesTarif();
   afficherTarifs();
   if(eleveSelectionne){
     const found=etudiants.find(e=>e.id===eleveSelectionne.id);
@@ -1486,12 +1484,35 @@ function afficherResume(){
   document.getElementById("resumePartiels").textContent=part;
 }
 
+function remplirSelectClassesTarif(){
+  const select=document.getElementById("tarifClasseId");
+  const current=select.value;
+  select.innerHTML='<option value="">Sélectionner une classe</option>';
+  classesServeur.forEach(c=>{
+    const option=document.createElement("option");
+    option.value=c.id;
+    option.textContent=(c.code?c.code+" — ":"")+c.name;
+    select.appendChild(option);
+  });
+  if(current && classesServeur.some(c=>c.id===current)) select.value=current;
+}
+
 function afficherTarifs(){
   const tb=document.getElementById("tableTarifs");
   tb.innerHTML="";
-  tarifs.forEach(t=>{
+  const rows=[...classesServeur].sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"fr"));
+  if(!rows.length){
+    tb.innerHTML='<tr><td colspan="6">Aucune classe active disponible pour configurer un tarif.</td></tr>';
+    return;
+  }
+  rows.forEach(c=>{
+    const t=tarifs.find(x=>x.class_id===c.id);
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${escapeHtml(t.class_name||"")}</td><td>${formatMontant(t.installment1_amount)}<br><span class="small">${escapeHtml(t.installment1_label||"")}</span></td><td>${formatMontant(t.installment2_amount)}<br><span class="small">${escapeHtml(t.installment2_label||"")}</span></td><td>${formatMontant(t.installment3_amount)}<br><span class="small">${escapeHtml(t.installment3_label||"")}</span></td><td>${formatMontant(t.amount)}</td><td><button class="action btn-edit" onclick="modifierTarif('${t.class_id}')">Modifier</button></td>`;
+    if(t){
+      tr.innerHTML=`<td>${escapeHtml(c.name||"")}</td><td>${formatMontant(t.installment1_amount)}<br><span class="small">${escapeHtml(t.installment1_label||"")}</span></td><td>${formatMontant(t.installment2_amount)}<br><span class="small">${escapeHtml(t.installment2_label||"")}</span></td><td>${formatMontant(t.installment3_amount)}<br><span class="small">${escapeHtml(t.installment3_label||"")}</span></td><td>${formatMontant(t.amount)}</td><td><button type="button" class="action btn-edit" onclick="modifierTarif('${c.id}')">Modifier</button></td>`;
+    }else{
+      tr.innerHTML=`<td>${escapeHtml(c.name||"")}</td><td colspan="3" class="small">Tarif non configuré</td><td>—</td><td><button type="button" class="action btn-save" onclick="ouvrirCreationTarif('${c.id}')">Créer le tarif</button></td>`;
+    }
     tb.appendChild(tr);
   });
 }
@@ -1570,11 +1591,23 @@ function ouvrirReduction(){
   document.getElementById("reduction").focus();
 }
 
+function ouvrirCreationTarif(classId=""){
+  remplirSelectClassesTarif();
+  document.getElementById("titreModalTarif").textContent="Créer un tarif de classe";
+  document.getElementById("tarifClasseId").disabled=false;
+  document.getElementById("tarifClasseId").value=classId||"";
+  ["date1","date2","date3","montant1","montant2","montant3"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("montantTotal").value="0.00";
+  document.getElementById("modalTarif").style.display="flex";
+}
+
 function modifierTarif(classId){
   const t=tarifs.find(x=>x.class_id===classId);
   if(!t) return afficherMessage("Tarif serveur introuvable.","error");
-  document.getElementById("tarifClasseOriginal").value=classId;
-  document.getElementById("tarifClasseNom").value=t.class_name||"";
+  remplirSelectClassesTarif();
+  document.getElementById("titreModalTarif").textContent="Modifier le tarif de la classe";
+  document.getElementById("tarifClasseId").value=classId;
+  document.getElementById("tarifClasseId").disabled=true;
   document.getElementById("montantTotal").value=t.amount||0;
   document.getElementById("date1").value=t.installment1_label||"";
   document.getElementById("montant1").value=t.installment1_amount||0;
@@ -1585,9 +1618,15 @@ function modifierTarif(classId){
   document.getElementById("modalTarif").style.display="flex";
 }
 
+function recalculerTotalTarif(){
+  const total=[1,2,3].reduce((sum,n)=>sum+Number(document.getElementById("montant"+n).value||0),0);
+  document.getElementById("montantTotal").value=total.toFixed(2);
+}
+
 async function enregistrerTarif(){
   if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
-  const classId=document.getElementById("tarifClasseOriginal").value;
+  const classId=document.getElementById("tarifClasseId").value;
+  if(!classId) return afficherMessage("Sélectionnez une classe.","error");
   const body={
     resource:"tariff",school_year_id:anneeServeurId,class_id:classId,
     amount:Number(document.getElementById("montantTotal").value||0),
@@ -1598,8 +1637,10 @@ async function enregistrerTarif(){
     installment3_amount:Number(document.getElementById("montant3").value||0),
     installment3_label:document.getElementById("date3").value.trim()
   };
-  if(body.amount<0||body.installment1_amount<0||body.installment2_amount<0||body.installment3_amount<0) return afficherMessage("Les montants ne peuvent pas être négatifs.","error");
-  try{ await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); fermerModals(); await chargerFinance(); afficherMessage("Tarif enregistré."); }
+  if(body.amount<=0||body.installment1_amount<0||body.installment2_amount<0||body.installment3_amount<0) return afficherMessage("Saisissez au moins un versement avec un montant positif.","error");
+  const somme=body.installment1_amount+body.installment2_amount+body.installment3_amount;
+  if(Math.abs(somme-body.amount)>0.01) return afficherMessage("Le total doit correspondre à la somme des trois versements.","error");
+  try{ await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); fermerModals(); await chargerFinance(); afficherMessage("Tarif enregistré pour cette classe."); }
   catch(e){ afficherMessage(e.message,"error"); }
 }
 
@@ -1683,6 +1724,7 @@ document.addEventListener("DOMContentLoaded",async()=>{
     try{ await chargerFinance(); }catch(e){ afficherMessage(e.message,"error"); }
   });
   document.getElementById("btnToutesClasses").addEventListener("click",afficherToutesLesClasses);
+  [1,2,3].forEach(n=>document.getElementById("montant"+n).addEventListener("input",recalculerTotalTarif));
   document.getElementById("recherche").addEventListener("input",()=>{afficherEleves();afficherSituations();});
   try{
     await chargerAnnees();
