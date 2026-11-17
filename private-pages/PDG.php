@@ -584,6 +584,7 @@ imcRequirePageAccess('paies.read', 'PDG', $pdo ?? null);
             id="anneeAcademique"
             onchange="chargerTableauDeBord()">
         </select>
+        <div id="messageTableauBord" class="message" role="status" aria-live="polite"></div>
 
         <button
             class="btn btn-orange"
@@ -1451,7 +1452,6 @@ async function connecterPDG() {
 
         await chargerAnnees();
         initialiserMoisPaie();
-        await chargerPersonnelServeur();
         await chargerTableauDeBord();
     } catch (error) {
         document.getElementById("messageErreur").textContent =
@@ -2487,38 +2487,124 @@ async function chargerDepensesServeur() {
 }
 
 async function chargerTableauDeBord() {
+    const status = document.getElementById("messageTableauBord");
     const select = document.getElementById("anneeAcademique");
-    if (!select || !select.selectedOptions.length) return;
+    if (!select || !select.selectedOptions.length) {
+        if (status) { status.style.display = "block"; status.textContent = "Aucune année scolaire sélectionnée."; }
+        return;
+    }
     const schoolYearId = select.selectedOptions[0].dataset.yearId;
-    if (!schoolYearId) throw new Error("Identifiant d'année scolaire absent de PostgreSQL.");
+    if (!schoolYearId) {
+        if (status) { status.style.display = "block"; status.textContent = "Identifiant d'année scolaire absent de PostgreSQL."; }
+        return;
+    }
     anneeConnectee = select.value;
-    await chargerPersonnelServeur();
-    await chargerPaiesServeur(true);
-    const financeResponse = await fetch("/api/finance/index.php?school_year_id=" + encodeURIComponent(schoolYearId), { credentials: "same-origin", headers: { "Accept": "application/json" }, cache: "no-store" });
-    const financePayload = await financeResponse.json();
-    if (!financeResponse.ok || !financePayload.success) throw new Error(financePayload.error || "Impossible de charger les données financières PostgreSQL.");
-    dashboardStudents = (financePayload.students || []).map(student => ({ id: String(student.id), nom: student.last_name, prenom: student.first_name, classe: student.class_name, classId: String(student.class_id), annee: anneeConnectee }));
-    dashboardInvoices = Array.isArray(financePayload.invoices) ? financePayload.invoices : [];
-    dashboardTariffs = Array.isArray(financePayload.tariffs) ? financePayload.tariffs : [];
-    const depensesAnnee = await chargerDepensesServeur();
-    const totalPrevu = dashboardStudents.reduce((sum, student) => sum + calculerFinanceEleve(student, anneeConnectee).montantAPayer, 0);
-    const totalRecu = dashboardStudents.reduce((sum, student) => sum + calculerFinanceEleve(student, anneeConnectee).totalPaye, 0);
-    const totalDepenses = depensesAnnee.reduce((sum, expense) => sum + Number(expense.montant || 0), 0);
-    const totalSalaires = totalSalairesAnnee();
-    const soldeAnnuel = totalRecu - totalSalaires - totalDepenses;
-    document.getElementById("totalPrevu").textContent = formatMontant(totalPrevu);
-    document.getElementById("totalRecu").textContent = formatMontant(totalRecu);
-    document.getElementById("totalSalaires").textContent = formatMontant(totalSalaires);
-    document.getElementById("totalDepenses").textContent = formatMontant(totalDepenses);
-    const elementSolde = document.getElementById("soldeAnnuel");
-    elementSolde.textContent = formatMontant(soldeAnnuel);
-    elementSolde.className = soldeAnnuel >= 0 ? "solde-positif" : "solde-negatif";
-    await afficherPaie();
-    afficherDepenses(depensesAnnee);
-    afficherSituations(dashboardStudents, anneeConnectee);
-    afficherResumeClasses(dashboardStudents, anneeConnectee);
-}
+    if (status) { status.style.display = "block"; status.textContent = "Chargement des données financières…"; }
 
+    // Charger d'abord les données de scolarité, indépendamment des dépenses et paies.
+    try {
+        const financeResponse = await fetch("/api/finance/index.php?school_year_id=" + encodeURIComponent(schoolYearId), {
+            credentials: "same-origin", headers: { "Accept": "application/json" }, cache: "no-store"
+        });
+        const financePayload = await financeResponse.json();
+        if (!financeResponse.ok || !financePayload.success) {
+            throw new Error(financePayload.error || "Impossible de charger les données financières PostgreSQL.");
+        }
+        dashboardStudents = (financePayload.students || []).map(student => ({
+            id: String(student.id), nom: student.last_name, prenom: student.first_name,
+            classe: student.class_name, classId: String(student.class_id), annee: anneeConnectee
+        }));
+        dashboardInvoices = Array.isArray(financePayload.invoices) ? financePayload.invoices : [];
+        dashboardTariffs = Array.isArray(financePayload.tariffs) ? financePayload.tariffs : [];
+
+        afficherSituations(dashboardStudents, anneeConnectee);
+        afficherResumeClasses(dashboardStudents, anneeConnectee);
+        const totalPrevu = dashboardStudents.reduce((sum, student) =>
+            sum + calculerFinanceEleve(student, anneeConnectee).montantAPayer, 0);
+        const totalRecu = dashboardStudents.reduce((sum, student) =>
+            sum + calculerFinanceEleve(student, anneeConnectee).totalPaye, 0);
+        document.getElementById("totalPrevu").textContent = formatMontant(totalPrevu);
+        document.getElementById("totalRecu").textContent = formatMontant(totalRecu);
+        if (status) status.textContent = dashboardStudents.length
+            ? "Situation financière chargée : " + dashboardStudents.length + " élève(s)."
+            : "Aucun élève inscrit pour cette année scolaire.";
+    } catch (error) {
+        console.error("Chargement de la situation financière PDG :", error);
+        const message = error && error.message ? error.message : "Erreur inconnue.";
+        if (status) { status.style.display = "block"; status.textContent = "Situation financière indisponible : " + message; }
+        document.getElementById("listeSituations").innerHTML =
+            '<tr><td colspan="6">Impossible de charger la situation financière. ' + echapperHTML(message) + '</td></tr>';
+        document.getElementById("resumeClasses").innerHTML =
+            '<tr><td colspan="4">Impossible de charger le résumé par classe.</td></tr>';
+        document.getElementById("totalPrevu").textContent = "Indisponible";
+        document.getElementById("totalRecu").textContent = "Indisponible";
+        return;
+    }
+
+    // Les dépenses et les paies ont leur propre résultat : leur panne ne vide pas
+    // les tableaux de scolarité déjà affichés.
+    const results = await Promise.allSettled([
+        chargerPersonnelServeur(), chargerPaiesServeur(true), chargerDepensesServeur()
+    ]);
+    const personnelResult = results[0], paiesResult = results[1], depensesResult = results[2];
+    const salairesDisponibles = paiesResult.status === "fulfilled";
+    const depensesDisponibles = depensesResult.status === "fulfilled";
+    const depensesAnnee = depensesDisponibles ? depensesResult.value : [];
+
+    if (depensesDisponibles) {
+        afficherDepenses(depensesAnnee);
+        document.getElementById("totalDepenses").textContent = formatMontant(
+            depensesAnnee.reduce((sum, expense) => sum + Number(expense.montant || 0), 0)
+        );
+        const messageDepense = document.getElementById("messageDepense");
+        if (messageDepense) {
+            messageDepense.textContent = depensesAnnee.length ? "" : "Aucune dépense enregistrée pour cette année scolaire.";
+            messageDepense.style.display = depensesAnnee.length ? "none" : "block";
+        }
+    } else {
+        console.error("Chargement des dépenses PDG :", depensesResult.reason);
+        depensesServeur = [];
+        document.getElementById("listeDepenses").innerHTML =
+            '<tr><td colspan="4">Impossible de charger la liste des dépenses.</td></tr>';
+        document.getElementById("totalDepenses").textContent = "Indisponible";
+        const messageDepense = document.getElementById("messageDepense");
+        if (messageDepense) {
+            messageDepense.textContent = "Liste des dépenses indisponible : " +
+                (depensesResult.reason && depensesResult.reason.message ? depensesResult.reason.message : "erreur serveur");
+            messageDepense.style.display = "block";
+        }
+    }
+
+    if (salairesDisponibles) {
+        document.getElementById("totalSalaires").textContent = formatMontant(totalSalairesAnnee());
+    } else {
+        console.error("Chargement des paies PDG :", paiesResult.reason);
+        document.getElementById("totalSalaires").textContent = "Indisponible";
+    }
+    try {
+        await afficherPaie();
+    } catch (error) {
+        console.error("Affichage du tableau de paie PDG :", error);
+        const messagePaie = document.getElementById("messagePaie");
+        if (messagePaie) messagePaie.textContent = "Tableau des paies indisponible : " + (error.message || "erreur serveur");
+    }
+
+    const solde = document.getElementById("soldeAnnuel");
+    if (salairesDisponibles && depensesDisponibles) {
+        const totalRecu = dashboardStudents.reduce((sum, student) =>
+            sum + calculerFinanceEleve(student, anneeConnectee).totalPaye, 0);
+        const soldeAnnuel = totalRecu - totalSalairesAnnee() -
+            depensesAnnee.reduce((sum, expense) => sum + Number(expense.montant || 0), 0);
+        solde.textContent = formatMontant(soldeAnnuel);
+        solde.className = soldeAnnuel >= 0 ? "solde-positif" : "solde-negatif";
+    } else {
+        solde.textContent = "Indisponible";
+        solde.className = "";
+    }
+    if (status && personnelResult.status === "rejected") {
+        status.textContent += " Le module personnel est momentanément indisponible.";
+    }
+}
 
 /* ============================================================
    DÉPENSES
@@ -3068,8 +3154,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.getElementById("messageErreur").textContent = "";
         await chargerAnnees();
         initialiserMoisPaie();
-        await chargerPersonnelServeur();
-        chargerTableauDeBord();
+        await chargerTableauDeBord();
     } catch (error) {
         const message = document.getElementById("messageErreur");
         if (message) message.textContent = error && error.message ? error.message : "Impossible de restaurer la session PDG.";

@@ -1050,8 +1050,28 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             return;
         }
 
-            try { await chargerParentsDisponibles(); } catch (parentError) { console.warn(parentError); }
-            await chargerOptionsInscription();
+            // Attacher immédiatement le gestionnaire du formulaire : une erreur de
+            // chargement des listes (classes/années/parents) ne doit jamais rendre
+            // le bouton Enregistrer inerte.
+            const studentForm = document.getElementById("studentForm");
+            if (studentForm && studentForm.dataset.submitBound !== "true") {
+                studentForm.addEventListener("submit", enregistrerEleve);
+                studentForm.dataset.submitBound = "true";
+            }
+
+            try {
+                await chargerParentsDisponibles();
+            } catch (parentError) {
+                console.warn(parentError);
+                afficherMessage("Le répertoire des parents est momentanément indisponible. Vous pouvez toujours saisir les responsables manuellement.");
+            }
+
+            try {
+                await chargerOptionsInscription();
+            } catch (optionsError) {
+                console.error(optionsError);
+                afficherMessage("Impossible de charger les classes et années scolaires. Vérifiez la connexion au serveur puis réessayez. " + (optionsError.message || ""));
+            }
 
             chargerEleves().then(function () {
                 afficherEleves();
@@ -1061,40 +1081,9 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                 afficherEleves();
             });
 
-            document
-                .getElementById("searchStudent")
-                .addEventListener(
-                    "input",
-                    afficherEleves
-                );
-
-
-            document
-                .getElementById("anneeScolaire")
-                .addEventListener(
-                    "change",
-                    function () {
-
-                        afficherEleves();
-
-                    }
-                );
-
-
-            document
-                .getElementById("photoGallery")
-                .addEventListener(
-                    "change",
-                    chargerPhotoGalerie
-                );
-
-
-            document
-                .getElementById("studentForm")
-                .addEventListener(
-                    "submit",
-                    enregistrerEleve
-                );
+            document.getElementById("searchStudent").addEventListener("input", afficherEleves);
+            document.getElementById("anneeScolaire").addEventListener("change", afficherEleves);
+            document.getElementById("photoGallery").addEventListener("change", chargerPhotoGalerie);
 
     });
 
