@@ -181,13 +181,13 @@ jobs:
       - name: Verify parent consent workflow schema
         run: |
           psql -X -v ON_ERROR_STOP=1 <<'SQL'
-          DO $
+          DO $verify$
           BEGIN
             IF to_regclass('public.whatsapp_consent_email_challenges') IS NULL THEN RAISE EXCEPTION 'email challenge table missing'; END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_consents' AND column_name='consent_method') THEN RAISE EXCEPTION 'consent method column missing'; END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_consent_audit' AND column_name='actor_type') THEN RAISE EXCEPTION 'audit actor type missing'; END IF;
             IF (SELECT is_nullable FROM information_schema.columns WHERE table_name='whatsapp_consent_audit' AND column_name='actor_user_id') <> 'YES' THEN RAISE EXCEPTION 'parent audit actor must support a non-user actor'; END IF;
-          END $;
+          END $verify$;
           SQL
 
       - name: Verify WhatsApp endpoint PHP syntax
