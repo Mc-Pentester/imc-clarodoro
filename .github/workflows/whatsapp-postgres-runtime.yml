@@ -178,6 +178,18 @@ jobs:
           END $$;
           SQL
 
+      - name: Verify parent consent workflow schema
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          BEGIN
+            IF to_regclass('public.whatsapp_consent_email_challenges') IS NULL THEN RAISE EXCEPTION 'email challenge table missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_consents' AND column_name='consent_method') THEN RAISE EXCEPTION 'consent method column missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_consent_audit' AND column_name='actor_type') THEN RAISE EXCEPTION 'audit actor type missing'; END IF;
+            IF (SELECT is_nullable FROM information_schema.columns WHERE table_name='whatsapp_consent_audit' AND column_name='actor_user_id') <> 'YES' THEN RAISE EXCEPTION 'parent audit actor must support a non-user actor'; END IF;
+          END $;
+          SQL
+
       - name: Verify WhatsApp endpoint PHP syntax
         run: |
           php -l config/email.php
@@ -227,6 +239,8 @@ jobs:
           }
 
           check_unauthenticated consent_read GET '/api/whatsapp/consents.php?parent_id=00000000-0000-4000-8000-000000000001' '' 401
+          check_unauthenticated consent_invitation POST '/api/whatsapp/consent-invitations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
+          check_unauthenticated consent_parent_search GET '/api/whatsapp/consent-parents-search.php?q=parent' '' 401
           check_unauthenticated consent_invitation POST '/api/whatsapp/consent-invitations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
           check_unauthenticated consent_parent_search GET '/api/whatsapp/consent-parents-search.php?q=parent' '' 401
           check_unauthenticated consent_write POST '/api/whatsapp/consents.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401

@@ -55,7 +55,7 @@ try {
     error_log('WhatsApp consent invitation creation failed: ' . $e->getMessage());
     apiError(503, 'Impossible de préparer l’invitation.');
 }
-$link = $baseUrl . '/whatsapp-consent.html?token=' . rawurlencode($token);
+$link = $baseUrl . '/whatsapp-parent-consent.html?token=' . rawurlencode($token);
 $body = "Bonjour " . $parent['first_name'] . ",\n\n"
     . "L’établissement vous invite à définir vos préférences de communication WhatsApp. "
     . "Aucun accord n’est présumé et aucun message ne sera envoyé sans votre choix explicite.\n\n"

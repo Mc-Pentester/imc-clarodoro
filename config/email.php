@@ -12,7 +12,7 @@ function imcSendSmtpEmail(string $to, string $subject, string $body): void
     $password = (string) (getenv('SMTP_PASSWORD') ?: '');
     $security = strtolower(trim((string) (getenv('SMTP_SECURITY') ?: 'tls')));
     $from = trim((string) (getenv('SMTP_FROM_EMAIL') ?: ''));
-    $fromName = trim((string) (getenv('SMTP_FROM_NAME') ?: 'Clarodaro'));
+    $fromName = str_replace(["\\r", "\\n"], '', trim((string) (getenv('SMTP_FROM_NAME') ?: 'Clarodaro')));
 
     if ($host === '' || !ctype_digit((string) $portRaw) || $from === '' ||
         !filter_var($from, FILTER_VALIDATE_EMAIL) || !filter_var($to, FILTER_VALIDATE_EMAIL) ||

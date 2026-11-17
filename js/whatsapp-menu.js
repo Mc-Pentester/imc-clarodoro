@@ -17,20 +17,19 @@
     }
 
     if (!window.IMCAuth.isAuthenticated()) return;
-    if (!window.IMCAuth.hasPermission("whatsapp.message.send") && !window.IMCAuth.hasPermission("whatsapp.consent.read")) return;
+    if (!window.IMCAuth.hasPermission("whatsapp.message.send")) return;
 
     document.querySelectorAll(".menu-principal").forEach(function (menu) {
-      if (menu.querySelector('[data-imc-whatsapp-send="true"]')) return;
-      var button = document.createElement("button");
-      button.type = "button";
-      button.dataset.imcWhatsappSend = "true";
-      button.className = "pdg";
-      button.textContent = "Envoyer un message WhatsApp";
-      button.setAttribute("aria-label", "Ouvrir l'interface d'envoi WhatsApp");
-      button.addEventListener("click", function () {
-        window.location.href = "/whatsapp-send.html";
-      });
-      menu.appendChild(button);
+      if (window.IMCAuth.hasPermission("whatsapp.message.send") && !menu.querySelector('[data-imc-whatsapp-send="true"]')) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.dataset.imcWhatsappSend = "true";
+        button.className = "pdg";
+        button.textContent = "Envoyer un message WhatsApp";
+        button.setAttribute("aria-label", "Ouvrir l'interface d'envoi WhatsApp");
+        button.addEventListener("click", function () { window.location.href = "/whatsapp-send.html"; });
+        menu.appendChild(button);
+      }
       if (window.IMCAuth.hasPermission("whatsapp.consent.read") && !menu.querySelector('[data-imc-whatsapp-consent="true"]')) {
         var consentButton = document.createElement("button");
         consentButton.type = "button";
@@ -38,7 +37,7 @@
         consentButton.className = "pdg";
         consentButton.textContent = "Gérer les consentements WhatsApp";
         consentButton.setAttribute("aria-label", "Gérer les consentements WhatsApp des parents");
-        consentButton.addEventListener("click", function () { window.location.href = "/whatsapp-consent.html"; });
+        consentButton.addEventListener("click", function () { window.location.href = "/whatsapp-consent-management.html"; });
         menu.appendChild(consentButton);
       }
     });

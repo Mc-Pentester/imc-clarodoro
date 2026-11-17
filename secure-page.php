@@ -23,7 +23,7 @@ $pages = [
     'classes.html' => ['public' => 'classes.html', 'file' => 'classes.php', 'permission' => 'classes.manage', 'role' => 'PDG'],
     'payroll.html' => ['public' => 'payroll.html', 'file' => 'payroll.php', 'permission' => 'paies.read', 'role' => 'PDG'],
     'whatsapp-send.html' => ['public' => 'whatsapp-send.html', 'file' => 'whatsapp-send.php', 'permission' => 'whatsapp.message.send', 'role' => 'PDG'],
-    'whatsapp-consent.html' => ['public' => 'whatsapp-consent.html', 'file' => 'whatsapp-consent.php', 'permission' => 'whatsapp.consent.read', 'role' => null],
+    'whatsapp-consent-management.html' => ['public' => 'whatsapp-consent-management.html', 'file' => 'whatsapp-consent.php', 'permission' => 'whatsapp.consent.read', 'role' => null],
     'vacations.html' => ['public' => 'vacations.html', 'file' => 'vacations.php', 'permission' => 'vacances.read', 'role' => null],
 ];
 
