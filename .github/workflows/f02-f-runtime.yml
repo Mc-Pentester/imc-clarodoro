@@ -81,6 +81,12 @@ jobs:
           grep -Fq 'const FINANCE_API = "/api/finance/index.php";' "$FINANCE_PAGE"
           grep -Fq 'apiJson(FINANCE_API' "$FINANCE_PAGE"
           grep -Fq 'id="reductionType"' "$FINANCE_PAGE"
+          grep -Fq 'id="reste"' "$FINANCE_PAGE"
+          grep -Fq 'const permissionRequise=factureExistante?"finances.update":"finances.create";' "$FINANCE_PAGE"
+          if grep -Fq 'inputid="reste"' "$FINANCE_PAGE"; then
+            echo "FAIL: finance balance field id is malformed"
+            exit 1
+          fi
           grep -Fq 'reduction_percent:reductionValue' "$FINANCE_PAGE"
           if grep -Fq 'onchange="enregistrerVersementDirect' "$FINANCE_PAGE"; then
             echo "FAIL: existing payment amounts must not create duplicate payments when edited"
