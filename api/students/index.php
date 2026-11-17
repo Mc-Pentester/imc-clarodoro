@@ -6,6 +6,34 @@ require_once __DIR__ . '/../../config/auth.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+/**
+ * Journalise les erreurs SQL de création sans exposer les données personnelles
+ * éventuellement incluses dans le DETAIL PostgreSQL (NINU, téléphone, etc.).
+ */
+function logStudentCreationDatabaseFailure(PDOException $exception): void
+{
+    $sqlState = 'unknown';
+    if (isset($exception->errorInfo) && is_array($exception->errorInfo) && isset($exception->errorInfo[0])) {
+        $sqlState = (string) $exception->errorInfo[0];
+    } elseif ($exception->getCode() !== '') {
+        $sqlState = (string) $exception->getCode();
+    }
+
+    $message = $exception->getMessage();
+    $message = preg_replace(
+        '/(DETAIL:\\s*Key\\s*\\([^)]*\\)\\s*=\\s*)\\([^)]*\\)/i',
+        '$1([redacted])',
+        $message
+    ) ?? 'Database error';
+    $message = preg_replace(
+        "/(invalid input syntax for type [^:]+:\\s*)'[^']*'/i",
+        '$1[redacted]',
+        $message
+    ) ?? 'Database error';
+
+    error_log('Student creation failed [SQLSTATE ' . $sqlState . ']: ' . substr($message, 0, 1500));
+}
+
 function normalizeStudentParents($raw): array
 {
     if (!is_array($raw) || !array_is_list($raw) || count($raw) > 100) apiError(422, 'parents doit contenir au maximum 100 responsables');
@@ -419,6 +447,7 @@ elseif ($method === 'POST') {
         if (str_contains($e->getMessage(), 'enrollments_one_active_per_student_year')) {
             apiError(409, 'Cet élève possède déjà une inscription active pour cette année scolaire');
         }
+        logStudentCreationDatabaseFailure($e);
         apiError(500, 'Erreur interne du serveur');
     }
 }
