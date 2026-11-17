@@ -13,13 +13,14 @@ function normalizeStudentParents($raw): array
     foreach ($raw as $item) {
         if (!is_array($item)) apiError(422, 'Chaque responsable doit être un objet');
         $p = [];
-        foreach (['first_name','last_name','phone','email','address','ninu','relationship_type'] as $f) {
+        foreach (['parent_id','first_name','last_name','phone','email','address','ninu','relationship_type'] as $f) {
             if (isset($item[$f]) && !is_string($item[$f])) apiError(422, "Champ parent invalide: $f");
             $p[$f] = trim((string)($item[$f] ?? ''));
         }
         $p['is_primary'] = filter_var($item['is_primary'] ?? false, FILTER_VALIDATE_BOOLEAN);
-        $hasData = false;
+        $hasData = $p['parent_id'] !== '';
         foreach (['first_name','last_name','phone','email','address','ninu'] as $f) if ($p[$f] !== '') $hasData = true;
+        if ($p['parent_id'] !== '' && !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $p['parent_id'])) apiError(422, 'Identifiant de fiche parent invalide');
         if (!$hasData) continue;
         if ($p['first_name'] === '' || $p['last_name'] === '') apiError(422, 'Le nom et le prénom sont requis pour chaque responsable renseigné');
         if (strlen($p['first_name']) > 150 || strlen($p['last_name']) > 150 || strlen($p['phone']) > 50 || strlen($p['email']) > 255 || strlen($p['address']) > 2000) apiError(422, 'Coordonnées du responsable trop longues');
@@ -38,7 +39,13 @@ function saveStudentParents(PDO $pdo, string $studentId, array $parents): void
     $pdo->prepare('DELETE FROM student_parents WHERE student_id = :id')->execute([':id' => $studentId]);
     foreach ($parents as $p) {
         $parentId = null;
-        if ($p['ninu'] !== '') {
+        if ($p['parent_id'] !== '') {
+            $find = $pdo->prepare('SELECT id FROM parents WHERE id = :id FOR UPDATE');
+            $find->execute([':id' => $p['parent_id']]);
+            $parentId = $find->fetchColumn() ?: null;
+            if (!$parentId) apiError(422, 'La fiche parent sélectionnée est introuvable');
+        }
+        if ($parentId === null && $p['ninu'] !== '') {
             $find = $pdo->prepare('SELECT id FROM parents WHERE ninu = :ninu FOR UPDATE');
             $find->execute([':ninu' => $p['ninu']]);
             $parentId = $find->fetchColumn() ?: null;

@@ -430,6 +430,7 @@ th{
   <button type="button" onclick="ouvrirPage('resultats.html')">Résultats</button>
   <button type="button" onclick="ouvrirPage('finances.html')">Finances</button>
   <button type="button" onclick="ouvrirPage('personnel.html')">Personnel</button>
+  <button type="button" onclick="ouvrirPage('parents.html')">Parents et responsables</button>
   <button type="button" onclick="ouvrirPage('annees-scolaires.html')">Année scolaire</button>
   <button type="button" onclick="ouvrirPage('vacances.html')">Vacances</button>
   <button type="button" onclick="ouvrirPage('pdg.html')">PDG</button>

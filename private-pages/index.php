@@ -700,10 +700,14 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 
                 <div class="form-group full">
                     <h3>Parents et responsables légaux</h3>
-                    <p>Jusqu'à trois responsables. Le NINU permet de retrouver la même fiche parent pour ses autres enfants.</p>
+                    <p>Jusqu'à trois responsables. Le NINU permet de retrouver la même fiche parent pour ses autres enfants.</p> <a href="/parents.html" target="_blank" rel="noopener">Ouvrir le répertoire indépendant des parents</a>.
                 </div>
                 <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
                     <legend>Père</legend>
+                    <div class="form-group full">
+                        <label for="parentpereExistant">Utiliser une fiche parent existante (père)</label>
+                        <select id="parentpereExistant"><option value="">Créer / saisir une nouvelle fiche</option></select>
+                    </div>
                     <div class="form-grid">
                         <div class="form-group"><label for="parentperePrenom">Prénom</label><input id="parentperePrenom" maxlength="150"></div>
                         <div class="form-group"><label for="parentpereNom">Nom</label><input id="parentpereNom" maxlength="150"></div>
@@ -716,6 +720,10 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                 </fieldset>
                 <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
                     <legend>Mère</legend>
+                    <div class="form-group full">
+                        <label for="parentmereExistant">Utiliser une fiche parent existante (mère)</label>
+                        <select id="parentmereExistant"><option value="">Créer / saisir une nouvelle fiche</option></select>
+                    </div>
                     <div class="form-grid">
                         <div class="form-group"><label for="parentmerePrenom">Prénom</label><input id="parentmerePrenom" maxlength="150"></div>
                         <div class="form-group"><label for="parentmereNom">Nom</label><input id="parentmereNom" maxlength="150"></div>
@@ -728,6 +736,10 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                 </fieldset>
                 <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
                     <legend>Autre responsable / tuteur</legend>
+                    <div class="form-group full">
+                        <label for="parenttuteurExistant">Utiliser une fiche parent existante (responsable)</label>
+                        <select id="parenttuteurExistant"><option value="">Créer / saisir une nouvelle fiche</option></select>
+                    </div>
                     <div class="form-grid">
                         <div class="form-group"><label for="parenttuteurPrenom">Prénom</label><input id="parenttuteurPrenom" maxlength="150"></div>
                         <div class="form-group"><label for="parenttuteurNom">Nom</label><input id="parenttuteurNom" maxlength="150"></div>
@@ -1037,6 +1049,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             return;
         }
 
+            try { await chargerParentsDisponibles(); } catch (parentError) { console.warn(parentError); }
             await chargerOptionsInscription();
 
             chargerEleves().then(function () {
@@ -1188,7 +1201,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             address: "",
             phone: eleve.contact || "",
             status: eleve.status || "ACTIVE",
-            parents: eleve.parents || [],
             profile_data: {
                 lieuNaissance: eleve.lieuNaissance,
                 departement: eleve.departement,
@@ -1203,6 +1215,12 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                 anneeScolaire: eleve.anneeScolaire
             }
         };
+
+        // Ne pas supprimer implicitement les liens parentaux lors d'une modification
+        // d'élève si le formulaire n'a fourni aucun responsable.
+        if (!id || (Array.isArray(eleve.parents) && eleve.parents.length > 0)) {
+            payload.parents = Array.isArray(eleve.parents) ? eleve.parents : [];
+        }
 
         if (!id) {
             payload.class_id = eleve.classId;
@@ -1423,8 +1441,8 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
         const slots = [{key:"pere",relationship:"FATHER"},{key:"mere",relationship:"MOTHER"},{key:"tuteur",relationship:"GUARDIAN"}];
         return slots.map(function(slot) {
             const value = suffix => document.getElementById("parent"+slot.key+suffix).value.trim();
-            return {first_name:value("Prenom"),last_name:value("Nom"),ninu:value("Ninu"),phone:value("Telephone"),email:value("Email"),address:value("Adresse"),relationship_type:slot.relationship,is_primary:document.getElementById("parent"+slot.key+"Principal").checked};
-        }).filter(p => p.first_name || p.last_name || p.ninu || p.phone || p.email || p.address);
+            return {parent_id:document.getElementById("parent"+slot.key+"Existant").value,first_name:value("Prenom"),last_name:value("Nom"),ninu:value("Ninu"),phone:value("Telephone"),email:value("Email"),address:value("Adresse"),relationship_type:slot.relationship,is_primary:document.getElementById("parent"+slot.key+"Principal").checked};
+        }).filter(p => p.parent_id || p.first_name || p.last_name || p.ninu || p.phone || p.email || p.address);
     }
 
     function chargerParentsFormulaire(parents) {
@@ -1432,9 +1450,34 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
         slots.forEach(function(slot,index) {
             const p = (parents || []).find(item => item.relationship_type === slot.relationship) || (parents || [])[index] || {};
             const set = (suffix,value) => document.getElementById("parent"+slot.key+suffix).value = value || "";
+            document.getElementById("parent"+slot.key+"Existant").value = p.id || p.parent_id || "";
             set("Prenom",p.first_name); set("Nom",p.last_name); set("Ninu",p.ninu);
             set("Telephone",p.phone); set("Email",p.email); set("Adresse",p.address);
             document.getElementById("parent"+slot.key+"Principal").checked = Boolean(p.is_primary);
+        });
+    }
+
+    async function chargerParentsDisponibles() {
+        const response = await fetch("api/parents/index.php", {credentials:"same-origin",headers:{"Accept":"application/json"},cache:"no-store"});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || "Répertoire des parents indisponible");
+        const options = (data.parents || []).map(parent => {
+            const option = document.createElement("option");
+            option.value = parent.id;
+            option.textContent = parent.last_name + " " + parent.first_name + (parent.ninu ? " — " + parent.ninu : "");
+            return option;
+        });
+        ["pere","mere","tuteur"].forEach(key => {
+            const select = document.getElementById("parent"+key+"Existant");
+            options.forEach(option => select.appendChild(option.cloneNode(true)));
+            select.addEventListener("change", function() {
+                const parent = (data.parents || []).find(item => item.id === select.value);
+                const prefix = "parent"+key;
+                const set = (suffix,value) => document.getElementById(prefix+suffix).value = value || "";
+                if (!parent) return;
+                set("Prenom",parent.first_name); set("Nom",parent.last_name); set("Ninu",parent.ninu);
+                set("Telephone",parent.phone); set("Email",parent.email); set("Adresse",parent.address);
+            });
         });
     }
 

@@ -1,0 +1,36 @@
+name: Independent parent directory
+on:
+  pull_request:
+    paths:
+      - 'api/parents/index.php'
+      - 'private-pages/parents.php'
+      - 'private-pages/index.php'
+      - 'private-pages/PDG.php'
+      - 'private-pages/personnel.php'
+      - 'secure-page.php'
+      - 'parents.html'
+      - 'database/migrations/*independent_parent_directory.sql'
+      - 'tests/independent-parent-directory-static.sh'
+      - '.github/workflows/independent-parent-directory.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/parents/index.php'
+      - 'private-pages/parents.php'
+      - 'private-pages/index.php'
+      - 'private-pages/PDG.php'
+      - 'private-pages/personnel.php'
+      - 'secure-page.php'
+      - 'parents.html'
+      - 'database/migrations/*independent_parent_directory.sql'
+      - 'tests/independent-parent-directory-static.sh'
+      - '.github/workflows/independent-parent-directory.yml'
+jobs:
+  parent-directory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PHP
+        run: sudo apt-get update && sudo apt-get install -y php-cli
+      - name: Validate parent directory
+        run: bash tests/independent-parent-directory-static.sh
