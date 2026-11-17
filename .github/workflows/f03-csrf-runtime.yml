@@ -112,7 +112,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nohup php -S 127.0.0.1:8080 -t . > /tmp/imc-php.log 2>&1 &
+          nohup php -d log_errors=1 -d error_log=/tmp/imc-php.log -S 127.0.0.1:8080 -t . > /tmp/imc-php.log 2>&1 &
           echo $! > /tmp/imc-php.pid
           for i in {1..20}; do
             if curl -sS -o /dev/null http://127.0.0.1:8080/api/auth/me.php; then
