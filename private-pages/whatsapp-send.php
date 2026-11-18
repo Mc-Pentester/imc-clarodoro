@@ -23,7 +23,7 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <section class="card">
 <h2>Destinataire et autorisation</h2>
 <div class="grid">
-<div class="wide"><label for="parentSearch">Rechercher un parent par nom ou numéro de téléphone</label><input id="parentSearch" type="search" autocomplete="off" placeholder="Nom, prénom ou numéro de téléphone…" aria-describedby="parentSearchHint"><p id="parentSearchHint" class="hint">Saisissez au moins 2 caractères. Seuls les parents ayant un consentement actif pour la finalité choisie apparaissent.</p><div id="parentResults" class="result" hidden role="listbox" aria-label="Résultats de recherche des parents"></div><div id="selectedParent" class="result" hidden aria-live="polite"></div><input id="parent_id" type="hidden" required></div>
+<div class="wide"><label for="parentSearch">Rechercher un parent par nom, téléphone ou nom de son élève</label><input id="parentSearch" type="search" autocomplete="off" placeholder="Nom du parent, téléphone ou nom de l’élève…" aria-describedby="parentSearchHint"><p id="parentSearchHint" class="hint">Saisissez au moins 2 caractères du nom du parent, de son téléphone ou du nom de son élève. Seuls les parents liés à cet élève et ayant un consentement actif pour la finalité choisie apparaissent.</p><div id="parentResults" class="result" hidden role="listbox" aria-label="Résultats de recherche des parents"></div><div id="selectedParent" class="result" hidden aria-live="polite"></div><input id="parent_id" type="hidden" required></div>
 <div><label for="purpose">Finalité / consentement</label><select id="purpose"><option value="ATTENDANCE">Présence / absence</option><option value="RESULTS_AVAILABLE">Résultats disponibles</option><option value="PAYMENT_REMINDER">Rappel de paiement</option><option value="GENERAL">Message général</option></select></div>
 </div>
 <p class="hint">Les deux modes sont actuellement destinés aux parents disposant d’un consentement actif pour la finalité choisie.</p>
@@ -77,7 +77,8 @@ async function searchParents(){
     for(const parent of data.parents){
       const option=document.createElement('button');option.type='button';option.style.cssText='display:block;width:100%;text-align:left;margin:5px 0;background:#f0f7f4;color:#173b32;border:1px solid #c9ded5';
       const fullName=[parent.first_name,parent.last_name].filter(Boolean).join(' ');
-      option.textContent=fullName+' — '+parent.phone_e164;
+      const studentNames=parent.student_names?' · Élève(s) : '+parent.student_names:'';
+      option.textContent=fullName+' — '+parent.phone_e164+studentNames;
       option.setAttribute('role','option');
       option.addEventListener('click',()=>{
         $('parent_id').value=parent.id;
