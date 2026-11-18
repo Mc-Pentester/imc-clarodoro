@@ -80,6 +80,11 @@ call_api() {
 CONSENT="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\",\"evidence_reference\":\"CI signed consent fixture\"}"
 SEND="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"template_name\":\"ci_template\",\"language\":\"fr\",\"idempotency_key\":\"whatsapp-http-key-000001\",\"parameters\":[\"CI\"]}"
 
+call_api no_permission 403 "$DENIED_SID" POST /api/whatsapp/consents.php "$CONSENT" whatsapp-ci-csrf-token
+call_api no_csrf 403 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$CONSENT" ''
+NO_EVIDENCE="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\"}"
+call_api paper_without_evidence 422 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$NO_EVIDENCE" whatsapp-ci-csrf-token
+call_api opt_in 200 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$CONSENT" whatsapp-ci-csrf-token
 SEARCH_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-parent-search.json --write-out '%{http_code}' \
   -H "Cookie: IMC_SESSION=$ALLOWED_SID" \
   "http://127.0.0.1:8100/api/whatsapp/parents-search.php?purpose=GENERAL&q=Student%20Search")"
@@ -98,11 +103,6 @@ DENIED_SEARCH_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-parent
 test "$DENIED_SEARCH_STATUS" = "403"
 echo "PASS parent search permission enforcement HTTP 403"
 
-call_api no_permission 403 "$DENIED_SID" POST /api/whatsapp/consents.php "$CONSENT" whatsapp-ci-csrf-token
-call_api no_csrf 403 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$CONSENT" ''
-NO_EVIDENCE="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\"}"
-call_api paper_without_evidence 422 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$NO_EVIDENCE" whatsapp-ci-csrf-token
-call_api opt_in 200 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$CONSENT" whatsapp-ci-csrf-token
 BATCH_CONSENT="{\"parent_id\":\"$PARENT_ID\",\"purposes\":[\"ATTENDANCE\",\"RESULTS_AVAILABLE\"],\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\",\"evidence_reference\":\"CI batch signed consent\"}"
 call_api paper_batch 200 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$BATCH_CONSENT" whatsapp-ci-csrf-token
 BATCH_COUNT="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_consents WHERE parent_id='$PARENT_ID' AND purpose IN ('ATTENDANCE','RESULTS_AVAILABLE') AND status='OPTED_IN'")"
