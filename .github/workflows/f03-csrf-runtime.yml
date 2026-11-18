@@ -204,6 +204,15 @@ jobs:
           test "$LINK_ROWS" = "2"
           echo "Same parent NINU reused across two students: PASS"
 
+          # Regression: an unselected primary-parent checkbox must persist FALSE,
+          # not be serialized by PDO as an empty string rejected by PostgreSQL.
+          BODY_FALSE='{"matricule":"F03-CSRF-FALSE-001","last_name":"False","first_name":"Primary","class_id":"00000000-0000-0000-0000-000000000306","school_year_id":"00000000-0000-0000-0000-000000000307","parents":[{"first_name":"Jean","last_name":"NonPrimary","ninu":"1987654321","relationship_type":"FATHER","is_primary":false}]}'
+          STATUS="$(status_with_body /tmp/cookie1.txt "$CSRF1" "$BODY_FALSE" /tmp/valid-false-primary.json)"
+          test "$STATUS" = "201"
+          FALSE_LINK_ROWS="$(psql "postgresql://postgres:postgres@127.0.0.1:5432/imc_clarodoro" -Atc "SELECT COUNT(*) FROM student_parents sp JOIN students s ON s.id=sp.student_id JOIN parents p ON p.id=sp.parent_id WHERE s.matricule='F03-CSRF-FALSE-001' AND p.ninu='1987654321' AND sp.is_primary=FALSE")"
+          test "$FALSE_LINK_ROWS" = "1"
+          echo "Unselected primary-parent flag persists as PostgreSQL FALSE: PASS"
+
           STATUS="$(curl -sS -o /tmp/get.json -w '%{http_code}' \
             -b /tmp/cookie1.txt \
             http://127.0.0.1:8080/api/students/index.php)"
