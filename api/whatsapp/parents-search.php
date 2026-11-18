@@ -32,18 +32,31 @@ try {
     // Only return recipients with active consent for the selected purpose.
     // Phone matching uses digits only so spaces, + and punctuation do not matter.
     $stmt = $pdo->prepare(
-        "SELECT DISTINCT p.id, p.first_name, p.last_name, c.phone_e164
+        "SELECT p.id, p.first_name, p.last_name, c.phone_e164,
+                COALESCE(
+                    string_agg(
+                        DISTINCT concat_ws(' ', s.first_name, s.last_name),
+                        ', ' ORDER BY concat_ws(' ', s.first_name, s.last_name)
+                    ),
+                    ''
+                ) AS student_names
          FROM parents p
          INNER JOIN whatsapp_consents c
            ON c.parent_id = p.id
           AND c.purpose = :purpose
           AND c.status = 'OPTED_IN'
+         LEFT JOIN student_parents sp ON sp.parent_id = p.id
+         LEFT JOIN students s ON s.id = sp.student_id
          WHERE
            p.first_name ILIKE :first_name_search
            OR p.last_name ILIKE :last_name_search
            OR (p.first_name || ' ' || p.last_name) ILIKE :full_name_search
+           OR s.first_name ILIKE :student_first_name_search
+           OR s.last_name ILIKE :student_last_name_search
+           OR (s.first_name || ' ' || s.last_name) ILIKE :student_full_name_search
            OR (:parent_digits <> '' AND regexp_replace(COALESCE(p.phone, ''), '[^0-9]', '', 'g') LIKE :parent_phone_search)
            OR (:consent_digits <> '' AND regexp_replace(c.phone_e164, '[^0-9]', '', 'g') LIKE :consent_phone_search)
+         GROUP BY p.id, p.first_name, p.last_name, c.phone_e164
          ORDER BY p.last_name, p.first_name
          LIMIT 20"
     );
@@ -52,6 +65,9 @@ try {
         ':first_name_search' => $nameSearch,
         ':last_name_search' => $nameSearch,
         ':full_name_search' => $nameSearch,
+        ':student_first_name_search' => $nameSearch,
+        ':student_last_name_search' => $nameSearch,
+        ':student_full_name_search' => $nameSearch,
         ':parent_digits' => $digits,
         ':consent_digits' => $digits,
         ':parent_phone_search' => $phoneSearch,
@@ -63,6 +79,7 @@ try {
             'first_name' => (string) $row['first_name'],
             'last_name' => (string) $row['last_name'],
             'phone_e164' => (string) $row['phone_e164'],
+            'student_names' => (string) ($row['student_names'] ?? ''),
         ];
     }, $stmt->fetchAll());
 
