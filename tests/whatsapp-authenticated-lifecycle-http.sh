@@ -28,7 +28,7 @@ DENIED_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM users WHERE usern
 PARENT_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM parents WHERE last_name='Runtime' AND first_name='Fixture' ORDER BY created_at LIMIT 1")"
 test -n "$USER_ID" && test -n "$DENIED_ID" && test -n "$PARENT_ID"
 
-STUDENT_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule, last_name, first_name) VALUES ('WHATSAPP-SEARCH-STUDENT-001', 'Search', 'Student') RETURNING id")"
+STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule, last_name, first_name) VALUES ('WHATSAPP-SEARCH-STUDENT-001', 'Search', 'Student') RETURNING id")"
 psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v student="$STUDENT_ID" <<'SQL'
 INSERT INTO student_parents (student_id, parent_id, relationship_type, is_primary)
 VALUES (:'student', :'parent', 'MOTHER', TRUE);
