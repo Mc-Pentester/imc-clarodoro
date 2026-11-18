@@ -28,6 +28,12 @@ DENIED_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM users WHERE usern
 PARENT_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM parents WHERE last_name='Runtime' AND first_name='Fixture' ORDER BY created_at LIMIT 1")"
 test -n "$USER_ID" && test -n "$DENIED_ID" && test -n "$PARENT_ID"
 
+STUDENT_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule, last_name, first_name) VALUES ('WHATSAPP-SEARCH-STUDENT-001', 'Search', 'Student') RETURNING id")"
+psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v student="$STUDENT_ID" <<'SQL'
+INSERT INTO student_parents (student_id, parent_id, relationship_type, is_primary)
+VALUES (:'student', :'parent', 'MOTHER', TRUE);
+SQL
+
 make_session() {
   php -d session.save_path="$SESSIONS" -r '
     session_name("IMC_SESSION");
@@ -73,6 +79,24 @@ call_api() {
 
 CONSENT="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\",\"evidence_reference\":\"CI signed consent fixture\"}"
 SEND="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"template_name\":\"ci_template\",\"language\":\"fr\",\"idempotency_key\":\"whatsapp-http-key-000001\",\"parameters\":[\"CI\"]}"
+
+SEARCH_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-parent-search.json --write-out '%{http_code}' \
+  -H "Cookie: IMC_SESSION=$ALLOWED_SID" \
+  "http://127.0.0.1:8100/api/whatsapp/parents-search.php?purpose=GENERAL&q=Student%20Search")"
+test "$SEARCH_STATUS" = "200"
+php -r '
+  $d = json_decode(file_get_contents($argv[1]), true);
+  $expectedParent = $argv[2];
+  if (($d["success"] ?? false) !== true || !is_array($d["parents"] ?? null)) exit(1);
+  $matches = array_values(array_filter($d["parents"], static fn($p) => ($p["id"] ?? "") === $expectedParent));
+  if (count($matches) !== 1 || !str_contains((string)($matches[0]["student_names"] ?? ""), "Student Search")) exit(1);
+' /tmp/whatsapp-parent-search.json "$PARENT_ID"
+echo "PASS parent search by linked student full name HTTP 200"
+DENIED_SEARCH_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-parent-search-denied.json --write-out '%{http_code}' \
+  -H "Cookie: IMC_SESSION=$DENIED_SID" \
+  "http://127.0.0.1:8100/api/whatsapp/parents-search.php?purpose=GENERAL&q=Student%20Search")"
+test "$DENIED_SEARCH_STATUS" = "403"
+echo "PASS parent search permission enforcement HTTP 403"
 
 call_api no_permission 403 "$DENIED_SID" POST /api/whatsapp/consents.php "$CONSENT" whatsapp-ci-csrf-token
 call_api no_csrf 403 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$CONSENT" ''
