@@ -24,6 +24,22 @@ require("NETWORK SERVICE" in configure and "LOCAL SERVICE" in configure and "S-1
 require("IMC-Clarodaro-PHP-Server" in configure, "PHP startup task name missing")
 require("55432" in configure and "8080" in configure, "dedicated ports/default HTTP port missing")
 require("Test-PortAvailable" in configure, "port conflict protection missing")
+require("Test-LocalServiceProcessOwner" in configure and "GetOwnerSid" in configure
+        and "S-1-5-19" in configure and "Get-Process -Id ([int]$listener.OwningProcess)" in configure,
+        "HTTP startup validation must authenticate the exact PHP executable and LOCAL SERVICE owner when CIM metadata is partially hidden")
+require("commandLineMatches" in configure and "router.php" in configure and "0\\.0\\.0\\.0:" in configure,
+        "HTTP startup validation must check the expected router and port whenever Windows exposes the process command line")
+require("function Get-ClarodaroHttpListener" in configure
+        and "Get-NetTCPConnection" in configure and "netstat.exe" in configure
+        and "Source = 'netstat'" in configure,
+        "HTTP listener detection must fall back to the native Windows TCP table when Get-NetTCPConnection is unavailable or empty")
+require("Get-ClarodaroHttpListener -Port $Port" in configure
+        and "Get-NetTCPConnection et netstat" in configure
+        and "$request.Proxy = $null" in configure,
+        "HTTP health check must use the authenticated listener fallback and bypass system proxy for localhost")
+require("TASK_STATE_RUNNING" in configure and "LastTaskResult n'est pas un code d'échec final" in configure
+        and "Aucun processus php.exe actif" in configure,
+        "startup diagnostics must distinguish a still-running scheduled task from its final exit code and record PHP process presence")
 require("WindowsIdentity]::GetCurrent().User.Value" in configure and "$dataRoot /grant $dataRootInstallerAce" in configure
         and "$dataDirectory /inheritance:r /grant:r" in configure and "$dataDirectory /remove:g $installerAce" in configure,
         "initdb must receive temporary access as the installer identity, then remove it before service startup")
@@ -51,8 +67,20 @@ require("IMC_CLARODARO_ENV_FILE" in launcher and "router.php" in launcher,
         "PHP server does not load protected environment or router")
 require("Unregister-ScheduledTask" in cleanup and "sc.exe delete" in cleanup and "NETWORK SERVICE" in cleanup and "LOCAL SERVICE" in cleanup,
         "owned task/service cleanup missing")
-require("PostgreSQL\\data" in cleanup and "Remove-Item" not in cleanup,
-        "uninstall must preserve ProgramData database and config")
+require("PostgreSQL\\data" in cleanup and "PurgeData" in cleanup and "Remove-Item -LiteralPath $programDataRoot -Recurse -Force" in cleanup,
+        "uninstall must preserve ProgramData by default and purge it only after explicit opt-in")
+require("Copy-DirectoryWithoutOverwrite" in cleanup and "preserved-app-data" in cleanup
+        and "Get-Sha256Hex" in cleanup and "Copy-DirectoryWithoutOverwrite" in configure
+        and "exports" in cleanup and "exports" in configure
+        and "legacy-env" in cleanup and "legacy-env" in configure,
+        "uninstall must preserve and verify app-local user files outside Program Files, then restore them on reinstall")
+require('Name: "{app}\\backups"; Flags: uninsneveruninstall' not in iss
+        and 'Name: "{app}\\uploads"; Flags: uninsneveruninstall' not in iss
+        and 'Name: "{app}\\storage"; Flags: uninsneveruninstall' not in iss,
+        "Program Files writable directories must be moved before removal, not retained in the install tree")
+require("CmdLineParamExists('/PURGEDATA')" in iss and "PurgeClarodaroData" in iss
+        and "MB_DEFBUTTON2" in iss and " -PurgeData" in iss,
+        "uninstaller must offer a safe default data-preservation choice and a separately confirmed full purge")
 require("runtime" in router and "installer" in router and "database" in router and "router.php" in router and "strncasecmp" in router,
         "HTTP router must deny direct access to runtimes, secrets and internal directories")
 require("Initialize-PDG-Account.ps1" not in iss and "IMC_BOOTSTRAP_PASSWORD" not in iss
@@ -66,29 +94,34 @@ require("Create my account" not in setup_page and "Créer mon compte PDG" in set
 require("requireCsrfToken" in setup_api and "proc_open" in setup_api
         and "IMC_BOOTSTRAP_PASSWORD" in setup_api and "password_hash" not in setup_api,
         "one-time HTTP setup must validate CSRF and delegate account creation to the guarded CLI bootstrap")
-require("pdgCountBeforeSetup" in workflow and "setupSession" in workflow
-        and "api/auth/initial-setup.php" in workflow,
-        "Windows smoke test must prove no PDG is created during install and create it through post-install HTTP")
+require("pdgCountBeforeSetup" in workflow and "scripts/first-run-browser-smoke.mjs" in workflow
+        and "CLARODARO_TEST_PDG_PASSWORD" in workflow and "Parcours navigateur de première configuration PDG : PASS." in workflow,
+        "Windows smoke test must prove no PDG is created during install, then create it through the real browser setup form")
+require("setupSession" not in workflow,
+        "obsolete HTTP-only setup-session smoke-test marker must not be required")
+browser_smoke = read("scripts/first-run-browser-smoke.mjs")
+require("playwright" in browser_smoke and "Bienvenue sur Clarodaro" in browser_smoke
+        and "CLIENT-SIDE 12-CHARACTER MINIMUM" in browser_smoke
+        and "UNICODE PDG PASSWORD CREATION" in browser_smoke
+        and "SECOND SETUP REFUSED (HTTP 409)" in browser_smoke,
+        "real-browser first-run test must cover the visible form, password validation, Unicode password and one-time setup refusal")
 require("Prepare-Upgrade.ps1" in iss and "CurStepChanged" in iss,
         "pre-upgrade service shutdown hook missing")
+
 prepare_upgrade = read("installer/Prepare-Upgrade.ps1")
-require("Stop-Process -Id $listenerPid -Force -ErrorAction Stop" in prepare_upgrade
-        and "Wait-Process -Id $listenerPid -Timeout 5" in prepare_upgrade
+require("Test-LocalServiceProcessOwner" in prepare_upgrade and "GetOwnerSid" in prepare_upgrade
+        and "S-1-5-19" in prepare_upgrade and "expectedRouter" in prepare_upgrade
+        and "currentIdentityMatches" in prepare_upgrade,
+        "upgrade shutdown must authenticate the exact PHP executable, router, port and LOCAL SERVICE owner before stopping it")
+require("Wait-Process -Id $listenerPid -Timeout 5" in prepare_upgrade
         and "taskkill.exe" in prepare_upgrade and "/PID $listenerPid /T /F" in prepare_upgrade
-        and "Processus PHP authentifié" in prepare_upgrade
-        and "retryExecutableMatches" in prepare_upgrade and "retryOwnerMatches" in prepare_upgrade,
-        "upgrade must stop, re-authenticate the exact PHP PID before targeted taskkill, and confirm process exit")
-require("CommandLine" in prepare_upgrade and "$expectedRouter" in prepare_upgrade
-        and "Test-LocalServiceProcessOwner" in prepare_upgrade and "S-1-5-19" in prepare_upgrade
-        and "$currentIdentityMatches" in prepare_upgrade and "$commandLineMatches" in prepare_upgrade,
-        "PHP process termination must verify exact executable and LOCAL SERVICE owner, and validate command-line identity when Windows exposes it")
-require("Get-Process -Id $listenerPid" in prepare_upgrade,
-        "PHP executable-path fallback is missing when CIM omits ExecutablePath")
+        and "retryExecutableMatches" in prepare_upgrade and "retryOwnerMatches" in prepare_upgrade
+        and "Processus PHP authentifié" in prepare_upgrade,
+        "upgrade must re-authenticate the same PID before targeted taskkill and confirm that it exited")
 require("Stop-Process -Name" not in prepare_upgrade,
         "upgrade must never stop PHP processes by process name")
-
-require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss,
-        "uninstall cleanup hook missing")
+require("Remove-Windows-Services.ps1" in iss and "CurUninstallStepChanged" in iss and "InitializeUninstall" in iss,
+        "uninstall cleanup and data-choice hooks missing")
 require("Configure-Windows-Services.ps1" in iss and "AfterInstall: ConfigureAfterFiles" in iss and "procedure ConfigureAfterFiles" in iss,
         "post-file-copy service provisioning hook missing")
 require("Remove-Windows-Services.ps1" in iss and "Start-Clarodaro-Server.ps1" in iss,

@@ -1,6 +1,6 @@
 #define MyAppName "IMC-Clarodaro"
 #define MyAppVersion "1.1.0"
-#define MyAppPublisher "IMC-Clarodaro"
+#define MyAppPublisher "Jean Rony Agéna"
 #define MyAppURL "https://github.com/Mc-Pentester/imc-clarodoro"
 
 [Setup]
@@ -9,13 +9,14 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-DefaultDirName={autopf}\IMC-Clarodaro
+LicenseFile=..\LICENSE-CLARODARO.txt
+DefaultDirName={autopf}\IMC-Clarodoro
 DisableProgramGroupPage=yes
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\dist
-OutputBaseFilename=IMC-Clarodaro-Setup-{#MyAppVersion}
+OutputBaseFilename=IMC-Clarodoro-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -30,10 +31,10 @@ Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDesc
 
 [Dirs]
 Name: "{app}"
-Name: "{app}\logs"; Flags: uninsneveruninstall
-Name: "{app}\backups"; Flags: uninsneveruninstall
-Name: "{app}\uploads"; Flags: uninsneveruninstall
-Name: "{app}\storage"; Flags: uninsneveruninstall
+Name: "{app}\logs"
+Name: "{app}\backups"
+Name: "{app}\uploads"
+Name: "{app}\storage"
 Name: "{app}\installer"
 
 [Files]
@@ -41,7 +42,8 @@ Name: "{app}\installer"
 Source: "..\*"; DestDir: "{app}"; Excludes: ".git\*,.github\*,.env,.env.*,backups\*,logs\*,tmp\*,cache\*,node_modules\*,vendor\*,dist\*,audit\*,docs\*,installer\payload\*,installer\*.iss,installer\*.ps1"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Bundled, checksum-verified PHP runtime (NTS x64) and PostgreSQL server binaries.
 Source: "payload\php\*"; DestDir: "{app}\runtime\php"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "payload\postgresql\*"; DestDir: "{commonappdata}\IMC-Clarodaro\runtime\postgresql"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+; Stage PostgreSQL inside the install directory; Configure-Windows-Services.ps1 copies and verifies it in ProgramData before service registration.
+Source: "payload\postgresql\*"; DestDir: "{app}\installer\postgresql-runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "payload\runtime-manifest.json"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "payload\vc_redist.x64.exe"; DestDir: "{app}\runtime"; Flags: ignoreversion
 Source: "Start-Clarodaro-Server.ps1"; DestDir: "{app}\installer"; Flags: ignoreversion
@@ -54,10 +56,49 @@ Source: "Prepare-Upgrade.ps1"; Flags: dontcopy
 ; Bundling binaries does not authorize initialization, migration, restore or replacement of any existing PostgreSQL data directory.
 
 [Icons]
-Name: "{autoprograms}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14
-Name: "{autodesktop}\IMC-Clarodaro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
+Name: "{autoprograms}\IMC-Clarodoro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14
+Name: "{autodesktop}\IMC-Clarodoro"; Filename: "{sys}\cmd.exe"; Parameters: "/c start """" ""http://localhost:18080/"""; WorkingDir: "{app}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 14; Tasks: desktopicon
 
 [Code]
+
+var
+  PurgeClarodaroData: Boolean;
+
+function CmdLineParamExists(const Value: string): Boolean;
+var
+  I: Integer;
+begin
+  Result := False;
+  for I := 1 to ParamCount do
+    if CompareText(ParamStr(I), Value) = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  Result := True;
+  PurgeClarodaroData := False;
+  if CmdLineParamExists('/PURGEDATA') then
+    PurgeClarodaroData := True
+  else if not UninstallSilent then
+  begin
+    if MsgBox(
+      'Souhaitez-vous supprimer aussi les données locales de Clarodaro ?' + #13#10 + #13#10 +
+      'OUI : supprimer définitivement la base PostgreSQL, le compte PDG, les comptes utilisateurs, les paramètres, les sauvegardes, les exports, le stockage, les fichiers téléversés, les secrets et les journaux.' + #13#10 + #13#10 +
+      'NON : conserver toutes ces données pour une éventuelle réinstallation. C''est le choix recommandé.',
+      mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    begin
+      if MsgBox(
+        'CONFIRMATION FINALE : toutes les données de cet établissement seront supprimées sans possibilité de récupération par Clarodaro.' + #13#10 + #13#10 +
+        'Assurez-vous de disposer d''une sauvegarde externe si nécessaire. Confirmer la suppression définitive ?',
+        mbCriticalError, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        PurgeClarodaroData := True;
+    end;
+  end;
+end;
 
 procedure ConfigureAfterFiles;
 var
@@ -141,6 +182,8 @@ begin
     Parameters := '-NoProfile -ExecutionPolicy Bypass -File "' +
       ExpandConstant('{app}\installer\Remove-Windows-Services.ps1') +
       '" -AppRoot "' + ExpandConstant('{app}') + '"';
+    if PurgeClarodaroData then
+      Parameters := Parameters + ' -PurgeData';
     if not Exec(
       ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters,
