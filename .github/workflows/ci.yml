@@ -71,6 +71,15 @@ jobs:
               if marker not in private_text:
                   raise SystemExit(f"Original page content missing from protected source: {private}")
           print("SENSITIVE PAGE SOURCE SEPARATION: PASS")
+
+      - name: Verify E.164 phone normalization
+        run: php tests/e164-phone-validation.php
+
+      - name: Audit PDG bootstrap first-run safety
+        run: python3 scripts/audit-bootstrap-auth-safety.py
+
+      - name: Audit Windows installer service and data safety
+        run: python3 scripts/audit-windows-installer-safety.py
           PY
 
       - name: Audit PDG bootstrap first-run safety
