@@ -109,8 +109,8 @@ if ($phpVersionExitCode -ne 0) {
 }
 $phpModules = & $phpExePath -m 2>&1
 $phpModulesExitCode = $LASTEXITCODE
-if ($phpModulesExitCode -ne 0 -or $phpModules -notcontains 'PDO' -or $phpModules -notcontains 'pdo_pgsql' -or $phpModules -notcontains 'pgsql' -or $phpModules -notcontains 'curl') {
-    throw 'PHP ne charge pas correctement PDO, pdo_pgsql, pgsql et curl (requis pour WhatsApp réel).'
+if ($phpModulesExitCode -ne 0 -or $phpModules -notcontains 'PDO' -or $phpModules -notcontains 'pdo_pgsql' -or $phpModules -notcontains 'pgsql') {
+    throw 'PHP ne charge pas correctement PDO, pdo_pgsql et pgsql.'
 }
 
 $postgresVersion = (& (Join-Path $payloadRoot 'postgresql\bin\postgres.exe') --version 2>&1)

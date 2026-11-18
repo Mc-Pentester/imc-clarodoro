@@ -647,7 +647,22 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                         id="classe"
                         required>
 
-                        <option value="">Chargement des classes…</option>
+                        <option value="">
+                            -- Choisir une classe --
+                        </option>
+
+                        <option>1ère Kind</option>
+                        <option>2ème Kind</option>
+                        <option>3ème Kind</option>
+                        <option>1ère A.F.</option>
+                        <option>2ème A.F.</option>
+                        <option>3ème A.F.</option>
+                        <option>4ème A.F.</option>
+                        <option>5ème A.F.</option>
+                        <option>6ème A.F.</option>
+                        <option>7ème A.F.</option>
+                        <option>8ème A.F.</option>
+                        <option>9ème A.F.</option>
 
                     </select>
 
@@ -697,59 +712,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 
                 </div>
 
-
-                <div class="form-group full">
-                    <h3>Parents et responsables légaux</h3>
-                    <p>Jusqu'à trois responsables. Le NINU permet de retrouver la même fiche parent pour ses autres enfants.</p> <a href="/parents.html" target="_blank" rel="noopener">Ouvrir le répertoire indépendant des parents</a>.
-                </div>
-                <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
-                    <legend>Père</legend>
-                    <div class="form-group full">
-                        <label for="parentpereExistant">Utiliser une fiche parent existante (père)</label>
-                        <select id="parentpereExistant"><option value="">Créer / saisir une nouvelle fiche</option></select>
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group"><label for="parentperePrenom">Prénom</label><input id="parentperePrenom" maxlength="150"></div>
-                        <div class="form-group"><label for="parentpereNom">Nom</label><input id="parentpereNom" maxlength="150"></div>
-                        <div class="form-group"><label for="parentpereNinu">NINU (10 chiffres)</label><input id="parentpereNinu" maxlength="10" inputmode="numeric"></div>
-                        <div class="form-group"><label for="parentpereTelephone">Téléphone</label><input id="parentpereTelephone" type="tel" maxlength="50"></div>
-                        <div class="form-group"><label for="parentpereEmail">Courriel</label><input id="parentpereEmail" type="email" maxlength="255"></div>
-                        <div class="form-group"><label for="parentpereAdresse">Adresse</label><input id="parentpereAdresse" maxlength="2000"></div>
-                        <div class="form-group"><label for="parentperePrincipal">Responsable principal</label><input id="parentperePrincipal" type="checkbox"></div>
-                    </div>
-                </fieldset>
-                <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
-                    <legend>Mère</legend>
-                    <div class="form-group full">
-                        <label for="parentmereExistant">Utiliser une fiche parent existante (mère)</label>
-                        <select id="parentmereExistant"><option value="">Créer / saisir une nouvelle fiche</option></select>
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group"><label for="parentmerePrenom">Prénom</label><input id="parentmerePrenom" maxlength="150"></div>
-                        <div class="form-group"><label for="parentmereNom">Nom</label><input id="parentmereNom" maxlength="150"></div>
-                        <div class="form-group"><label for="parentmereNinu">NINU (10 chiffres)</label><input id="parentmereNinu" maxlength="10" inputmode="numeric"></div>
-                        <div class="form-group"><label for="parentmereTelephone">Téléphone</label><input id="parentmereTelephone" type="tel" maxlength="50"></div>
-                        <div class="form-group"><label for="parentmereEmail">Courriel</label><input id="parentmereEmail" type="email" maxlength="255"></div>
-                        <div class="form-group"><label for="parentmereAdresse">Adresse</label><input id="parentmereAdresse" maxlength="2000"></div>
-                        <div class="form-group"><label for="parentmerePrincipal">Responsable principal</label><input id="parentmerePrincipal" type="checkbox"></div>
-                    </div>
-                </fieldset>
-                <fieldset class="form-group full" style="border:1px solid #d7dce2;border-radius:8px;padding:14px;">
-                    <legend>Autre responsable / tuteur</legend>
-                    <div class="form-group full">
-                        <label for="parenttuteurExistant">Utiliser une fiche parent existante (responsable)</label>
-                        <select id="parenttuteurExistant"><option value="">Créer / saisir une nouvelle fiche</option></select>
-                    </div>
-                    <div class="form-grid">
-                        <div class="form-group"><label for="parenttuteurPrenom">Prénom</label><input id="parenttuteurPrenom" maxlength="150"></div>
-                        <div class="form-group"><label for="parenttuteurNom">Nom</label><input id="parenttuteurNom" maxlength="150"></div>
-                        <div class="form-group"><label for="parenttuteurNinu">NINU (10 chiffres)</label><input id="parenttuteurNinu" maxlength="10" inputmode="numeric"></div>
-                        <div class="form-group"><label for="parenttuteurTelephone">Téléphone</label><input id="parenttuteurTelephone" type="tel" maxlength="50"></div>
-                        <div class="form-group"><label for="parenttuteurEmail">Courriel</label><input id="parenttuteurEmail" type="email" maxlength="255"></div>
-                        <div class="form-group"><label for="parenttuteurAdresse">Adresse</label><input id="parenttuteurAdresse" maxlength="2000"></div>
-                        <div class="form-group"><label for="parenttuteurPrincipal">Responsable principal</label><input id="parenttuteurPrincipal" type="checkbox"></div>
-                    </div>
-                </fieldset>
 
                 <div class="form-group">
 
@@ -965,12 +927,8 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             </div>
 
             <div class="dossier-item">
-                <strong>NINU du parent (ancienne fiche) :</strong>
+                <strong>NINU du parent :</strong>
                 <span id="dossierNinuParent"></span>
-            </div>
-            <div class="dossier-item">
-                <strong>Parents / responsables :</strong>
-                <span id="dossierParents">Aucun responsable enregistré</span>
             </div>
 
             <div class="dossier-item">
@@ -1016,8 +974,9 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 <script src="auth.js"></script>
 <script>
 
+const ACTIVE_YEAR_KEY = "imc_active_year";
+
     let students = [];
-    let parentsHorsFormulaire = [];
     let photoActuelle = "";
     let cameraStream = null;
 
@@ -1037,41 +996,15 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
        INITIALISATION
     ================================================== */
 
-    document.addEventListener("DOMContentLoaded", async function () {
-        // Brancher le formulaire avant toute opération asynchrone (session,
-        // stockage sécurisé, listes). Un échec de préparation ne doit jamais
-        // laisser le bouton Enregistrer sans gestionnaire.
-        const studentForm = document.getElementById("studentForm");
-        if (studentForm && studentForm.dataset.submitBound !== "true") {
-            studentForm.addEventListener("submit", enregistrerEleve);
-            studentForm.dataset.submitBound = "true";
-        }
+    document.addEventListener(
+        "DOMContentLoaded",
+        function () {
 
-        const authenticated = await IMCAuth.verifySession();
-        if (!authenticated) {
-            window.location.replace("/index.html");
-            return;
-        }
+            IMCSecureStorage.ready.then(function (ok) {
 
-        const storageReady = await IMCSecureStorage.ready;
-        if (!storageReady) {
-            afficherMessage("Le stockage sécurisé n'est pas disponible.");
-            return;
-        }
+            if (!ok) return;
 
-            try {
-                await chargerParentsDisponibles();
-            } catch (parentError) {
-                console.warn(parentError);
-                afficherMessage("Le répertoire des parents est momentanément indisponible. Vous pouvez toujours saisir les responsables manuellement.");
-            }
-
-            try {
-                await chargerOptionsInscription();
-            } catch (optionsError) {
-                console.error(optionsError);
-                afficherMessage("Impossible de charger les classes et années scolaires. Vérifiez la connexion au serveur puis réessayez. " + (optionsError.message || ""));
-            }
+            creerAnnees();
 
             chargerEleves().then(function () {
                 afficherEleves();
@@ -1081,53 +1014,122 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                 afficherEleves();
             });
 
-            document.getElementById("searchStudent").addEventListener("input", afficherEleves);
-            document.getElementById("anneeScolaire").addEventListener("change", afficherEleves);
-            document.getElementById("photoGallery").addEventListener("change", chargerPhotoGalerie);
+            document
+                .getElementById("searchStudent")
+                .addEventListener(
+                    "input",
+                    afficherEleves
+                );
 
-    });
+
+            document
+                .getElementById("anneeScolaire")
+                .addEventListener(
+                    "change",
+                    function () {
+
+                        localStorage.setItem(
+                            ACTIVE_YEAR_KEY,
+                            this.value
+                        );
+
+                        afficherEleves();
+
+                    }
+                );
+
+
+            document
+                .getElementById("photoGallery")
+                .addEventListener(
+                    "change",
+                    chargerPhotoGalerie
+                );
+
+
+            document
+                .getElementById("studentForm")
+                .addEventListener(
+                    "submit",
+                    enregistrerEleve
+                );
+
+            });
+        }
+    );
 
 
     /* ==================================================
        ANNÉES
     ================================================== */
 
-    async function chargerOptionsInscription() {
-        const response = await fetch("api/student-enrollment-options/index.php", {
-            method: "GET", credentials: "same-origin",
-            headers: { "Accept": "application/json" }
-        });
-        const data = await response.json();
-        if (!response.ok || !data.success) throw new Error(data.message || data.error || "Impossible de charger les références scolaires.");
+    function creerAnnees() {
 
-        const classSelect = document.getElementById("classe");
-        classSelect.innerHTML = '<option value="">-- Choisir une classe --</option>';
-        (Array.isArray(data.classes) ? data.classes : []).forEach(item => {
-            const option = document.createElement("option");
-            option.value = item.id; option.textContent = item.name;
-            classSelect.appendChild(option);
-        });
+        const select =
+            document.getElementById(
+                "anneeScolaire"
+            );
 
-        const yearSelect = document.getElementById("anneeScolaire");
-        yearSelect.innerHTML = '<option value="">-- Choisir une année scolaire --</option>';
-        const years = Array.isArray(data.schoolYears) ? data.schoolYears : [];
-        years.forEach(item => {
-            const option = document.createElement("option");
-            option.value = item.id; option.textContent = item.label;
-            if (item.status === "ACTIVE" && !yearSelect.value) option.selected = true;
-            yearSelect.appendChild(option);
-        });
-        if (!data.classes?.length || !years.length) {
-            afficherMessage("Configurez une classe active et une année scolaire active avant toute inscription.");
+        select.innerHTML = "";
+
+
+        const anneeSauvegardee =
+            localStorage.getItem(
+                ACTIVE_YEAR_KEY
+            );
+
+
+        for (
+            let annee = 2026;
+            annee <= 2040;
+            annee++
+        ) {
+
+            const valeur =
+                annee +
+                " - " +
+                (annee + 1);
+
+
+            const option =
+                document.createElement(
+                    "option"
+                );
+
+
+            option.value = valeur;
+
+            option.textContent = valeur;
+
+
+            if (
+                anneeSauvegardee === valeur ||
+                (
+                    !anneeSauvegardee &&
+                    annee === 2026
+                )
+            ) {
+
+                option.selected = true;
+
+            }
+
+
+            select.appendChild(option);
+
         }
+
     }
+
 
     function anneeActuelle() {
-        return document.getElementById("anneeScolaire").selectedOptions[0]?.textContent || "";
-    }
-    function anneeScolaireId() { return document.getElementById("anneeScolaire").value; }
-    function classeActuelle() {
-        return document.getElementById("classe").selectedOptions[0]?.textContent || "";
+
+        return document
+            .getElementById(
+                "anneeScolaire"
+            )
+            .value;
+
     }
 
 
@@ -1151,16 +1153,13 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             departement: profile.departement || "",
             commune: profile.commune || "",
             sectionCommunale: profile.sectionCommunale || "",
-            classe: student.class_name || profile.classe || "",
-            classId: student.class_id || "",
+            classe: profile.classe || "",
             nisu: profile.nisu || student.matricule || "",
             contact: profile.contact || student.phone || "",
             ninuParent: profile.ninuParent || "",
-            parents: Array.isArray(student.parents) ? student.parents : [],
             documentInscription: profile.documentInscription || "",
-            photo: profile.photo || student.photo || "",
-            anneeScolaire: student.school_year_label || profile.anneeScolaire || anneeActuelle(),
-            schoolYearId: student.school_year_id || "",
+            photo: profile.photo || "",
+            anneeScolaire: profile.anneeScolaire || anneeActuelle(),
             status: student.status || "ACTIVE"
         };
     }
@@ -1173,7 +1172,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
         });
         const data = await response.json();
         if (!response.ok || !data.success) {
-            throw new Error(data.message || data.error || "Erreur de chargement des élèves");
+            throw new Error(data.message || "Erreur de chargement des élèves");
         }
         students = Array.isArray(data.students)
             ? data.students.map(adapterEleveServeur)
@@ -1206,20 +1205,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             }
         };
 
-        // Ne pas supprimer implicitement les liens parentaux lors d'une modification
-        // d'élève si le formulaire n'a fourni aucun responsable.
-        if (!id || (Array.isArray(eleve.parents) && eleve.parents.length > 0)) {
-            payload.parents = Array.isArray(eleve.parents) ? eleve.parents : [];
-        }
-
-        if (!id) {
-            payload.class_id = eleve.classId;
-            payload.school_year_id = eleve.schoolYearId;
-        } else {
-            // La classe fait partie de l'inscription active et peut être corrigée.
-            payload.class_id = eleve.classId;
-        }
-
         const response = await fetch(
             id ? "api/students/index.php?id=" + encodeURIComponent(id) : "api/students/index.php",
             {
@@ -1227,15 +1212,14 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                 credentials: "same-origin",
                 headers: {
                     "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    "X-CSRF-Token": IMCAuth.getCsrfToken() || ""
+                    "Accept": "application/json"
                 },
                 body: JSON.stringify(payload)
             }
         );
         const data = await response.json();
         if (!response.ok || !data.success) {
-            throw new Error(data.message || data.error || "Erreur d'enregistrement");
+            throw new Error(data.message || "Erreur d'enregistrement");
         }
         return adapterEleveServeur(data.student);
     }
@@ -1356,16 +1340,12 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                     );
 
 
-                const numberTd = document.createElement("td");
-                numberTd.textContent = String(index + 1);
-                row.appendChild(numberTd);
-
                 const photoTd = document.createElement("td");
                 if (estSourceImageSûre(student.photo)) {
                     const photo = document.createElement("img");
                     photo.src = student.photo;
                     photo.className = "student-photo";
-                    photo.alt = "Photo de " + (student.prenom || "l'élève");
+                    photo.alt = "Photo";
                     photoTd.appendChild(photo);
                 } else {
                     photoTd.textContent = "—";
@@ -1380,6 +1360,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                             : "";
 
                 [
+                    index + 1,
                     student.nom || "",
                     student.prenom || "",
                     sexe,
@@ -1427,59 +1408,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
        ENREGISTRER — F-02-A
     ================================================== */
 
-    function collecterParentsFormulaire() {
-        const slots = [{key:"pere",relationship:"FATHER"},{key:"mere",relationship:"MOTHER"},{key:"tuteur",relationship:"GUARDIAN"}];
-        const entered = slots.map(function(slot) {
-            const value = suffix => document.getElementById("parent"+slot.key+suffix).value.trim();
-            return {parent_id:document.getElementById("parent"+slot.key+"Existant").value,first_name:value("Prenom"),last_name:value("Nom"),ninu:value("Ninu"),phone:value("Telephone"),email:value("Email"),address:value("Adresse"),relationship_type:slot.relationship,is_primary:document.getElementById("parent"+slot.key+"Principal").checked};
-        }).filter(p => p.parent_id || p.first_name || p.last_name || p.ninu || p.phone || p.email || p.address);
-        const hidden = parentsHorsFormulaire.map(p => ({
-            parent_id:p.id || p.parent_id, first_name:p.first_name, last_name:p.last_name,
-            ninu:p.ninu || "", phone:p.phone || "", email:p.email || "", address:p.address || "",
-            relationship_type:p.relationship_type || "OTHER", is_primary:Boolean(p.is_primary)
-        }));
-        return entered.concat(hidden);
-    }
-
-    function chargerParentsFormulaire(parents) {
-        const slots = [{key:"pere",relationship:"FATHER"},{key:"mere",relationship:"MOTHER"},{key:"tuteur",relationship:"GUARDIAN"}];
-        const represented = new Set();
-        slots.forEach(function(slot,index) {
-            const p = (parents || []).find(item => item.relationship_type === slot.relationship && !represented.has(item.id)) || (parents || []).find(item => !represented.has(item.id)) || {};
-            if (p.id) represented.add(p.id);
-            const set = (suffix,value) => document.getElementById("parent"+slot.key+suffix).value = value || "";
-            document.getElementById("parent"+slot.key+"Existant").value = p.id || p.parent_id || "";
-            set("Prenom",p.first_name); set("Nom",p.last_name); set("Ninu",p.ninu);
-            set("Telephone",p.phone); set("Email",p.email); set("Adresse",p.address);
-            document.getElementById("parent"+slot.key+"Principal").checked = Boolean(p.is_primary);
-        });
-        parentsHorsFormulaire = (parents || []).filter(p => p.id && !represented.has(p.id));
-    }
-
-    async function chargerParentsDisponibles() {
-        const response = await fetch("api/parents/index.php", {credentials:"same-origin",headers:{"Accept":"application/json"},cache:"no-store"});
-        const data = await response.json();
-        if (!response.ok || !data.success) throw new Error(data.error || "Répertoire des parents indisponible");
-        const options = (data.parents || []).map(parent => {
-            const option = document.createElement("option");
-            option.value = parent.id;
-            option.textContent = parent.last_name + " " + parent.first_name + (parent.ninu ? " — " + parent.ninu : "");
-            return option;
-        });
-        ["pere","mere","tuteur"].forEach(key => {
-            const select = document.getElementById("parent"+key+"Existant");
-            options.forEach(option => select.appendChild(option.cloneNode(true)));
-            select.addEventListener("change", function() {
-                const parent = (data.parents || []).find(item => item.id === select.value);
-                const prefix = "parent"+key;
-                const set = (suffix,value) => document.getElementById(prefix+suffix).value = value || "";
-                if (!parent) return;
-                set("Prenom",parent.first_name); set("Nom",parent.last_name); set("Ninu",parent.ninu);
-                set("Telephone",parent.phone); set("Email",parent.email); set("Adresse",parent.address);
-            });
-        });
-    }
-
     async function enregistrerEleve(event) {
         event.preventDefault();
 
@@ -1491,10 +1419,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             return;
         }
 
-        if (!id && (!document.getElementById("classe").value || !anneeScolaireId())) {
-            afficherMessage("Sélectionnez une classe et une année scolaire actives.");
-            return;
-        }
         const nisu = document.getElementById("nisu").value.trim();
         const existing = id ? students.find(function (student) { return student.id === id; }) : null;
 
@@ -1508,16 +1432,13 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             departement: document.getElementById("departement").value.trim(),
             commune: document.getElementById("commune").value.trim(),
             sectionCommunale: document.getElementById("sectionCommunale").value.trim(),
-            classe: classeActuelle() || (existing && existing.classe) || "",
-            classId: document.getElementById("classe").value || (existing && existing.classId) || "",
+            classe: document.getElementById("classe").value,
             nisu: nisu,
             contact: document.getElementById("contact").value.trim(),
             ninuParent: document.getElementById("ninuParent").value.trim(),
-            parents: collecterParentsFormulaire(),
             documentInscription: document.getElementById("documentInscription").value,
             photo: photoActuelle,
-            anneeScolaire: anneeActuelle() || (existing && existing.anneeScolaire) || "",
-            schoolYearId: anneeScolaireId() || (existing && existing.schoolYearId) || "",
+            anneeScolaire: anneeActuelle(),
             status: "ACTIVE"
         };
 
@@ -1557,22 +1478,10 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
         document.getElementById("departement").value = student.departement || "";
         document.getElementById("commune").value = student.commune || "";
         document.getElementById("sectionCommunale").value = student.sectionCommunale || "";
-        document.getElementById("classe").value = student.classId || "";
-        document.getElementById("anneeScolaire").value = student.schoolYearId || "";
-        const classSelect = document.getElementById("classe");
-        classSelect.disabled = false;
-        if (student.classId && !Array.from(classSelect.options).some(option => option.value === student.classId)) {
-            const currentOption = document.createElement("option");
-            currentOption.value = student.classId;
-            currentOption.textContent = student.classe || "Classe actuelle (indisponible)";
-            classSelect.appendChild(currentOption);
-        }
-        classSelect.value = student.classId || "";
-        document.getElementById("anneeScolaire").disabled = true;
+        document.getElementById("classe").value = student.classe || "";
         document.getElementById("nisu").value = student.nisu || "";
         document.getElementById("contact").value = student.contact || "";
         document.getElementById("ninuParent").value = student.ninuParent || "";
-        chargerParentsFormulaire(student.parents || []);
         document.getElementById("documentInscription").value = student.documentInscription || "";
 
         photoActuelle = student.photo || "";
@@ -1659,8 +1568,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
     ================================================== */
 
     function annulerFormulaire() {
-        document.getElementById("classe").disabled = false;
-        document.getElementById("anneeScolaire").disabled = false;
 
         document
             .getElementById(
@@ -2002,15 +1909,6 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             "dossierNinuParent"
         ).textContent =
             student.ninuParent || "";
-
-        document.getElementById("dossierParents").textContent =
-            (student.parents || []).map(function(parent) {
-                const relation = {FATHER:"Père",MOTHER:"Mère",GUARDIAN:"Tuteur",OTHER:"Autre"}[parent.relationship_type] || "Responsable";
-                return relation + " : " + parent.first_name + " " + parent.last_name
-                    + (parent.phone ? " — " + parent.phone : "")
-                    + (parent.email ? " — " + parent.email : "")
-                    + (parent.is_primary ? " (principal)" : "");
-            }).join("\n") || "Aucun responsable enregistré";
 
 
         document.getElementById(

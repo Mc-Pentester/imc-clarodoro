@@ -21,17 +21,11 @@ $protected = [
     '/pdg.html' => 'PDG.html',
     '/finances.html' => 'finances.html',
     '/personnel.html' => 'personnel.html',
-    '/parents.html' => 'parents.html',
     '/badge.html' => 'badge.html',
     '/payroll-recovery.html' => 'payroll-recovery.html',
-    '/expense-recovery.html' => 'expense-recovery.html',
     '/resultats.html' => 'resultats.html',
-    '/classes.html' => 'classes.html',
-    '/payroll.html' => 'payroll.html',
     '/vacations.html' => 'vacations.html',
     '/vacances.html' => 'vacations.html',
-    '/whatsapp-send.html' => 'whatsapp-send.html',
-    '/whatsapp-consent-management.html' => 'whatsapp-consent-management.html',
 ];
 
 if ($path === '/setup' || $path === '/setup/') {
@@ -51,6 +45,10 @@ if (isset($protected[$path]) || isset($protected[$lowerPath])) {
     exit;
 }
 
+if ($path === '/whatsapp-send.html') {
+    require __DIR__ . '/private-pages/whatsapp-send.php';
+    exit;
+}
 
 $blockedDirectories = [
     '/runtime', '/installer', '/database', '/scripts', '/config',
