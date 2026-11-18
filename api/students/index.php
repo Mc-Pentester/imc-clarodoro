@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/auth.php';
+require_once __DIR__ . '/../../config/phone.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -281,10 +282,13 @@ elseif ($method === 'POST') {
     }
 
     $phone = null;
-    if (isset($data['phone']) && is_string($data['phone'])) {
-        $phone = trim($data['phone']);
-        if (strlen($phone) > 50) {
-            apiError(422, 'phone trop long (max 50 caractères)');
+    if (array_key_exists('phone', $data) && $data['phone'] !== null && $data['phone'] !== '') {
+        if (!is_string($data['phone']) || strlen($data['phone']) > 50) {
+            apiError(422, 'phone invalide');
+        }
+        $phone = normalizeE164Phone($data['phone']);
+        if ($phone === null) {
+            apiError(422, 'Le téléphone doit inclure l’indicatif international au format E.164 (ex. +50937000000)');
         }
     }
 
@@ -621,10 +625,16 @@ elseif ($method === 'PUT' || $method === 'PATCH') {
         $params[':address'] = trim($data['address']);
     }
 
-    if (isset($data['phone']) && is_string($data['phone'])) {
-        $phone = trim($data['phone']);
-        if (strlen($phone) > 50) {
-            apiError(422, 'phone trop long (max 50 caractères)');
+    if (array_key_exists('phone', $data)) {
+        if ($data['phone'] === null || $data['phone'] === '') {
+            $phone = null;
+        } elseif (!is_string($data['phone']) || strlen($data['phone']) > 50) {
+            apiError(422, 'phone invalide');
+        } else {
+            $phone = normalizeE164Phone($data['phone']);
+            if ($phone === null) {
+                apiError(422, 'Le téléphone doit inclure l’indicatif international au format E.164 (ex. +50937000000)');
+            }
         }
         $updateFields[] = 'phone = :phone';
         $params[':phone'] = $phone;
