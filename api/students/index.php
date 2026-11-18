@@ -87,7 +87,13 @@ function saveStudentParents(PDO $pdo, string $studentId, array $parents): void
             $parentId = $stmt->fetchColumn();
         }
         $link = $pdo->prepare('INSERT INTO student_parents(student_id,parent_id,relationship_type,is_primary) VALUES(:student_id,:parent_id,:relationship_type,:is_primary)');
-        $link->execute([':student_id'=>$studentId,':parent_id'=>$parentId,':relationship_type'=>$p['relationship_type'],':is_primary'=>$p['is_primary']]);
+        $link->bindValue(':student_id', $studentId, PDO::PARAM_STR);
+        $link->bindValue(':parent_id', $parentId, PDO::PARAM_STR);
+        $link->bindValue(':relationship_type', $p['relationship_type'], PDO::PARAM_STR);
+        // PDO_PGSQL may serialize PHP false as an empty string when execute(array)
+        // is used. Bind explicitly as BOOLEAN so PostgreSQL receives FALSE, not ''.
+        $link->bindValue(':is_primary', $p['is_primary'], PDO::PARAM_BOOL);
+        $link->execute();
     }
 }
 
