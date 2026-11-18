@@ -17,40 +17,6 @@ function Write-Step([string]$Message) {
     Write-Host "[Clarodaro] $Message"
 }
 
-function Get-Sha256Hex([string]$Path) {
-    $stream = [System.IO.File]::OpenRead($Path)
-    $sha256 = [System.Security.Cryptography.SHA256]::Create()
-    try {
-        $bytes = $sha256.ComputeHash($stream)
-        return ([System.BitConverter]::ToString($bytes)).Replace('-', '')
-    }
-    finally {
-        $sha256.Dispose()
-        $stream.Dispose()
-    }
-}
-
-function Copy-DirectoryWithoutOverwrite([string]$Source, [string]$Destination) {
-    if (-not (Test-Path -LiteralPath $Source -PathType Container)) { return }
-    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    $sourceRoot = [System.IO.Path]::GetFullPath($Source).TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-    foreach ($file in Get-ChildItem -LiteralPath $Source -File -Recurse -Force) {
-        $relative = $file.FullName.Substring($sourceRoot.Length)
-        $target = Join-Path $Destination $relative
-        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
-        if (Test-Path -LiteralPath $target -PathType Leaf) {
-            $sourceHash = (Get-Sha256Hex -Path $file.FullName)
-            $targetHash = (Get-Sha256Hex -Path $target)
-            if ($sourceHash -ne $targetHash) { throw "Conflit de données pendant la conservation : $target. Aucun fichier existant ne sera écrasé." }
-        } else {
-            Copy-Item -LiteralPath $file.FullName -Destination $target -ErrorAction Stop
-        }
-        $verifiedHash = (Get-Sha256Hex -Path $target)
-        $expectedHash = (Get-Sha256Hex -Path $file.FullName)
-        if ($verifiedHash -ne $expectedHash) { throw "Vérification SHA-256 échouée après copie : $target" }
-    }
-}
-
 function Set-PrivateAcl([string]$Path) {
     $inheritance = if (Test-Path -LiteralPath $Path -PathType Container) { '(OI)(CI)F' } else { 'F' }
     & icacls.exe $Path /inheritance:r /grant:r "*S-1-5-18:$inheritance" "*S-1-5-32-544:$inheritance" | Out-Null
@@ -63,103 +29,27 @@ function Test-PortAvailable([int]$Port) {
     return ($null -eq $listener)
 }
 
-function Get-ClarodaroHttpListener([int]$Port) {
-    # Dans certains contextes de service restreints, Get-NetTCPConnection
-    # peut ne rien retourner alors que le serveur PHP écoute réellement.
-    # netstat fournit alors une seconde source Windows pour retrouver le PID.
-    try {
-        $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction Stop |
-            Select-Object -First 1
-        if ($listener) {
-            return [pscustomobject]@{
-                LocalAddress = [string]$listener.LocalAddress
-                LocalPort = [int]$listener.LocalPort
-                OwningProcess = [int]$listener.OwningProcess
-                Source = 'Get-NetTCPConnection'
-            }
-        }
-    }
-    catch {
-        Write-Step "Détection TCP PowerShell indisponible pour le port $Port : $($_.Exception.Message)"
-    }
-
-    $netstat = Join-Path $env:SystemRoot 'System32\netstat.exe'
-    if (Test-Path -LiteralPath $netstat -PathType Leaf) {
-        $lines = & $netstat -ano -p tcp 2>$null
-        foreach ($line in $lines) {
-            if ([string]$line -match '^\s*TCP\s+(?<local>\S+):(?<port>\d+)\s+\S+\s+LISTENING\s+(?<pid>\d+)\s*$' -and
-                [int]$Matches.port -eq $Port) {
-                return [pscustomobject]@{
-                    LocalAddress = [string]$Matches.local
-                    LocalPort = [int]$Matches.port
-                    OwningProcess = [int]$Matches.pid
-                    Source = 'netstat'
-                }
-            }
-        }
-    }
-    return $null
-}
-
-function Test-LocalServiceProcessOwner($Process) {
-    if (-not $Process) { return $false }
-    try {
-        $owner = Invoke-CimMethod -InputObject $Process -MethodName GetOwnerSid -ErrorAction Stop
-        return ($owner.ReturnValue -eq 0 -and [string]$owner.Sid -eq 'S-1-5-19')
-    }
-    catch {
-        Write-Step ("Impossible de confirmer le propriétaire LOCAL SERVICE du processus HTTP : " + $_.Exception.Message)
-        return $false
-    }
-}
-
 function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
-    $listener = Get-ClarodaroHttpListener -Port $Port
+    $listener = Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue |
+        Select-Object -First 1
     if (-not $listener) {
-        throw "Aucun listener TCP détecté sur le port HTTP $Port (Get-NetTCPConnection et netstat)."
+        throw "Aucun processus n'écoute sur le port HTTP $Port."
     }
 
     $listenerProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
-    if (-not $listenerProcess) {
-        throw "Impossible de lire les métadonnées du processus qui écoute sur le port $Port (PID $($listener.OwningProcess))."
+    if (-not $listenerProcess -or -not $listenerProcess.ExecutablePath) {
+        throw "Impossible d'identifier le processus qui écoute sur le port $Port."
     }
-
-    $actualExecutable = [string]$listenerProcess.ExecutablePath
-    if ([string]::IsNullOrWhiteSpace($actualExecutable)) {
-        $processInfo = Get-Process -Id ([int]$listener.OwningProcess) -ErrorAction SilentlyContinue
-        if ($processInfo) { $actualExecutable = [string]$processInfo.Path }
-    }
-    if ([string]::IsNullOrWhiteSpace($actualExecutable)) {
-        throw "Impossible de confirmer le chemin de l'exécutable HTTP (PID $($listener.OwningProcess))."
-    }
-
-    $actualExecutable = [System.IO.Path]::GetFullPath($actualExecutable)
+    $actualExecutable = [System.IO.Path]::GetFullPath([string]$listenerProcess.ExecutablePath)
     $expectedExecutable = [System.IO.Path]::GetFullPath($ExpectedPhpPath)
-    $executableMatches = [string]::Equals($actualExecutable, $expectedExecutable, [StringComparison]::OrdinalIgnoreCase)
-    $isLocalServiceOwner = Test-LocalServiceProcessOwner $listenerProcess
-    $commandLine = [string]$listenerProcess.CommandLine
-    $commandLineMatches = $true
-    if (-not [string]::IsNullOrWhiteSpace($commandLine)) {
-        $normalizedCommandLine = $commandLine.Replace('/', '\')
-        $expectedRoot = [System.IO.Path]::GetFullPath($AppRoot).TrimEnd('\')
-        $expectedRouter = Join-Path $expectedRoot 'router.php'
-        $commandLineMatches = $normalizedCommandLine.IndexOf($expectedRouter, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-            $normalizedCommandLine.IndexOf($expectedRoot, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and
-            ($normalizedCommandLine -match ('(?i)(?:^|\s)-S\s+["'']?0\.0\.0\.0:' + $Port + '["'']?(?:\s|$)'))
-    }
-    else {
-        Write-Step "Ligne de commande masquée par Windows pour PID $($listener.OwningProcess) ; validation par exécutable exact et SID LOCAL SERVICE."
-    }
-
-    if (-not $executableMatches -or -not $isLocalServiceOwner -or -not $commandLineMatches) {
-        throw "Le port HTTP $Port est occupé par un processus non authentifié comme PHP Clarodaro (PID $($listener.OwningProcess), exécutable=$actualExecutable, LOCAL SERVICE=$isLocalServiceOwner)."
+    if (-not [string]::Equals($actualExecutable, $expectedExecutable, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Le port HTTP $Port est occupé par un autre programme : $actualExecutable. Clarodaro PHP attendu : $expectedExecutable"
     }
 
     $request = [System.Net.HttpWebRequest]::Create("http://127.0.0.1:$Port/")
     $request.Method = 'GET'
     $request.AllowAutoRedirect = $false
     $request.Timeout = 8000
-    $request.Proxy = $null
     $response = $null
     try {
         $response = $request.GetResponse()
@@ -187,7 +77,7 @@ function Test-ClarodaroHttpEndpoint([int]$Port, [string]$ExpectedPhpPath) {
     if ($body -notmatch '(?i)Bienvenue sur Clarodaro|Connexion requise|Créer mon compte PDG|Configuration terminée') {
         throw "Le serveur répond avec une page Clarodaro inattendue (HTTP $statusCode)."
     }
-    Write-Step "Contrôle HTTP Clarodaro réussi : port $Port, PID $($listener.OwningProcess), source=$($listener.Source), exécutable PHP et propriétaire LOCAL SERVICE confirmés, HTTP $statusCode."
+    Write-Step "Contrôle HTTP Clarodaro réussi : port $Port, processus PHP identifié, HTTP $statusCode."
 }
 
 $AppRoot = [System.IO.Path]::GetFullPath($AppRoot)
@@ -204,54 +94,19 @@ $taskName = 'IMC-Clarodaro-PHP-Server'
 $postgresServiceAccount = 'NT AUTHORITY\NETWORK SERVICE'
 $phpTaskAccount = 'NT AUTHORITY\LOCAL SERVICE'
 $postgresRuntimeRoot = Join-Path $programDataRoot 'runtime\postgresql'
-$postgresRuntimeSource = Join-Path $AppRoot 'installer\postgresql-runtime'
 $pgBin = Join-Path $postgresRuntimeRoot 'bin'
 $pgCtl = Join-Path $pgBin 'pg_ctl.exe'
 $initdb = Join-Path $pgBin 'initdb.exe'
 $psql = Join-Path $pgBin 'psql.exe'
 $pgIsReady = Join-Path $pgBin 'pg_isready.exe'
-$postgres = Join-Path $pgBin 'postgres.exe'
 $php = Join-Path $AppRoot 'runtime\php\php.exe'
 
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     throw 'Cette configuration doit être exécutée en administrateur.'
 }
-
-# PostgreSQL est d'abord livré dans le dossier de staging de l'application.
-# Le déploiement vers ProgramData est explicite afin de ne pas dépendre du
-# traitement des destinations CommonAppData par Inno Setup.
-if (-not (Test-Path -LiteralPath $postgresRuntimeSource -PathType Container)) {
-    throw "Payload PostgreSQL absent de l'installation : $postgresRuntimeSource"
-}
-$runtimeSourceBin = Join-Path $postgresRuntimeSource 'bin'
-foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe')) {
-    $sourceFile = Join-Path $runtimeSourceBin $runtimeFile
-    if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
-        throw "Binaire PostgreSQL absent du payload embarqué : $sourceFile"
-    }
-}
-New-Item -ItemType Directory -Path $postgresRuntimeRoot -Force | Out-Null
-Write-Step "Déploiement du runtime PostgreSQL : $postgresRuntimeSource -> $postgresRuntimeRoot"
-$robocopyOutput = & robocopy.exe $postgresRuntimeSource $postgresRuntimeRoot /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP 2>&1
-$robocopyExitCode = $LASTEXITCODE
-if ($robocopyExitCode -ge 8) {
-    throw "Copie du runtime PostgreSQL vers ProgramData échouée (robocopy $robocopyExitCode) : $($robocopyOutput -join ' ')"
-}
-foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe')) {
-    $sourceFile = Join-Path $runtimeSourceBin $runtimeFile
-    $targetFile = Join-Path $pgBin $runtimeFile
-    if (-not (Test-Path -LiteralPath $targetFile -PathType Leaf)) {
-        throw "Binaire PostgreSQL non déployé dans ProgramData : $targetFile"
-    }
-    if ((Get-Sha256Hex -Path $sourceFile) -ne (Get-Sha256Hex -Path $targetFile)) {
-        throw "Vérification SHA-256 du runtime PostgreSQL échouée après déploiement : $targetFile"
-    }
-}
-Write-Step 'Runtime PostgreSQL déployé et vérifié (5 exécutables).'
-
-foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $postgres, $php)) {
+foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $php)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
-        throw "Runtime requis absent après déploiement : $required"
+        throw "Runtime requis absent : $required"
     }
 }
 if ($PostgreSqlPort -lt 1024 -or $PostgreSqlPort -gt 65535 -or $HttpPort -lt 1024 -or $HttpPort -gt 65535) {
@@ -270,28 +125,6 @@ elseif (-not (Test-PortAvailable $HttpPort)) {
 }
 
 New-Item -ItemType Directory -Path $configRoot, $dataRoot, $logRoot -Force | Out-Null
-
-$preservedAppDataRoot = Join-Path $programDataRoot 'preserved-app-data'
-foreach ($relativeDirectory in @('backups', 'uploads', 'storage', 'logs', 'exports')) {
-    $savedDirectory = Join-Path $preservedAppDataRoot $relativeDirectory
-    $installedDirectory = Join-Path $AppRoot $relativeDirectory
-    if (Test-Path -LiteralPath $savedDirectory -PathType Container) {
-        Write-Step "Restauration des fichiers locaux conservés : $relativeDirectory"
-        Copy-DirectoryWithoutOverwrite -Source $savedDirectory -Destination $installedDirectory
-        Remove-Item -LiteralPath $savedDirectory -Recurse -Force -ErrorAction Stop
-    }
-}
-$legacyEnvironmentRoot = Join-Path $preservedAppDataRoot 'legacy-env'
-if (Test-Path -LiteralPath $legacyEnvironmentRoot -PathType Container) {
-    Write-Step 'Restauration de la configuration historique .env conservée.'
-    Copy-DirectoryWithoutOverwrite -Source $legacyEnvironmentRoot -Destination $AppRoot
-    Remove-Item -LiteralPath $legacyEnvironmentRoot -Recurse -Force -ErrorAction Stop
-}
-if ((Test-Path -LiteralPath $preservedAppDataRoot -PathType Container) -and
-    -not (Get-ChildItem -LiteralPath $preservedAppDataRoot -Force | Select-Object -First 1)) {
-    Remove-Item -LiteralPath $preservedAppDataRoot -Force
-}
-
 
 # Configurer les ACL sur les repertoires parents AVANT de creer le cluster
 # NetworkService (S-1-5-20) a besoin de droits de traversee sur tous les repertoires parents
@@ -751,41 +584,10 @@ if ($hasProtectedConfig) {
 $taskEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } else { '' }
 if ($task) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-
-    # Stopper uniquement un éventuel processus PHP orphelin appartenant à
-    # cette installation et à ce port. Ne jamais tuer un autre serveur PHP.
-    $expectedPhp = [System.IO.Path]::GetFullPath($php)
-    $expectedRoot = [System.IO.Path]::GetFullPath($AppRoot)
-    $ownedPhp = Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
-        Where-Object {
-            $executableMatches = $false
-            if (-not [string]::IsNullOrWhiteSpace([string]$_.ExecutablePath)) {
-                try {
-                    $candidate = [System.IO.Path]::GetFullPath([string]$_.ExecutablePath)
-                    $executableMatches = [string]::Equals($candidate, $expectedPhp, [StringComparison]::OrdinalIgnoreCase)
-                } catch { $executableMatches = $false }
-            }
-            $commandLine = [string]$_.CommandLine
-            if (-not $executableMatches -and -not [string]::IsNullOrWhiteSpace($commandLine)) {
-                $normalizedCommandLine = $commandLine.Replace('/', '\')
-                $normalizedExpectedPhp = $expectedPhp.Replace('/', '\')
-                $executableMatches = $normalizedCommandLine.IndexOf($normalizedExpectedPhp, [StringComparison]::OrdinalIgnoreCase) -ge 0
-            }
-            $executableMatches -and
-                $commandLine -like "*-S 0.0.0.0:$HttpPort*" -and
-                $commandLine -like "*$expectedRoot*"
-        }
-    foreach ($process in $ownedPhp) {
-        Write-Step "Arrêt du processus PHP Clarodaro orphelin PID=$($process.ProcessId)."
-        Stop-Process -Id ([int]$process.ProcessId) -Force -ErrorAction Stop
-    }
-
-    $stopDeadline = (Get-Date).AddSeconds(30)
+    $stopDeadline = (Get-Date).AddSeconds(20)
     while (-not (Test-PortAvailable $HttpPort) -and (Get-Date) -lt $stopDeadline) { Start-Sleep -Seconds 1 }
     if (-not (Test-PortAvailable $HttpPort)) {
-        $listener = Get-NetTCPConnection -State Listen -LocalPort $HttpPort -ErrorAction SilentlyContinue | Select-Object -First 1
-        $owner = if ($listener) { Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue } else { $null }
-        throw "Le port HTTP $HttpPort reste occupé après l'arrêt de la tâche. PID=$($listener.OwningProcess), processus=$($owner.Name), chemin=$($owner.ExecutablePath). Aucun processus tiers ne sera arrêté."
+        throw "L'ancien serveur Clarodaro n'a pas libéré le port $HttpPort. Aucun nouveau serveur n'a été lancé."
     }
 }
 
@@ -804,38 +606,12 @@ $principal = New-ScheduledTaskPrincipal -UserId $phpTaskAccount -LogonType Servi
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
-
-# Attendre une réponse HTTP réelle de Clarodaro, pas seulement un port TCP
-# qui s'ouvre. Le serveur peut démarrer alors que la tâche est encore Running.
-$httpDeadline = (Get-Date).AddSeconds(60)
-$httpReady = $false
-$lastHttpError = ''
-do {
-    try {
-        Test-ClarodaroHttpEndpoint -Port $HttpPort -ExpectedPhpPath $php
-        $httpReady = $true
-        break
-    }
-    catch {
-        $lastHttpError = $_.Exception.Message
-        Start-Sleep -Seconds 2
-    }
-} while ((Get-Date) -lt $httpDeadline)
-
-if (-not $httpReady) {
+$httpDeadline = (Get-Date).AddSeconds(35)
+while ((Test-PortAvailable $HttpPort) -and (Get-Date) -lt $httpDeadline) { Start-Sleep -Seconds 1 }
+if (Test-PortAvailable $HttpPort) {
     $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
     $taskState = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-    $taskResultText = 'indisponible'
-    if ($taskInfo -and $null -ne $taskInfo.LastTaskResult) {
-        $taskResultNumber = [long]$taskInfo.LastTaskResult
-        $taskResultHex = '0x{0:X8}' -f ([uint32]$taskResultNumber)
-        $taskResultText = "$taskResultNumber ($taskResultHex)"
-    }
-    $taskStateText = if ($taskState) { [string]$taskState.State } else { 'introuvable' }
-    if ($taskStateText -eq 'Running' -and $taskResultText -like '267009*') {
-        Write-Step "La tâche PHP est toujours en cours (0x00041301 = TASK_STATE_RUNNING) ; LastTaskResult n'est pas un code d'échec final."
-    }
-    Write-Step "Échec du contrôle HTTP PHP : état tâche=$taskStateText, LastTaskResult=$taskResultText, LastRunTime=$($taskInfo.LastRunTime)"
+    Write-Step "Échec démarrage PHP : état tâche=$($taskState.State), LastTaskResult=$($taskInfo.LastTaskResult), LastRunTime=$($taskInfo.LastRunTime)"
     if ($taskState) {
         foreach ($taskAction in $taskState.Actions) {
             Write-Step "Action PHP : Execute=$($taskAction.Execute) ; Arguments=$($taskAction.Arguments) ; WorkingDirectory=$($taskAction.WorkingDirectory)"
@@ -845,18 +621,6 @@ if (-not $httpReady) {
         Where-Object { $_.Message -like "*$taskName*" } | Select-Object -First 25
     foreach ($event in $taskEvents) {
         Write-Step "TaskScheduler ID=$($event.Id) $($event.TimeCreated): $($event.Message)"
-    }
-    $phpProcesses = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue)
-    foreach ($phpProcess in $phpProcesses) {
-        $ownerSid = 'inconnu'
-        try {
-            $ownerInfo = Invoke-CimMethod -InputObject $phpProcess -MethodName GetOwnerSid -ErrorAction Stop
-            if ($ownerInfo.ReturnValue -eq 0) { $ownerSid = [string]$ownerInfo.Sid }
-        } catch {}
-        Write-Step "Processus PHP observé : PID=$($phpProcess.ProcessId), exécutable=$($phpProcess.ExecutablePath), propriétaire SID=$ownerSid, commande=$($phpProcess.CommandLine)"
-    }
-    if ($phpProcesses.Count -eq 0) {
-        Write-Step 'Aucun processus php.exe actif au moment du diagnostic HTTP.'
     }
     $phpLog = Join-Path $logRoot 'php-server.log'
     if (Test-Path -LiteralPath $phpLog -PathType Leaf) {
@@ -868,36 +632,12 @@ if (-not $httpReady) {
             Get-Content -LiteralPath $phpOutputLog -Tail 100 | ForEach-Object { Write-Step "PHP process: $_" }
         }
     }
-    throw "Le serveur PHP Clarodaro n'a pas fourni une réponse HTTP valide sur le port $HttpPort après 60 secondes (LastTaskResult=$($taskInfo.LastTaskResult)). Dernière erreur HTTP : $lastHttpError"
+    throw "Le serveur PHP n'a pas démarré sur le port $HttpPort (LastTaskResult=$($taskInfo.LastTaskResult))."
 }
 
-# Installer les tâches de sauvegarde après validation du serveur et de la configuration DB.
-# Le runner lit le fichier protégé ProgramData et s'exécute sous LOCAL SERVICE,
-# comme le serveur PHP : aucun mot de passe n'est stocké dans les arguments de tâche.
-$backupEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } elseif (Test-Path -LiteralPath $legacyEnvironmentFile -PathType Leaf) { $legacyEnvironmentFile } else { '' }
-$backupInstaller = Join-Path $AppRoot 'Scripts\INSTALL-DB-BACKUP-TASK.ps1'
-if (-not $backupEnvironmentFile) {
-    Write-Warning 'Sauvegarde automatique non configurée : fichier de connexion DB introuvable.'
-}
-elseif (-not (Test-Path -LiteralPath $backupInstaller -PathType Leaf)) {
-    Write-Warning "Sauvegarde automatique non configurée : script absent ($backupInstaller)."
-}
-else {
-    try {
-        & $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $backupInstaller -AppRoot $AppRoot -EnvironmentFile $backupEnvironmentFile -PgBin $pgBin -BackupDirectory (Join-Path $AppRoot 'backups')
-        if ($LASTEXITCODE -ne 0) {
-            throw "Installation des tâches de sauvegarde échouée (code $LASTEXITCODE)."
-        }
-        Write-Step 'Tâches de sauvegarde installées et vérifiées.'
-    }
-    catch {
-        Write-Warning ("Le serveur Clarodaro est opérationnel, mais la sauvegarde automatique reste à configurer : " + $_.Exception.Message)
-        Write-Step 'Consulter installer-services.log pour le diagnostic de la sauvegarde.'
-    }
-}
-
-# La boucle précédente a déjà confirmé l'identité du processus et une réponse HTTP.
-# Aucun second contrôle ponctuel n'est nécessaire ici.
+# Ne pas confondre un simple port TCP ouvert avec le serveur web Clarodaro.
+# EDB ou un autre service peut répondre sur 8080 sans servir l'application.
+Test-ClarodaroHttpEndpoint -Port $HttpPort -ExpectedPhpPath $php
 
 try {
     if (-not (Get-NetFirewallRule -DisplayName 'IMC-Clarodaro HTTP LAN' -ErrorAction SilentlyContinue)) {

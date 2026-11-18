@@ -649,11 +649,11 @@ Tableau financier de l'élève
 
 <th>Montant à payer</th>
 
-<th>1er versement payé / dû</th>
+<th>1er Versement</th>
 
-<th>2e versement payé / dû</th>
+<th>2ème Versement</th>
 
-<th>3e versement payé / dû</th>
+<th>3ème Versement</th>
 
 <th>Total</th>
 
@@ -679,8 +679,8 @@ Tableau financier de l'élève
 
 <div class="info-calcul">
 
-💡 Pour enregistrer un paiement, utilisez le bouton <strong>« + Ajouter un versement »</strong> après avoir enregistré la situation financière.
-Le <strong>Total versé</strong> et le <strong>Reste à payer</strong> sont recalculés automatiquement.
+💡 Les montants des versements sont saisissables directement.
+Le <strong>Total</strong> et la <strong>Balance</strong> sont calculés automatiquement.
 
 </div>
 
@@ -704,28 +704,20 @@ Le <strong>Total versé</strong> et le <strong>Reste à payer</strong> sont reca
 id="tarifNormal"
 type="number"
 min="0"
-step="0.01"
-readonly
-aria-readonly="true">
+step="0.01">
 
 </div>
 
 
 <div>
 
-<label>Type de réduction</label>
-<select id="reductionType">
-<option value="FIXED">Montant fixe (HTG)</option>
-<option value="PERCENT">Pourcentage (%)</option>
-</select>
+<label>Réduction exceptionnelle</label>
 
-<label style="margin-top:8px">Valeur de la réduction</label>
 <input
 id="reduction"
 type="number"
 min="0"
-step="0.01"
-placeholder="Montant ou pourcentage">
+step="0.01">
 
 </div>
 
@@ -758,8 +750,7 @@ readonly>
 
 <label>Reste à payer</label>
 
-<input
-id="reste"
+<inputid="reste"
 type="number"
 readonly>
 
@@ -875,13 +866,11 @@ Action
 <h2>Tarifs par classe</h2>
 
 <p class="small no-print">
-Configure ici le tarif de chaque classe pour l'année scolaire sélectionnée. Les montants saisis pour les versements déterminent automatiquement le total.
-</p>
 
-<div class="no-print" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0">
-<button type="button" id="btnCreerTarif" class="action btn-save" onclick="ouvrirCreationTarif()">+ Créer un tarif</button>
-<span class="small">Un tarif est défini par année scolaire et par classe.</span>
-</div>
+Les montants et les dates des versements sont modifiables pour chaque année.
+Le total est calculé automatiquement.
+
+</p>
 
 
 <div class="table-wrap">
@@ -1055,12 +1044,21 @@ Situation de tous les élèves
 <div class="modal-content">
 
 
-<h2 id="titreModalTarif">Créer un tarif de classe</h2>
+<h2>
+Modifier le tarif de la classe
+</h2>
+
+
+<input
+type="hidden"
+id="tarifClasseOriginal">
+
 
 <label>Classe</label>
-<select id="tarifClasseId" required>
-<option value="">Sélectionner une classe</option>
-</select>
+
+<input
+id="tarifClasseNom"
+readonly>
 
 
 <label style="margin-top:10px">
@@ -1073,9 +1071,7 @@ Montant total de la classe ($ HT)
 id="montantTotal"
 type="number"
 min="0"
-step="0.01"
-readonly
-aria-readonly="true">
+step="0.01">
 
 
 <p class="small">
@@ -1190,11 +1186,6 @@ Ajouter un versement
 
 
 <label>
-Versement scolaire à régler
-</label>
-<select id="versementInstallment"></select>
-
-<label style="margin-top:10px">
 Date
 </label>
 
@@ -1216,7 +1207,7 @@ readonly>
 
 <label style="margin-top:10px">
 
-Montant (HTG)
+Montant ($ HT)
 
 </label>
 
@@ -1289,7 +1280,6 @@ let anneeServeurId = "";
 let etudiants = [];
 let factures = [];
 let tarifs = [];
-let classesServeur = [];
 let eleveSelectionne = null;
 let classeSelectionnee = "";
 
@@ -1317,7 +1307,7 @@ async function apiJson(url, options={}){
   let payload=null;
   try{ payload=await response.json(); }catch(_){}
   if(!response.ok || !payload || payload.success!==true){
-    throw new Error((payload&&(payload.message||payload.error))||("Erreur HTTP "+response.status));
+    throw new Error((payload&&payload.message)||("Erreur HTTP "+response.status));
   }
   return payload;
 }
@@ -1374,7 +1364,6 @@ async function chargerFinance(){
   etudiants=data.students||[];
   factures=data.invoices||[];
   tarifs=data.tariffs||[];
-  classesServeur=data.classes||[];
   renderAll();
 }
 
@@ -1383,7 +1372,6 @@ function renderAll(){
   afficherEleves();
   afficherSituations();
   afficherResume();
-  remplirSelectClassesTarif();
   afficherTarifs();
   if(eleveSelectionne){
     const found=etudiants.find(e=>e.id===eleveSelectionne.id);
@@ -1484,35 +1472,12 @@ function afficherResume(){
   document.getElementById("resumePartiels").textContent=part;
 }
 
-function remplirSelectClassesTarif(){
-  const select=document.getElementById("tarifClasseId");
-  const current=select.value;
-  select.innerHTML='<option value="">Sélectionner une classe</option>';
-  classesServeur.forEach(c=>{
-    const option=document.createElement("option");
-    option.value=c.id;
-    option.textContent=(c.code?c.code+" — ":"")+c.name;
-    select.appendChild(option);
-  });
-  if(current && classesServeur.some(c=>c.id===current)) select.value=current;
-}
-
 function afficherTarifs(){
   const tb=document.getElementById("tableTarifs");
   tb.innerHTML="";
-  const rows=[...classesServeur].sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"fr"));
-  if(!rows.length){
-    tb.innerHTML='<tr><td colspan="6">Aucune classe active disponible pour configurer un tarif.</td></tr>';
-    return;
-  }
-  rows.forEach(c=>{
-    const t=tarifs.find(x=>x.class_id===c.id);
+  tarifs.forEach(t=>{
     const tr=document.createElement("tr");
-    if(t){
-      tr.innerHTML=`<td>${escapeHtml(c.name||"")}</td><td>${formatMontant(t.installment1_amount)}<br><span class="small">${escapeHtml(t.installment1_label||"")}</span></td><td>${formatMontant(t.installment2_amount)}<br><span class="small">${escapeHtml(t.installment2_label||"")}</span></td><td>${formatMontant(t.installment3_amount)}<br><span class="small">${escapeHtml(t.installment3_label||"")}</span></td><td>${formatMontant(t.amount)}</td><td><button type="button" class="action btn-edit" onclick="modifierTarif('${c.id}')">Modifier</button></td>`;
-    }else{
-      tr.innerHTML=`<td>${escapeHtml(c.name||"")}</td><td colspan="3" class="small">Tarif non configuré</td><td>—</td><td><button type="button" class="action btn-save" onclick="ouvrirCreationTarif('${c.id}')">Créer le tarif</button></td>`;
-    }
+    tr.innerHTML=`<td>${escapeHtml(t.class_name||"")}</td><td>${formatMontant(t.installment1_amount)}<br><span class="small">${escapeHtml(t.installment1_label||"")}</span></td><td>${formatMontant(t.installment2_amount)}<br><span class="small">${escapeHtml(t.installment2_label||"")}</span></td><td>${formatMontant(t.installment3_amount)}<br><span class="small">${escapeHtml(t.installment3_label||"")}</span></td><td>${formatMontant(t.amount)}</td><td><button class="action btn-edit" onclick="modifierTarif('${t.class_id}')">Modifier</button></td>`;
     tb.appendChild(tr);
   });
 }
@@ -1522,10 +1487,8 @@ function afficherTableauResumeEleve(e,f){
   tb.innerHTML="";
   const x=obtenirLigneFinance(e);
   const payments=(f?.payments||[]).sort((a,b)=>String(a.payment_date||"").localeCompare(String(b.payment_date||"")));
-  const tariff=tarifEleve(e);
-  const parts=f?.installments||(tariff?[1,2,3].map(n=>({installment_number:n,due_amount:Number(tariff["installment"+n+"_amount"]||0),reduction_amount:0,paid_amount:0})).filter(part=>part.due_amount>0):[]);
-  const byNumber=[1,2,3].map(n=>parts.find(part=>Number(part.installment_number)===n)||null);
-  const cells=byNumber.map(part=>`<td>${part?formatMontant(part.paid_amount)+" / "+formatMontant(Number(part.due_amount)-Number(part.reduction_amount)):"—"}</td>`).join("");
+  const byNumber=[1,2,3].map(n=>payments[n-1]||null);
+  const cells=byNumber.map((p,n)=>`<td><input class="versement-input" type="number" min="0" step="0.01" value="${p?Number(p.amount):""}" placeholder="0" onchange="enregistrerVersementDirect(${n+1},this.value)"></td>`).join("");
   const last=payments[payments.length-1];
   const tr=document.createElement("tr");
   tr.innerHTML=`<td>1</td><td>${escapeHtml(e.last_name+" "+e.first_name)}</td><td>${escapeHtml(e.class_name||"")}</td><td class="money">${formatMontant(x.ap)}</td>${cells}<td id="totalAutoEleve" class="money total-auto">${formatMontant(x.tv)}</td><td id="balanceAutoEleve" class="money balance-auto">${formatMontant(x.r)}</td><td>${last?escapeHtml(last.payment_date||"—"):"—"}</td><td>${last?escapeHtml(last.method||"—"):"—"}</td>`;
@@ -1539,11 +1502,7 @@ function chargerFicheEleve(){
   const x=obtenirLigneFinance(eleveSelectionne);
   document.getElementById("identiteEleve").innerHTML=`<p><strong>Nom et prénom :</strong> ${escapeHtml(eleveSelectionne.last_name+" "+eleveSelectionne.first_name)}</p><p><strong>Classe :</strong> ${escapeHtml(eleveSelectionne.class_name||"")}</p><p><strong>Année académique :</strong> ${escapeHtml(anneesServeur.find(y=>y.id===anneeServeurId)?.label||"")}</p>`;
   document.getElementById("tarifNormal").value=f?Number(f.amount):Number(t?.amount||0);
-  const reductionType=f?.reduction_type||"FIXED";
-  document.getElementById("reductionType").value=reductionType;
-  document.getElementById("reduction").value=f
-    ? Number(reductionType==="PERCENT"?(f.reduction_percent||0):(f.reduction||0))
-    : 0;
+  document.getElementById("reduction").value=f?Number(f.reduction||0):0;
   document.getElementById("montantAPayer").value=x.ap.toFixed(2);
   document.getElementById("totalVerse").value=x.tv.toFixed(2);
   document.getElementById("reste").value=x.r.toFixed(2);
@@ -1554,32 +1513,25 @@ function chargerFicheEleve(){
   const payments=f?.payments||[];
   if(!payments.length){ tb.innerHTML="<tr><td colspan='7'>Aucun versement enregistré.</td></tr>"; return; }
   payments.forEach((p,i)=>{
-    const part=(f?.installments||[]).find(x=>x.id===p.installment_id);
     const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${i+1}</td><td>📅 ${escapeHtml(p.payment_date||"—")}</td><td>${part?Number(part.installment_number)+"e":"Historique"}</td><td class="money">${formatMontant(p.amount)}</td><td>${escapeHtml(p.method||"")}</td><td>${escapeHtml(p.reference||"")}</td><td class="no-print"><button class="action btn-delete" onclick="supprimerVersement('${escapeHtml(p.id)}')">Supprimer</button></td>`;
+    tr.innerHTML=`<td>${i+1}</td><td>📅 ${escapeHtml(p.payment_date||"—")}</td><td>${i+1}e</td><td class="money">${formatMontant(p.amount)}</td><td>${escapeHtml(p.method||"")}</td><td>${escapeHtml(p.reference||"")}</td><td class="no-print"><button class="action btn-delete" onclick="supprimerVersement('${escapeHtml(p.id)}')">Supprimer</button></td>`;
     tb.appendChild(tr);
   });
 }
 
 async function enregistrerSituation(){
   if(!eleveSelectionne) return;
-  const factureExistante=factureEleve(eleveSelectionne.id);
-  const permissionRequise=factureExistante?"finances.update":"finances.create";
-  if(!IMCAuth.requirePermission(permissionRequise)) return afficherMessage("Permission refusée.","error");
-  const reductionType=document.getElementById("reductionType").value;
-  const reductionValue=Number(document.getElementById("reduction").value||0);
-  const reductionPayload=reductionType==="PERCENT"
-    ? {reduction_type:"PERCENT",reduction_percent:reductionValue}
-    : {reduction_type:"FIXED",reduction:reductionValue};
+  if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
+  const reduction=Number(document.getElementById("reduction").value||0);
   const reason=document.getElementById("motifReduction").value.trim();
   let f=factureEleve(eleveSelectionne.id);
   try{
     if(!f){
       const t=tarifEleve(eleveSelectionne);
       if(!t||Number(t.amount)<=0) throw new Error("Aucun tarif serveur pour cette classe.");
-      await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"invoice",student_id:eleveSelectionne.id,school_year_id:anneeServeurId,amount:Number(t.amount),...reductionPayload,reduction_reason:reason})});
+      await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"invoice",student_id:eleveSelectionne.id,school_year_id:anneeServeurId,amount:Number(t.amount),reduction,reduction_reason:reason})});
     }else{
-      await apiJson(FINANCE_API+"?invoice_id="+encodeURIComponent(f.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({...reductionPayload,reduction_reason:reason})});
+      await apiJson(FINANCE_API+"?invoice_id="+encodeURIComponent(f.id),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({reduction,reduction_reason:reason})});
     }
     await chargerFinance();
     afficherMessage("Situation enregistrée.");
@@ -1591,23 +1543,11 @@ function ouvrirReduction(){
   document.getElementById("reduction").focus();
 }
 
-function ouvrirCreationTarif(classId=""){
-  remplirSelectClassesTarif();
-  document.getElementById("titreModalTarif").textContent="Créer un tarif de classe";
-  document.getElementById("tarifClasseId").disabled=false;
-  document.getElementById("tarifClasseId").value=classId||"";
-  ["date1","date2","date3","montant1","montant2","montant3"].forEach(id=>document.getElementById(id).value="");
-  document.getElementById("montantTotal").value="0.00";
-  document.getElementById("modalTarif").style.display="flex";
-}
-
 function modifierTarif(classId){
   const t=tarifs.find(x=>x.class_id===classId);
   if(!t) return afficherMessage("Tarif serveur introuvable.","error");
-  remplirSelectClassesTarif();
-  document.getElementById("titreModalTarif").textContent="Modifier le tarif de la classe";
-  document.getElementById("tarifClasseId").value=classId;
-  document.getElementById("tarifClasseId").disabled=true;
+  document.getElementById("tarifClasseOriginal").value=classId;
+  document.getElementById("tarifClasseNom").value=t.class_name||"";
   document.getElementById("montantTotal").value=t.amount||0;
   document.getElementById("date1").value=t.installment1_label||"";
   document.getElementById("montant1").value=t.installment1_amount||0;
@@ -1618,15 +1558,9 @@ function modifierTarif(classId){
   document.getElementById("modalTarif").style.display="flex";
 }
 
-function recalculerTotalTarif(){
-  const total=[1,2,3].reduce((sum,n)=>sum+Number(document.getElementById("montant"+n).value||0),0);
-  document.getElementById("montantTotal").value=total.toFixed(2);
-}
-
 async function enregistrerTarif(){
   if(!IMCAuth.requirePermission("finances.update")) return afficherMessage("Permission refusée.","error");
-  const classId=document.getElementById("tarifClasseId").value;
-  if(!classId) return afficherMessage("Sélectionnez une classe.","error");
+  const classId=document.getElementById("tarifClasseOriginal").value;
   const body={
     resource:"tariff",school_year_id:anneeServeurId,class_id:classId,
     amount:Number(document.getElementById("montantTotal").value||0),
@@ -1637,10 +1571,8 @@ async function enregistrerTarif(){
     installment3_amount:Number(document.getElementById("montant3").value||0),
     installment3_label:document.getElementById("date3").value.trim()
   };
-  if(body.amount<=0||body.installment1_amount<0||body.installment2_amount<0||body.installment3_amount<0) return afficherMessage("Saisissez au moins un versement avec un montant positif.","error");
-  const somme=body.installment1_amount+body.installment2_amount+body.installment3_amount;
-  if(Math.abs(somme-body.amount)>0.01) return afficherMessage("Le total doit correspondre à la somme des trois versements.","error");
-  try{ await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); fermerModals(); await chargerFinance(); afficherMessage("Tarif enregistré pour cette classe."); }
+  if(body.amount<0||body.installment1_amount<0||body.installment2_amount<0||body.installment3_amount<0) return afficherMessage("Les montants ne peuvent pas être négatifs.","error");
+  try{ await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); fermerModals(); await chargerFinance(); afficherMessage("Tarif enregistré."); }
   catch(e){ afficherMessage(e.message,"error"); }
 }
 
@@ -1648,17 +1580,8 @@ function ouvrirVersement(){
   if(!eleveSelectionne) return afficherMessage("Sélectionnez un élève.","error");
   const f=factureEleve(eleveSelectionne.id);
   if(!f) return afficherMessage("Enregistrez d'abord la situation financière.","error");
-  const select=document.getElementById("versementInstallment");
-  select.innerHTML="";
-  (f.installments||[]).filter(part=>Number(part.balance)>0.00001).forEach(part=>{
-    const option=document.createElement("option"); option.value=part.id;
-    option.textContent=Number(part.installment_number)+"e versement — reste "+formatMontant(part.balance);
-    select.appendChild(option);
-  });
-  if(!select.options.length) return afficherMessage("Tous les versements sont déjà réglés.","error");
-  document.getElementById("versementNumero").value=(f.installments.find(part=>part.id===select.value)?.installment_number)||"";
-  select.onchange=()=>{document.getElementById("versementNumero").value=(f.installments.find(part=>part.id===select.value)?.installment_number)||"";};
   document.getElementById("versementDate").value=new Date().toISOString().slice(0,10);
+  document.getElementById("versementNumero").value=(f.payments||[]).length+1;
   document.getElementById("versementMontant").value="";
   document.getElementById("versementObservation").value="";
   document.getElementById("modalVersement").style.display="flex";
@@ -1671,9 +1594,7 @@ async function enregistrerVersement(){
   const amount=Number(document.getElementById("versementMontant").value||0);
   if(!f||amount<=0) return afficherMessage("Versement invalide.","error");
   try{
-    const installmentId=document.getElementById("versementInstallment").value;
-    if(!installmentId) return afficherMessage("Sélectionnez le versement scolaire à régler.","error");
-    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,installment_id:installmentId,amount,payment_date:document.getElementById("versementDate").value,method:document.getElementById("versementMode").value,reference:document.getElementById("versementObservation").value.trim()})});
+    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,amount,payment_date:document.getElementById("versementDate").value,method:document.getElementById("versementMode").value,reference:document.getElementById("versementObservation").value.trim()})});
     fermerModals(); await chargerFinance(); afficherMessage("Versement enregistré.");
   }catch(e){ afficherMessage(e.message,"error"); }
 }
@@ -1684,10 +1605,8 @@ async function enregistrerVersementDirect(numero,valeur){
   const amount=Number(valeur||0);
   if(!f) return afficherMessage("Enregistrez d'abord la situation financière.","error");
   if(amount<=0) return afficherMessage("Le montant doit être supérieur à 0.","error");
-  const part=(f.installments||[]).find(x=>Number(x.balance)>0.00001);
-  if(!part) return afficherMessage("Tous les versements sont réglés.","error");
   try{
-    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,installment_id:part.id,amount,payment_date:new Date().toISOString().slice(0,10),method:"Espèces",reference:"Versement "+numero})});
+    await apiJson(FINANCE_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({resource:"payment",invoice_id:f.id,amount,payment_date:new Date().toISOString().slice(0,10),method:"Espèces",reference:"Versement "+numero})});
     await chargerFinance(); afficherMessage("Versement enregistré.");
   }catch(e){ afficherMessage(e.message,"error"); }
 }
@@ -1724,7 +1643,6 @@ document.addEventListener("DOMContentLoaded",async()=>{
     try{ await chargerFinance(); }catch(e){ afficherMessage(e.message,"error"); }
   });
   document.getElementById("btnToutesClasses").addEventListener("click",afficherToutesLesClasses);
-  [1,2,3].forEach(n=>document.getElementById("montant"+n).addEventListener("input",recalculerTotalTarif));
   document.getElementById("recherche").addEventListener("input",()=>{afficherEleves();afficherSituations();});
   try{
     await chargerAnnees();

@@ -28,20 +28,9 @@ try {
     // Valider le secret avant toute écriture dans les tables RBAC.
     $password = getenv('IMC_BOOTSTRAP_PASSWORD');
 
-    $passwordCharacterCount = is_string($password)
-        ? preg_match_all('/./us', $password, $passwordCharacters)
-        : false;
-
-    if (
-        !is_string($password) ||
-        $password === '' ||
-        strlen($password) > 1024 ||
-        $passwordCharacterCount === false ||
-        $passwordCharacterCount < 12 ||
-        preg_match('/[\x00-\x1F\x7F]/u', $password) === 1
-    ) {
+    if (!is_string($password) || strlen($password) < 12) {
         throw new RuntimeException(
-            'IMC_BOOTSTRAP_PASSWORD doit contenir au moins 12 caractères Unicode valides.'
+            'IMC_BOOTSTRAP_PASSWORD doit contenir au moins 12 caractères.'
         );
     }
 
@@ -122,12 +111,7 @@ try {
         'depenses.read',
         'depenses.create',
         'depenses.delete',
-        'depenses.reconcile',
-        'presences.read',
         'presences.create',
-        'presences.update',
-        'whatsapp.message.send',
-        'whatsapp.consent.read',
         'vault.update',
     ];
 
@@ -161,9 +145,6 @@ try {
             'vacances.read',
             'badge.read',
             'badge.print',
-            'presences.read',
-            'presences.create',
-            'presences.update',
         ],
 
         'Enseignant' => [
@@ -174,9 +155,7 @@ try {
             'resultats.create',
             'resultats.update',
             'vacances.read',
-            'presences.read',
             'presences.create',
-            'presences.update',
         ],
 
         'Secrétaire' => [
