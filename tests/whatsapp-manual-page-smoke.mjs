@@ -15,7 +15,8 @@ for (const match of script.matchAll(/\$\('([^']+)'\)/g)) {
   assert.ok(ids.includes(match[1]), 'Missing DOM element referenced by script: ' + match[1]);
 }
 assert.ok(page.includes('Envoyer manuellement'), 'Manual WhatsApp mode missing');
-assert.ok(page.includes('Rechercher un parent par nom ou numéro de téléphone'), 'Parent search by name and phone missing');
+assert.ok(page.includes('Rechercher un parent par nom, téléphone ou nom de son élève'), 'Parent search by student name missing');
+assert.ok(script.includes('parent.student_names'), 'Matching student names must be shown with parent results');
 assert.ok(script.includes("fetch(url,{credentials:'same-origin'"), 'Authorized parent search request missing');
 assert.ok(script.includes("/api/whatsapp/parents-search.php?purpose="), 'Purpose-scoped parent search endpoint missing');
 assert.ok(script.includes("$('parent_id').value=parent.id"), 'Selecting a search result must set the internal parent UUID');
@@ -33,6 +34,10 @@ assert.ok(page.includes('Le jeton d’accès reste exclusivement dans le fichier
 const parentSearchApi = fs.readFileSync('api/whatsapp/parents-search.php', 'utf8');
 assert.ok(parentSearchApi.includes("requirePermission($pdo, 'whatsapp.message.send')"), 'Parent search must require WhatsApp send permission');
 assert.ok(parentSearchApi.includes("c.status = 'OPTED_IN'"), 'Parent search must only return active-consent recipients');
+assert.ok(parentSearchApi.includes('LEFT JOIN student_parents sp ON sp.parent_id = p.id'), 'Parent search must resolve the existing student-parent relationship');
+assert.ok(parentSearchApi.includes('LEFT JOIN students s ON s.id = sp.student_id'), 'Parent search must match the student record');
+assert.ok(parentSearchApi.includes('student_full_name_search'), 'Parent search must match a student full name');
+assert.ok(parentSearchApi.includes('AS student_names'), 'Search results must identify the matching family students');
 assert.ok(parentSearchApi.includes('regexp_replace'), 'Phone search must ignore formatting characters');
 assert.ok(parentSearchApi.includes('LIMIT 20'), 'Parent search must cap result count');
 const manualApi = fs.readFileSync('api/whatsapp/manual-preparations.php', 'utf8');
