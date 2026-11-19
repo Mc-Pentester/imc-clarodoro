@@ -237,7 +237,7 @@ async function loadClassParents(){
     });
     list.hidden=false;
     $('selectAllClassParents').checked=true;
-    show($('classRecipientsSummary'),classParents.length+' parent(s) autorisé(s) et sélectionné(s). Un parent lié à plusieurs élèves de cette classe ne sera compté qu’une seule fois. Les parents sans consentement actif sont exclus.');
+    show($('classRecipientsSummary'),classParents.length+' parent(s) autorisé(s) et sélectionné(s) sur '+(data.total_linked_parents||classParents.length)+' parent(s) lié(s) à la classe. '+(data.excluded_without_active_consent||0)+' parent(s) exclu(s) faute de consentement actif. Un parent lié à plusieurs élèves de cette classe ne sera compté qu’une seule fois.');
     updateClassBatchButtons();
   }catch(error){show($('classRecipientsSummary'),'Chargement des parents impossible : '+error.message,true)}
   finally{$('loadClassParents').disabled=false}
