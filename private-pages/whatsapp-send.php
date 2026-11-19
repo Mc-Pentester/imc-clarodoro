@@ -128,6 +128,7 @@ async function loadConfig(){
     }
   }catch(error){show(status,'Impossible de vérifier la configuration Meta : '+error.message+'. Le mode manuel reste disponible.',true);configReady=false}
   $('sendButton').disabled=!configReady;
+  updateClassBatchButtons();
 }
 $('manualButton').addEventListener('click',async()=>{
   const out=$('manualResult');out.hidden=true;
