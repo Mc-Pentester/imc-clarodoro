@@ -102,6 +102,20 @@ try {
         ':school_year_id' => $schoolYearId,
     ]);
 
+    $totalStmt = $pdo->prepare(
+        "SELECT count(DISTINCT sp.parent_id)
+         FROM enrollments e
+         INNER JOIN student_parents sp ON sp.student_id = e.student_id
+         WHERE e.class_id = :class_id
+           AND e.school_year_id = :school_year_id
+           AND e.status = 'ACTIVE'"
+    );
+    $totalStmt->execute([
+        ':class_id' => $classId,
+        ':school_year_id' => $schoolYearId,
+    ]);
+    $totalParentCount = (int) $totalStmt->fetchColumn();
+
     $parents = array_map(static function (array $row): array {
         return [
             'parent_id' => (string) $row['parent_id'],
@@ -120,6 +134,8 @@ try {
         'purpose' => $purpose,
         'parents' => $parents,
         'count' => count($parents),
+        'total_linked_parents' => $totalParentCount,
+        'excluded_without_active_consent' => max(0, $totalParentCount - count($parents)),
     ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 } catch (Throwable $e) {
     error_log('WhatsApp class recipients lookup failed: ' . $e->getMessage());
