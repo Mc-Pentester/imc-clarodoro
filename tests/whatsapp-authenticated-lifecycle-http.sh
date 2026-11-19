@@ -103,6 +103,51 @@ DENIED_SEARCH_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-parent
 test "$DENIED_SEARCH_STATUS" = "403"
 echo "PASS parent search permission enforcement HTTP 403"
 
+# Seed one class with two siblings for the same opted-in parent and one
+# additional linked parent without consent. The class endpoint must deduplicate
+# the first parent and exclude the second one.
+LEVEL_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO levels (code,name) VALUES ('WHATSAPP-CLASS-LVL','WhatsApp class level') RETURNING id")"
+CLASS_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO classes (code,name,level_id,status) VALUES ('WHATSAPP-CLASS-A','WhatsApp test class','$LEVEL_ID','ACTIVE') RETURNING id")"
+SCHOOL_YEAR_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO school_years (label,start_date,end_date,status) VALUES ('WhatsApp CI 2026-2027','2026-09-01','2027-06-30','ACTIVE') RETURNING id")"
+SIBLING_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name) VALUES ('WHATSAPP-SIBLING-001','Search','Sibling') RETURNING id")"
+EXCLUDED_PARENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO parents (last_name,first_name) VALUES ('NoConsent','Parent') RETURNING id")"
+EXCLUDED_STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name) VALUES ('WHATSAPP-NOCONSENT-001','NoConsent','Student') RETURNING id")"
+psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v sibling="$SIBLING_ID" -v excluded_parent="$EXCLUDED_PARENT_ID" -v excluded_student="$EXCLUDED_STUDENT_ID" -v class="$CLASS_ID" -v year="$SCHOOL_YEAR_ID" <<'SQL'
+INSERT INTO student_parents (student_id,parent_id,relationship_type,is_primary)
+VALUES (:'sibling',:'parent','MOTHER',FALSE), (:'excluded_student',:'excluded_parent','FATHER',TRUE);
+INSERT INTO enrollments (student_id,class_id,school_year_id,status)
+SELECT id, :'class'::uuid, :'year'::uuid, 'ACTIVE'
+FROM students
+WHERE id IN (:'sibling', :'excluded_student')
+UNION ALL
+SELECT id, :'class'::uuid, :'year'::uuid, 'ACTIVE'
+FROM students
+WHERE id = (SELECT id FROM students WHERE matricule='WHATSAPP-SEARCH-STUDENT-001');
+SQL
+CLASS_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-class-recipients.json --write-out '%{http_code}' \
+  -H "Cookie: IMC_SESSION=$ALLOWED_SID" \
+  "http://127.0.0.1:8100/api/whatsapp/class-recipients.php?class_id=$CLASS_ID&school_year_id=$SCHOOL_YEAR_ID&purpose=GENERAL")"
+test "$CLASS_STATUS" = "200"
+php -r '
+  $d=json_decode(file_get_contents($argv[1]),true);
+  $expectedParent=$argv[2];
+  if (($d["success"]??false)!==true || ($d["count"]??-1)!==1 || ($d["total_linked_parents"]??-1)!==2 || ($d["excluded_without_active_consent"]??-1)!==1) exit(1);
+  $p=$d["parents"][0]??[];
+  if (($p["parent_id"]??"")!==$expectedParent || ($p["student_count"]??-1)!==2) exit(1);
+  if (!str_contains((string)($p["student_names"]??""),"Student Search") || !str_contains((string)($p["student_names"]??""),"Sibling Search")) exit(1);
+' /tmp/whatsapp-class-recipients.json "$PARENT_ID"
+echo "PASS class parent lookup: deduplicates siblings and excludes parents without active consent"
+DENIED_CLASS_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-class-recipients-denied.json --write-out '%{http_code}' \
+  -H "Cookie: IMC_SESSION=$DENIED_SID" \
+  "http://127.0.0.1:8100/api/whatsapp/class-recipients.php?class_id=$CLASS_ID&school_year_id=$SCHOOL_YEAR_ID&purpose=GENERAL")"
+test "$DENIED_CLASS_STATUS" = "403"
+echo "PASS class recipient permission enforcement HTTP 403"
+printf -v CLASS_MANUAL_BODY '{"parent_id":"%s","purpose":"GENERAL","message":"Class broadcast CI preparation"}' "$PARENT_ID"
+call_api class_manual_preparation 200 "$ALLOWED_SID" POST /api/whatsapp/manual-preparations.php "$CLASS_MANUAL_BODY" whatsapp-ci-csrf-token
+CLASS_MANUAL_AUDIT="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_manual_preparations WHERE parent_id='$PARENT_ID' AND purpose='GENERAL'")"
+test "$CLASS_MANUAL_AUDIT" = "1"
+echo "PASS class manual preparation is audited without sending a WhatsApp message"
+
 BATCH_CONSENT="{\"parent_id\":\"$PARENT_ID\",\"purposes\":[\"ATTENDANCE\",\"RESULTS_AVAILABLE\"],\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\",\"evidence_reference\":\"CI batch signed consent\"}"
 call_api paper_batch 200 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$BATCH_CONSENT" whatsapp-ci-csrf-token
 BATCH_COUNT="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_consents WHERE parent_id='$PARENT_ID' AND purpose IN ('ATTENDANCE','RESULTS_AVAILABLE') AND status='OPTED_IN'")"

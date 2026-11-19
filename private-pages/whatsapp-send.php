@@ -29,6 +29,24 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <p class="hint">Les deux modes sont actuellement destinés aux parents disposant d’un consentement actif pour la finalité choisie.</p>
 </section>
 <section class="card">
+<div class="mode">Diffusion à une classe</div>
+<h2>Envoyer un message aux parents d’une classe</h2>
+<p class="hint">Clarodaro récupère les élèves inscrits dans la classe et l’année scolaire sélectionnées, puis déduplique les parents. Seuls les parents ayant un consentement actif pour la finalité choisie sont proposés. Les autres sont exclus.</p>
+<div class="grid">
+<div><label for="broadcastSchoolYear">Année scolaire active</label><select id="broadcastSchoolYear"><option value="">Chargement…</option></select></div>
+<div><label for="broadcastClass">Classe active</label><select id="broadcastClass"><option value="">Choisir une classe</option></select></div>
+<div class="wide actions"><button type="button" id="loadClassParents">Charger les parents autorisés</button><label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input id="selectAllClassParents" type="checkbox" checked style="width:auto"> Sélectionner tous les parents autorisés</label></div>
+</div>
+<div id="classRecipientsSummary" class="result" hidden aria-live="polite"></div>
+<div id="classParentList" class="result" hidden></div>
+<div class="actions" style="margin-top:12px">
+<button type="button" id="manualBatchButton" disabled>Préparer les liens WhatsApp pour la classe</button>
+<button type="button" id="metaBatchButton" disabled>Envoyer la classe via Meta</button>
+</div>
+<div id="classBatchResult" class="result" hidden aria-live="polite"></div>
+<p class="hint">Mode manuel : Clarodaro prépare un lien par parent; vous ouvrez chaque conversation et appuyez vous-même sur Envoyer. Mode Meta : Clarodaro transmet les modèles approuvés un par un, sans ouvrir les conversations. L’acceptation par Meta n’est pas une preuve de livraison.</p>
+</section>
+<section class="card">
 <div class="mode">Mode 1 · WhatsApp sur le poste</div>
 <h2>Envoyer manuellement</h2>
 <div class="grid">
@@ -110,6 +128,7 @@ async function loadConfig(){
     }
   }catch(error){show(status,'Impossible de vérifier la configuration Meta : '+error.message+'. Le mode manuel reste disponible.',true);configReady=false}
   $('sendButton').disabled=!configReady;
+  updateClassBatchButtons();
 }
 $('manualButton').addEventListener('click',async()=>{
   const out=$('manualResult');out.hidden=true;
@@ -160,6 +179,145 @@ $('sendButton').addEventListener('click',async()=>{
   }catch(error){show(out,'ÉCHEC DE L’ENVOI : '+error.message,true)}
   finally{$('sendButton').disabled=!configReady}
 });
+let classParents=[];
+let classExcludedCount=0;
+function selectedClassParents(){
+  return classParents.filter(parent=>{
+    const checkbox=document.querySelector('[data-class-parent="'+parent.parent_id+'"]');
+    return checkbox&&checkbox.checked;
+  });
+}
+function updateClassBatchButtons(){
+  const count=selectedClassParents().length;
+  $('manualBatchButton').disabled=count===0;
+  $('metaBatchButton').disabled=count===0||!configReady;
+}
+function setClassBatchBusy(busy){
+  $('purpose').disabled=busy;
+  $('broadcastClass').disabled=busy;
+  $('broadcastSchoolYear').disabled=busy;
+  $('loadClassParents').disabled=busy;
+  $('selectAllClassParents').disabled=busy;
+  document.querySelectorAll('[data-class-parent]').forEach(node=>node.disabled=busy);
+  $('manualBatchButton').disabled=busy||selectedClassParents().length===0;
+  $('metaBatchButton').disabled=busy||!configReady||selectedClassParents().length===0;
+}
+async function loadClassOptions(){
+  const yearSelect=$('broadcastSchoolYear'),classSelect=$('broadcastClass');
+  try{
+    const response=await fetch('/api/whatsapp/class-recipients.php',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
+    const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+    if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
+    yearSelect.replaceChildren(new Option('Choisir une année scolaire',''));
+    (data.school_years||[]).forEach(year=>yearSelect.add(new Option(year.label,year.id)));
+    classSelect.replaceChildren(new Option('Choisir une classe',''));
+    (data.classes||[]).forEach(item=>classSelect.add(new Option(item.name+' ('+item.code+')',item.id)));
+    if((data.school_years||[]).length===1)yearSelect.value=data.school_years[0].id;
+    if(!(data.school_years||[]).length||!(data.classes||[]).length){
+      show($('classRecipientsSummary'),'Aucune année scolaire active ou aucune classe active disponible.',true);
+    }
+  }catch(error){show($('classRecipientsSummary'),'Chargement des classes impossible : '+error.message,true)}
+}
+async function loadClassParents(){
+  const classId=$('broadcastClass').value,schoolYearId=$('broadcastSchoolYear').value;
+  if(!classId||!schoolYearId){show($('classRecipientsSummary'),'Choisissez une année scolaire et une classe.',true);return}
+  $('loadClassParents').disabled=true;
+  show($('classRecipientsSummary'),'Recherche des parents ayant un consentement actif…');
+  $('classParentList').hidden=true;
+  classParents=[];
+  updateClassBatchButtons();
+  try{
+    const url='/api/whatsapp/class-recipients.php?class_id='+encodeURIComponent(classId)+'&school_year_id='+encodeURIComponent(schoolYearId)+'&purpose='+encodeURIComponent($('purpose').value);
+    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
+    const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+    if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
+    classParents=Array.isArray(data.parents)?data.parents:[];
+    const list=$('classParentList');list.replaceChildren();
+    if(!classParents.length){
+      show($('classRecipientsSummary'),'Aucun parent avec consentement actif pour cette classe, cette année et cette finalité.');
+      list.hidden=true;return;
+    }
+    classParents.forEach(parent=>{
+      const label=document.createElement('label');
+      label.style.cssText='display:flex;align-items:flex-start;gap:10px;padding:9px;border-bottom:1px solid #dce4e8;font-weight:normal';
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=true;checkbox.style.width='auto';checkbox.dataset.classParent=parent.parent_id;
+      checkbox.addEventListener('change',updateClassBatchButtons);
+      const text=document.createElement('span');
+      text.textContent=[parent.first_name,parent.last_name].filter(Boolean).join(' ')+' — '+parent.phone_e164+' · Élève(s) : '+parent.student_names;
+      label.append(checkbox,text);list.appendChild(label);
+    });
+    list.hidden=false;
+    $('selectAllClassParents').checked=true;
+    show($('classRecipientsSummary'),classParents.length+' parent(s) autorisé(s) et sélectionné(s) sur '+(data.total_linked_parents||classParents.length)+' parent(s) lié(s) à la classe. '+(data.excluded_without_active_consent||0)+' parent(s) exclu(s) faute de consentement actif. Un parent lié à plusieurs élèves de cette classe ne sera compté qu’une seule fois.');
+    updateClassBatchButtons();
+  }catch(error){show($('classRecipientsSummary'),'Chargement des parents impossible : '+error.message,true)}
+  finally{$('loadClassParents').disabled=false}
+}
+$('loadClassParents').addEventListener('click',loadClassParents);
+$('purpose').addEventListener('change',()=>{if($('broadcastClass').value&&$('broadcastSchoolYear').value)loadClassParents()});
+$('selectAllClassParents').addEventListener('change',()=>{
+  document.querySelectorAll('[data-class-parent]').forEach(node=>node.checked=$('selectAllClassParents').checked);
+  updateClassBatchButtons();
+});
+$('manualBatchButton').addEventListener('click',async()=>{
+  const recipients=selectedClassParents(),message=$('manual_message').value.trim(),purpose=$('purpose').value,out=$('classBatchResult');
+  if(!recipients.length){show(out,'Sélectionnez au moins un parent.',true);return}
+  if(!message||message.length>4000){show(out,'Rédigez un message de 1 à 4000 caractères dans le champ du mode manuel.',true);return}
+  setClassBatchBusy(true);show(out,'Vérification individuelle des consentements et préparation des liens…');
+  const prepared=[],failed=[];
+  for(const parent of recipients){
+    try{
+      const response=await fetch('/api/whatsapp/manual-preparations.php',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-Token':csrf},
+        body:JSON.stringify({parent_id:parent.parent_id,purpose,message})
+      });
+      const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+      if(!response.ok||data.success!==true||!/^\+[1-9][0-9]{7,14}$/.test(data.phone_e164||''))throw Error(data.error||('HTTP '+response.status));
+      prepared.push({parent,data});
+    }catch(error){failed.push([parent.first_name+' '+parent.last_name,error.message])}
+  }
+  out.replaceChildren();
+  const summary=document.createElement('p');summary.textContent=prepared.length+' lien(s) préparé(s), '+failed.length+' échec(s). Aucun message n’a été envoyé automatiquement.';out.appendChild(summary);
+  prepared.forEach(({parent,data})=>{
+    const link=document.createElement('a');link.href='https://wa.me/'+data.phone_e164.replace(/\D/g,'')+'?text='+encodeURIComponent(message);
+    link.target='_blank';link.rel='noopener noreferrer';link.textContent='Ouvrir WhatsApp — '+parent.first_name+' '+parent.last_name+' ('+parent.student_names+')';
+    link.style.cssText='display:block;padding:8px 0;color:#075e54;font-weight:bold';out.appendChild(link);
+  });
+  failed.forEach(([name,error])=>{const line=document.createElement('p');line.textContent='Échec pour '+name+' : '+error;out.appendChild(line)});
+  out.hidden=false;setClassBatchBusy(false);updateClassBatchButtons();
+});
+$('metaBatchButton').addEventListener('click',async()=>{
+  const recipients=selectedClassParents(),purpose=$('purpose').value,out=$('classBatchResult');
+  if(!configReady){show(out,'La configuration Meta n’est pas prête. Aucun envoi effectué.',true);return}
+  if(!recipients.length){show(out,'Sélectionnez au moins un parent.',true);return}
+  const templateName=$('template_name').value,language=$('language').value.trim();
+  if(!templateName||!/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language)){show(out,'Choisissez un modèle approuvé et une langue valide.',true);return}
+  const parameters=$('parameters').value.split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
+  if(!confirm('Confirmer l’envoi Meta à '+recipients.length+' parent(s) sélectionné(s) ? Chaque destinataire sera vérifié et journalisé individuellement.'))return;
+  setClassBatchBusy(true);
+  const accepted=[],failed=[];
+  for(let index=0;index<recipients.length;index++){
+    const parent=recipients[index];
+    show(out,'Envoi Meta : '+(index+1)+' / '+recipients.length+' — '+parent.first_name+' '+parent.last_name);
+    try{
+      const response=await fetch('/api/whatsapp/send.php',{
+        method:'POST',credentials:'same-origin',cache:'no-store',
+        headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-Token':csrf},
+        body:JSON.stringify({parent_id:parent.parent_id,purpose,template_name:templateName,language,parameters,idempotency_key:makeIdempotencyKey()})
+      });
+      const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+      if(!response.ok||data.success!==true)throw Error(data.error||('HTTP '+response.status)+(data.provider_error_code?' · Code Meta '+data.provider_error_code:''));
+      accepted.push(parent.first_name+' '+parent.last_name+' — '+data.provider_message_id);
+    }catch(error){failed.push(parent.first_name+' '+parent.last_name+' — '+error.message)}
+  }
+  out.replaceChildren();
+  const summary=document.createElement('p');summary.textContent='Bilan Meta : '+accepted.length+' demande(s) acceptée(s) par Meta, '+failed.length+' échec(s). L’acceptation ne confirme pas la livraison.';out.appendChild(summary);
+  accepted.forEach(item=>{const line=document.createElement('p');line.textContent='Accepté : '+item;out.appendChild(line)});
+  failed.forEach(item=>{const line=document.createElement('p');line.textContent='Échec : '+item;out.appendChild(line)});
+  out.hidden=false;setClassBatchBusy(false);updateClassBatchButtons();
+});
+loadClassOptions();
 loadConfig();
 </script>
 </body>

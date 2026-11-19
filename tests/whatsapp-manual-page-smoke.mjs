@@ -20,6 +20,15 @@ assert.ok(script.includes('parent.student_names'), 'Matching student names must 
 assert.ok(script.includes("fetch(url,{credentials:'same-origin'"), 'Authorized parent search request missing');
 assert.ok(script.includes("/api/whatsapp/parents-search.php?purpose="), 'Purpose-scoped parent search endpoint missing');
 assert.ok(script.includes("$('parent_id').value=parent.id"), 'Selecting a search result must set the internal parent UUID');
+assert.ok(page.includes('Envoyer un message aux parents d’une classe'), 'Class-wide parent broadcast UI missing');
+assert.ok(page.includes('Préparer les liens WhatsApp pour la classe'), 'Manual class broadcast action missing');
+assert.ok(page.includes('Envoyer la classe via Meta'), 'Meta class broadcast action missing');
+assert.ok(script.includes("/api/whatsapp/class-recipients.php?class_id="), 'Consent-filtered class recipient lookup missing');
+assert.ok(script.includes("fetch('/api/whatsapp/manual-preparations.php'"), 'Manual batch must reuse the per-parent audited preparation endpoint');
+assert.ok(script.includes("fetch('/api/whatsapp/send.php'"), 'Meta batch must reuse the per-parent protected send endpoint');
+assert.ok(script.includes('makeIdempotencyKey()'), 'Each Meta recipient must receive an idempotency key');
+assert.ok(script.includes('excluded_without_active_consent'), 'UI must report parents excluded for missing active consent');
+assert.ok(script.includes('parent.student_names'), 'Class results must identify linked students');
 assert.ok(page.includes('Envoyer automatiquement via Meta'), 'Meta Cloud API mode missing');
 assert.ok(script.includes("fetch('/api/whatsapp/manual-preparations.php'"), 'Manual server-side consent/audit endpoint missing');
 assert.ok(script.includes("fetch('/api/whatsapp/send.php'"), 'Meta configuration/send endpoint missing');
