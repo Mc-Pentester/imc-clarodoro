@@ -192,6 +192,16 @@ function updateClassBatchButtons(){
   $('manualBatchButton').disabled=count===0;
   $('metaBatchButton').disabled=count===0||!configReady;
 }
+function setClassBatchBusy(busy){
+  $('purpose').disabled=busy;
+  $('broadcastClass').disabled=busy;
+  $('broadcastSchoolYear').disabled=busy;
+  $('loadClassParents').disabled=busy;
+  $('selectAllClassParents').disabled=busy;
+  document.querySelectorAll('[data-class-parent]').forEach(node=>node.disabled=busy);
+  $('manualBatchButton').disabled=busy||selectedClassParents().length===0;
+  $('metaBatchButton').disabled=busy||!configReady||selectedClassParents().length===0;
+}
 async function loadClassOptions(){
   const yearSelect=$('broadcastSchoolYear'),classSelect=$('broadcastClass');
   try{
@@ -250,17 +260,17 @@ $('selectAllClassParents').addEventListener('change',()=>{
   updateClassBatchButtons();
 });
 $('manualBatchButton').addEventListener('click',async()=>{
-  const recipients=selectedClassParents(),message=$('manual_message').value.trim(),out=$('classBatchResult');
+  const recipients=selectedClassParents(),message=$('manual_message').value.trim(),purpose=$('purpose').value,out=$('classBatchResult');
   if(!recipients.length){show(out,'Sélectionnez au moins un parent.',true);return}
   if(!message||message.length>4000){show(out,'Rédigez un message de 1 à 4000 caractères dans le champ du mode manuel.',true);return}
-  $('manualBatchButton').disabled=true;show(out,'Vérification individuelle des consentements et préparation des liens…');
+  setClassBatchBusy(true);show(out,'Vérification individuelle des consentements et préparation des liens…');
   const prepared=[],failed=[];
   for(const parent of recipients){
     try{
       const response=await fetch('/api/whatsapp/manual-preparations.php',{
         method:'POST',credentials:'same-origin',cache:'no-store',
         headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-Token':csrf},
-        body:JSON.stringify({parent_id:parent.parent_id,purpose:$('purpose').value,message})
+        body:JSON.stringify({parent_id:parent.parent_id,purpose,message})
       });
       const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
       if(!response.ok||data.success!==true||!/^\+[1-9][0-9]{7,14}$/.test(data.phone_e164||''))throw Error(data.error||('HTTP '+response.status));
@@ -275,17 +285,17 @@ $('manualBatchButton').addEventListener('click',async()=>{
     link.style.cssText='display:block;padding:8px 0;color:#075e54;font-weight:bold';out.appendChild(link);
   });
   failed.forEach(([name,error])=>{const line=document.createElement('p');line.textContent='Échec pour '+name+' : '+error;out.appendChild(line)});
-  out.hidden=false;$('manualBatchButton').disabled=false;
+  out.hidden=false;setClassBatchBusy(false);updateClassBatchButtons();
 });
 $('metaBatchButton').addEventListener('click',async()=>{
-  const recipients=selectedClassParents(),out=$('classBatchResult');
+  const recipients=selectedClassParents(),purpose=$('purpose').value,out=$('classBatchResult');
   if(!configReady){show(out,'La configuration Meta n’est pas prête. Aucun envoi effectué.',true);return}
   if(!recipients.length){show(out,'Sélectionnez au moins un parent.',true);return}
   const templateName=$('template_name').value,language=$('language').value.trim();
   if(!templateName||!/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language)){show(out,'Choisissez un modèle approuvé et une langue valide.',true);return}
   const parameters=$('parameters').value.split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
   if(!confirm('Confirmer l’envoi Meta à '+recipients.length+' parent(s) sélectionné(s) ? Chaque destinataire sera vérifié et journalisé individuellement.'))return;
-  $('metaBatchButton').disabled=true;
+  setClassBatchBusy(true);
   const accepted=[],failed=[];
   for(let index=0;index<recipients.length;index++){
     const parent=recipients[index];
@@ -294,7 +304,7 @@ $('metaBatchButton').addEventListener('click',async()=>{
       const response=await fetch('/api/whatsapp/send.php',{
         method:'POST',credentials:'same-origin',cache:'no-store',
         headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-Token':csrf},
-        body:JSON.stringify({parent_id:parent.parent_id,purpose:$('purpose').value,template_name:templateName,language,parameters,idempotency_key:makeIdempotencyKey()})
+        body:JSON.stringify({parent_id:parent.parent_id,purpose,template_name:templateName,language,parameters,idempotency_key:makeIdempotencyKey()})
       });
       const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
       if(!response.ok||data.success!==true)throw Error(data.error||('HTTP '+response.status)+(data.provider_error_code?' · Code Meta '+data.provider_error_code:''));
@@ -305,7 +315,7 @@ $('metaBatchButton').addEventListener('click',async()=>{
   const summary=document.createElement('p');summary.textContent='Bilan Meta : '+accepted.length+' demande(s) acceptée(s) par Meta, '+failed.length+' échec(s). L’acceptation ne confirme pas la livraison.';out.appendChild(summary);
   accepted.forEach(item=>{const line=document.createElement('p');line.textContent='Accepté : '+item;out.appendChild(line)});
   failed.forEach(item=>{const line=document.createElement('p');line.textContent='Échec : '+item;out.appendChild(line)});
-  out.hidden=false;$('metaBatchButton').disabled=!configReady;
+  out.hidden=false;setClassBatchBusy(false);updateClassBatchButtons();
 });
 loadClassOptions();
 loadConfig();
