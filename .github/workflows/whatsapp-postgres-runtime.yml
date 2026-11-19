@@ -198,6 +198,7 @@ jobs:
           php -l api/whatsapp/consent-invitations.php
           php -l api/whatsapp/consent-public.php
           php -l api/whatsapp/consent-parents-search.php
+          php -l api/whatsapp/parents-search.php
           php -l private-pages/whatsapp-consent.php
           php -l api/whatsapp/send.php
           php -l api/whatsapp/manual-preparations.php
