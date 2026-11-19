@@ -116,11 +116,11 @@ psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v sibling="$SIBLING_ID" -v ex
 INSERT INTO student_parents (student_id,parent_id,relationship_type,is_primary)
 VALUES (:'sibling',:'parent','MOTHER',FALSE), (:'excluded_student',:'excluded_parent','FATHER',TRUE);
 INSERT INTO enrollments (student_id,class_id,school_year_id,status)
-SELECT id, :'class', :'year', 'ACTIVE'
+SELECT id, :'class'::uuid, :'year'::uuid, 'ACTIVE'
 FROM students
 WHERE id IN (:'sibling', :'excluded_student')
 UNION ALL
-SELECT id, :'class', :'year', 'ACTIVE'
+SELECT id, :'class'::uuid, :'year'::uuid, 'ACTIVE'
 FROM students
 WHERE id = (SELECT id FROM students WHERE matricule='WHATSAPP-SEARCH-STUDENT-001');
 SQL
