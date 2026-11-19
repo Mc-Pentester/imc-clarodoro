@@ -142,7 +142,7 @@ DENIED_CLASS_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-class-r
   "http://127.0.0.1:8100/api/whatsapp/class-recipients.php?class_id=$CLASS_ID&school_year_id=$SCHOOL_YEAR_ID&purpose=GENERAL")"
 test "$DENIED_CLASS_STATUS" = "403"
 echo "PASS class recipient permission enforcement HTTP 403"
-CLASS_MANUAL_BODY="{\\"parent_id\\":\\"$PARENT_ID\\",\\"purpose\\":\\"GENERAL\\",\\"message\\":\\"Class broadcast CI preparation\\"}"
+printf -v CLASS_MANUAL_BODY '{"parent_id":"%s","purpose":"GENERAL","message":"Class broadcast CI preparation"}' "$PARENT_ID"
 call_api class_manual_preparation 200 "$ALLOWED_SID" POST /api/whatsapp/manual-preparations.php "$CLASS_MANUAL_BODY" whatsapp-ci-csrf-token
 CLASS_MANUAL_AUDIT="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_manual_preparations WHERE parent_id='$PARENT_ID' AND purpose='GENERAL'")"
 test "$CLASS_MANUAL_AUDIT" = "1"
