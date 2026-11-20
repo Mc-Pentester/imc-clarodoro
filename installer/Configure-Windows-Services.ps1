@@ -740,7 +740,7 @@ if ($hasProtectedConfig -or $hasLegacyConfig) {
             throw 'Historique de migrations absent ou checksum modifié. Mise à jour bloquée ; aucune migration ni écriture de schéma ne sera tentée.'
         }
 
-        if ($migrationStatusText -match '(?m)^PENDING\s+') {
+        if ($migrationStatusText.Contains('PENDING')) {
             Write-Step 'Migrations en attente détectées : création et vérification d’une sauvegarde PostgreSQL avant toute modification.'
             $databaseConfig = @{}
             foreach ($line in Get-Content -LiteralPath $migrationEnvironmentFile) {
