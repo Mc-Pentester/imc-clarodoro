@@ -344,11 +344,34 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Impossible de créer le témoin de conservation en base.' }
             Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
 
+            # Simulate one unapplied, idempotent compatibility migration on an existing installation.
+            # The in-place installer upgrade must create and verify a pre-migration dump before applying it.
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $removeMigrationHistory = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -v ON_ERROR_STOP=1 -c "DELETE FROM schema_migrations WHERE filename = '20261120100000_whatsapp_recipient_consent_compatibility.sql';"
+            if ($LASTEXITCODE -ne 0) { throw "Impossible de préparer le test de migration de mise à jour : $removeMigrationHistory" }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+
             $upgrade = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
             if ($upgrade.ExitCode -ne 0) { throw "Réinstallation sans désinstallation échouée : code $($upgrade.ExitCode)" }
 
             $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             if (-not $service -or $service.Status -ne 'Running') { throw 'PostgreSQL ne redémarre pas après réinstallation.' }
+
+            $preMigrationBackupDir = Join-Path $env:ProgramData 'IMC-Clarodaro\backups\pre-migration'
+            $preMigrationBackups = @(Get-ChildItem -LiteralPath $preMigrationBackupDir -Filter '*.dump' -File -ErrorAction SilentlyContinue)
+            if ($preMigrationBackups.Count -lt 1) { throw 'La mise à jour avec une migration en attente n a pas créé de sauvegarde pré-migration.' }
+            $latestPreMigrationBackup = $preMigrationBackups | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+            $pgRestore = Join-Path $env:ProgramData 'IMC-Clarodaro\runtime\postgresql\bin\pg_restore.exe'
+            $backupListing = & $pgRestore --list $latestPreMigrationBackup.FullName 2>&1
+            if ($LASTEXITCODE -ne 0 -or -not ($backupListing -match 'Archive created at')) {
+              throw 'La sauvegarde pré-migration de la mise à jour est illisible.'
+            }
+            $env:PGPASSWORD = $dbValues['DB_PASSWORD']
+            $migrationHistoryCount = & $psql -h $dbValues['DB_HOST'] -p $dbValues['DB_PORT'] -U $dbValues['DB_USER'] -d $dbValues['DB_NAME'] -t -A -c "SELECT COUNT(*) FROM schema_migrations WHERE filename = '20261120100000_whatsapp_recipient_consent_compatibility.sql';"
+            if ($LASTEXITCODE -ne 0 -or ($migrationHistoryCount -join '').Trim() -ne '1') {
+              throw 'La mise à jour n a pas réappliqué la migration manquante.'
+            }
+            Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
             foreach ($relativeDirectory in @('backups','uploads','storage','logs','exports')) {
               $sentinel = Join-Path (Join-Path $installDir $relativeDirectory) 'uninstall-preservation-smoke.txt'
               if (-not (Test-Path -LiteralPath $sentinel) -or (Get-Content -LiteralPath $sentinel -Raw).Trim() -notmatch ("preserve-" + $relativeDirectory)) {

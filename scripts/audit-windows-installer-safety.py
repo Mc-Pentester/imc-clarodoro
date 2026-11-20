@@ -51,6 +51,14 @@ require("initial-provisioning-incomplete.marker" in configure,
         "incomplete first-install marker missing")
 require("database\\migrate.php" in configure and "'--status'" in configure and "'--apply'" in configure,
         "new-database migration flow missing")
+require("'pg_dump.exe'" in configure and "'pg_restore.exe'" in configure
+        and "$pgDump" in configure and "$pgRestore" in configure,
+        "verified PostgreSQL backup tools must be deployed and validated with the runtime")
+require("pre-migration" in configure and "--format=custom" in configure
+        and "--list" in configure and "PENDING" in configure and "DRIFT" in configure,
+        "existing-database migrations must be backed up only when pending, archive-validated, and blocked on checksum drift")
+require("postMigrationStatus" in configure and "checksums des migrations validés" in configure,
+        "migration history and checksums must be verified after upgrade")
 fresh_flow, existing_flow = configure.split("elseif ($service)", 1)
 require("bootstrap-auth.php" not in configure and "schema.sql" in fresh_flow and "schema.sql" not in existing_flow,
         "fresh-only schema initialization guard missing")
