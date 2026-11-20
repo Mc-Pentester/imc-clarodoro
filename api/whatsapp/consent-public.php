@@ -54,6 +54,8 @@ try {
     }
     $version = '2026-11-v1';
     foreach ($purposes as $purpose) {
+        $advisory = $pdo->prepare('SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))');
+        $advisory->execute([':lock_key' => $challenge['parent_id'] . ':' . $purpose]);
         $previousStmt = $pdo->prepare('SELECT status FROM whatsapp_consents WHERE parent_id = :parent AND purpose = :purpose FOR UPDATE');
         $previousStmt->execute([':parent'=>$challenge['parent_id'], ':purpose'=>$purpose]);
         $previous = $previousStmt->fetchColumn();
@@ -70,11 +72,13 @@ try {
                consent_method='DIGITAL_EMAIL', consent_email=EXCLUDED.consent_email,
                email_verified_at=NOW(), consent_text_version=EXCLUDED.consent_text_version,
                created_by=NULL, updated_by=NULL, updated_at=NOW()
-             RETURNING id"
+             RETURNING id, consent_method, consent_email, email_verified_at,
+                       consent_text_version, evidence_reference, consent_source, phone_e164"
         );
         $upsert->execute([':parent'=>$challenge['parent_id'], ':purpose'=>$purpose, ':phone'=>$phone,
             ':evidence'=>'email_challenge:'.$challenge['id'], ':email'=>$challenge['email'], ':version'=>$version]);
-        $consentId = $upsert->fetchColumn();
+        $savedConsent = $upsert->fetch(PDO::FETCH_ASSOC);
+        $consentId = $savedConsent['id'];
         $audit = $pdo->prepare(
             "INSERT INTO whatsapp_consent_audit
              (consent_id,parent_id,purpose,previous_status,new_status,actor_user_id,
@@ -85,6 +89,51 @@ try {
         $audit->execute([':consent'=>$consentId, ':parent'=>$challenge['parent_id'], ':purpose'=>$purpose,
             ':previous'=>$previous ?: null, ':evidence'=>'email_challenge:'.$challenge['id'],
             ':email'=>$challenge['email'], ':version'=>$version]);
+
+        $genericPreviousStmt = $pdo->prepare(
+            "SELECT status FROM whatsapp_recipient_consents
+             WHERE recipient_type = 'PARENT' AND parent_id = :parent_id AND purpose = :purpose
+             FOR UPDATE"
+        );
+        $genericPreviousStmt->execute([':parent_id' => $challenge['parent_id'], ':purpose' => $purpose]);
+        $genericPrevious = $genericPreviousStmt->fetchColumn();
+
+        $genericUpsert = $pdo->prepare(
+            "INSERT INTO whatsapp_recipient_consents
+                (recipient_type, parent_id, purpose, phone_e164, status, consent_source,
+                 consent_method, consent_email, email_verified_at, consent_text_version,
+                 evidence_reference, consented_at, revoked_at, created_by, updated_by)
+             VALUES ('PARENT', :parent_id, :purpose, :phone, 'OPTED_IN', 'DIGITAL_EMAIL',
+                 'DIGITAL_EMAIL', :email, NOW(), :text_version, :evidence,
+                 NOW(), NULL, NULL, NULL)
+             ON CONFLICT (parent_id, purpose) WHERE recipient_type = 'PARENT'
+             DO UPDATE SET phone_e164 = EXCLUDED.phone_e164, status = 'OPTED_IN',
+                 consent_source = 'DIGITAL_EMAIL', consent_method = 'DIGITAL_EMAIL',
+                 consent_email = EXCLUDED.consent_email, email_verified_at = NOW(),
+                 consent_text_version = EXCLUDED.consent_text_version,
+                 evidence_reference = EXCLUDED.evidence_reference,
+                 consented_at = NOW(), revoked_at = NULL, updated_by = NULL, updated_at = NOW()
+             RETURNING id, consent_method, consent_email, consent_text_version, evidence_reference"
+        );
+        $genericUpsert->execute([
+            ':parent_id' => $challenge['parent_id'], ':purpose' => $purpose, ':phone' => $phone,
+            ':email' => $challenge['email'], ':text_version' => $version,
+            ':evidence' => 'email_challenge:' . $challenge['id'],
+        ]);
+        $genericConsent = $genericUpsert->fetch(PDO::FETCH_ASSOC);
+
+        $genericAudit = $pdo->prepare(
+            "INSERT INTO whatsapp_recipient_consent_audit
+                (consent_id, recipient_type, previous_status, new_status, actor_user_id,
+                 consent_method, evidence_reference, consent_email, consent_text_version, actor_type)
+             VALUES (:consent_id, 'PARENT', :previous, 'OPTED_IN', NULL,
+                 'DIGITAL_EMAIL', :evidence, :email, :text_version, 'PARENT_EMAIL')"
+        );
+        $genericAudit->execute([
+            ':consent_id' => $genericConsent['id'], ':previous' => $genericPrevious ?: null,
+            ':evidence' => $genericConsent['evidence_reference'], ':email' => $genericConsent['consent_email'],
+            ':text_version' => $genericConsent['consent_text_version'],
+        ]);
     }
     $used=$pdo->prepare('UPDATE whatsapp_consent_email_challenges SET used_at=NOW() WHERE id=:id');
     $used->execute([':id'=>$challenge['id']]);

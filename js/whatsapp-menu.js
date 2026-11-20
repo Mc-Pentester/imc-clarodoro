@@ -30,6 +30,16 @@
         button.addEventListener("click", function () { window.location.href = "/whatsapp-send.html"; });
         menu.appendChild(button);
       }
+      if (window.IMCAuth.hasPermission("whatsapp.message.send") && !menu.querySelector('[data-imc-whatsapp-multi-send="true"]')) {
+        var multiButton = document.createElement("button");
+        multiButton.type = "button";
+        multiButton.dataset.imcWhatsappMultiSend = "true";
+        multiButton.className = "pdg";
+        multiButton.textContent = "WhatsApp — destinataires multiples";
+        multiButton.setAttribute("aria-label", "Ouvrir l'envoi WhatsApp multi-destinataires");
+        multiButton.addEventListener("click", function () { window.location.href = "/whatsapp-multi-send.html"; });
+        menu.appendChild(multiButton);
+      }
       if (window.IMCAuth.hasPermission("whatsapp.consent.read") && !menu.querySelector('[data-imc-whatsapp-consent="true"]')) {
         var consentButton = document.createElement("button");
         consentButton.type = "button";

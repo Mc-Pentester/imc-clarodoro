@@ -19,7 +19,7 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r CROSS JOIN permissions p
 WHERE r.name = 'WhatsApp CI'
-  AND p.name IN ('whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send')
+  AND p.name IN ('whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send', 'whatsapp.recipient.read', 'whatsapp.recipient.manage', 'whatsapp.message.audit')
 ON CONFLICT DO NOTHING;
 SQL
 
@@ -219,3 +219,51 @@ call_api expired_email_challenge 410 "$ALLOWED_SID" GET "/api/whatsapp/consent-p
 
 SEND_AGAIN="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"template_name\":\"ci_template\",\"language\":\"fr\",\"idempotency_key\":\"whatsapp-http-key-000002\",\"parameters\":[\"blocked\"]}"
 call_api send_after_opt_out 403 "$ALLOWED_SID" POST /api/whatsapp/send.php "$SEND_AGAIN" whatsapp-ci-csrf-token
+
+# Legacy -> generic and generic -> legacy consent compatibility.
+call_api generic_parent_consent_read 200 "$ALLOWED_SID" GET "/api/whatsapp/recipient-consents.php?recipient_type=PARENT&recipient_id=$PARENT_ID" '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-generic_parent_consent_read.json"),true); $matches=array_values(array_filter($d["consents"]??[], static fn($x)=>(($x["purpose"]??"")==="GENERAL"))); $c=$matches[0]??[]; if (($d["success"]??false)!==true || ($c["status"]??"")!=="OPTED_OUT" || ($c["consent_method"]??"")!=="PAPER" || ($c["evidence_reference"]??"")!=="CI signed consent fixture" || empty($c["consented_at"]) || empty($c["revoked_at"])) exit(1);'
+echo "PASS legacy revocation is mirrored without losing consent evidence or original consent timestamp"
+
+PARENT_NEW_CONSENT="{\"recipient_type\":\"PARENT\",\"recipient_id\":\"$PARENT_ID\",\"purpose\":\"ATTENDANCE\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\",\"evidence_reference\":\"CI generic signed parent consent\"}"
+call_api parent_generic_opt_in 200 "$ALLOWED_SID" POST /api/whatsapp/recipient-consents.php "$PARENT_NEW_CONSENT" whatsapp-ci-csrf-token
+call_api parent_legacy_read_after_generic 200 "$ALLOWED_SID" GET "/api/whatsapp/consents.php?parent_id=$PARENT_ID" '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-parent_legacy_read_after_generic.json"),true); $found=false; foreach (($d["consents"]??[]) as $c) { if (($c["purpose"]??"")==="ATTENDANCE" && ($c["status"]??"")==="OPTED_IN" && ($c["consent_method"]??"")==="PAPER" && ($c["evidence_reference"]??"") === "CI generic signed parent consent") $found=true; } if (!$found) exit(1);'
+echo "PASS generic parent opt-in is mirrored to the legacy consent API with evidence"
+
+PARENT_GENERIC_REVOKE="{\"recipient_type\":\"PARENT\",\"recipient_id\":\"$PARENT_ID\",\"purpose\":\"ATTENDANCE\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_OUT\",\"consent_source\":null,\"evidence_reference\":null}"
+call_api parent_generic_opt_out 200 "$ALLOWED_SID" POST /api/whatsapp/recipient-consents.php "$PARENT_GENERIC_REVOKE" whatsapp-ci-csrf-token
+GENERIC_REVOKED="$(psql -X -At -F '|' -v ON_ERROR_STOP=1 -c "SELECT status, consented_at IS NOT NULL, revoked_at IS NOT NULL, consent_method, evidence_reference FROM whatsapp_recipient_consents WHERE recipient_type='PARENT' AND parent_id='$PARENT_ID' AND purpose='ATTENDANCE'")"
+test "$GENERIC_REVOKED" = "OPTED_OUT|t|t|PAPER|CI generic signed parent consent"
+LEGACY_REVOKED="$(psql -X -At -F '|' -v ON_ERROR_STOP=1 -c "SELECT status, consented_at IS NOT NULL, revoked_at IS NOT NULL, consent_method, evidence_reference FROM whatsapp_consents WHERE parent_id='$PARENT_ID' AND purpose='ATTENDANCE'")"
+test "$LEGACY_REVOKED" = "$GENERIC_REVOKED"
+echo "PASS generic revocation preserves paper proof and original consent timestamp in both models"
+
+DIGITAL_GENERIC="$(psql -X -At -F '|' -v ON_ERROR_STOP=1 -c "SELECT status, consent_method, consent_email, email_verified_at IS NOT NULL, consent_text_version FROM whatsapp_recipient_consents WHERE recipient_type='PARENT' AND parent_id='$DIGITAL_PARENT_ID' AND purpose='GENERAL'")"
+test "$DIGITAL_GENERIC" = "OPTED_IN|DIGITAL_EMAIL|digital-runtime@example.test|t|2026-11-v1"
+DIGITAL_GENERIC_AUDIT="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_recipient_consent_audit WHERE recipient_type='PARENT' AND actor_type='PARENT_EMAIL' AND consent_email='digital-runtime@example.test' AND consent_text_version='2026-11-v1'")"
+test "$DIGITAL_GENERIC_AUDIT" = "1"
+echo "PASS verified parent email consent and its audit evidence are mirrored to generic recipients"
+
+DIGITAL_REVOKE="{\"parent_id\":\"$DIGITAL_PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000001\",\"status\":\"OPTED_OUT\",\"consent_source\":null,\"evidence_reference\":null}"
+call_api digital_parent_opt_out 200 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$DIGITAL_REVOKE" whatsapp-ci-csrf-token
+DIGITAL_REVOKED="$(psql -X -At -F '|' -v ON_ERROR_STOP=1 -c "SELECT status, consent_method, consent_email, email_verified_at IS NOT NULL, consent_text_version, evidence_reference IS NOT NULL, consented_at IS NOT NULL, revoked_at IS NOT NULL FROM whatsapp_recipient_consents WHERE recipient_type='PARENT' AND parent_id='$DIGITAL_PARENT_ID' AND purpose='GENERAL'")"
+test "$DIGITAL_REVOKED" = "OPTED_OUT|DIGITAL_EMAIL|digital-runtime@example.test|t|2026-11-v1|t|t|t"
+DIGITAL_REVOKE_AUDIT="$(psql -X -At -F '|' -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_recipient_consent_audit WHERE recipient_type='PARENT' AND actor_type='SCHOOL_USER' AND new_status='OPTED_OUT' AND consent_method='DIGITAL_EMAIL' AND consent_email='digital-runtime@example.test' AND consent_text_version='2026-11-v1'")"
+test "$DIGITAL_REVOKE_AUDIT" = "1"
+LEGACY_DIGITAL_REVOKE_AUDIT="$(psql -X -At -F '|' -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM whatsapp_consent_audit WHERE parent_id='$DIGITAL_PARENT_ID' AND actor_type='SCHOOL_USER' AND new_status='OPTED_OUT' AND consent_method='DIGITAL_EMAIL' AND consent_email='digital-runtime@example.test' AND consent_text_version='2026-11-v1'")"
+test "$LEGACY_DIGITAL_REVOKE_AUDIT" = "1"
+echo "PASS digital-email proof and verification metadata survive revocation in both consent models and audits"
+
+STUDENT_ID='00000000-0000-4000-8000-000000009111'
+STUDENT_CONSENT="{\"recipient_type\":\"STUDENT\",\"recipient_id\":\"$STUDENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000111\",\"status\":\"OPTED_IN\",\"consent_source\":\"Signed student form\",\"evidence_reference\":\"CI student consent evidence\"}"
+call_api student_opt_in 200 "$ALLOWED_SID" POST /api/whatsapp/recipient-consents.php "$STUDENT_CONSENT" whatsapp-ci-csrf-token
+call_api student_consent_read 200 "$ALLOWED_SID" GET "/api/whatsapp/recipient-consents.php?recipient_type=STUDENT&recipient_id=$STUDENT_ID" '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-student_consent_read.json"),true); $c=$d["consents"][0]??[]; if (($d["success"]??false)!==true || ($c["status"]??"")!=="OPTED_IN" || ($c["evidence_reference"]??"")!=="CI student consent evidence") exit(1);'
+call_api recipient_search 200 "$ALLOWED_SID" GET "/api/whatsapp/recipient-search.php?recipient_type=STUDENT&q=Adult" '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-recipient_search.json"),true); if (($d["success"]??false)!==true || count($d["recipients"]??[])<1) exit(1);'
+call_api message_history 200 "$ALLOWED_SID" GET /api/whatsapp/recipient-message-history.php '' ''
+php -r '$d=json_decode(file_get_contents("/tmp/whatsapp-message_history.json"),true); if (($d["success"]??false)!==true || count($d["messages"]??[])<1) exit(1);'
+MULTI_SEND="{\"recipient_type\":\"STUDENT\",\"recipient_id\":\"$STUDENT_ID\",\"scope\":\"STUDENT_ONLY\",\"purpose\":\"GENERAL\",\"template_name\":\"ci_template\",\"language\":\"fr\",\"idempotency_key\":\"whatsapp-multi-http-key-000001\",\"parameters\":[\"CI\"]}"
+call_api multi_send_disabled 503 "$ALLOWED_SID" POST /api/whatsapp/send-multi.php "$MULTI_SEND" whatsapp-ci-csrf-token
+echo "PASS generic recipient API, search, history and disabled-send safety"

@@ -78,11 +78,12 @@ try {
            consent_source = CASE WHEN EXCLUDED.status = \'OPTED_OUT\' THEN whatsapp_consents.consent_source ELSE EXCLUDED.consent_source END,
            evidence_reference = CASE WHEN EXCLUDED.status = \'OPTED_OUT\' THEN whatsapp_consents.evidence_reference ELSE EXCLUDED.evidence_reference END,
            consent_method = CASE WHEN EXCLUDED.status = \'OPTED_IN\' THEN EXCLUDED.consent_method ELSE whatsapp_consents.consent_method END,
-           consented_at = CASE WHEN EXCLUDED.status = \'OPTED_IN\' THEN NOW() ELSE whatsapp_consents.consented_at END,
+           consented_at = CASE WHEN EXCLUDED.status = \'OPTED_IN\' THEN NOW() WHEN EXCLUDED.status = \'OPTED_OUT\' THEN whatsapp_consents.consented_at ELSE NULL END,
            revoked_at = CASE WHEN EXCLUDED.status = \'OPTED_OUT\' THEN NOW() ELSE NULL END,
            updated_by = EXCLUDED.updated_by, updated_at = NOW()
          RETURNING id, parent_id, purpose, phone_e164, status, consent_source, consent_method,
-                   evidence_reference, consented_at, revoked_at, updated_at'
+                   evidence_reference, consent_email, email_verified_at, consent_text_version,
+                   consented_at, revoked_at, updated_at'
     );
     $previousStmt = $pdo->prepare('SELECT status FROM whatsapp_consents WHERE parent_id = :parent_id AND purpose = :purpose FOR UPDATE');
     $audit = $pdo->prepare(
@@ -90,7 +91,7 @@ try {
           (consent_id, parent_id, purpose, previous_status, new_status, actor_user_id,
            consent_method, evidence_reference, consent_email, consent_text_version, actor_type)
          VALUES (:consent_id, :parent_id, :purpose, :previous_status, :new_status, :actor,
-           :consent_method, :evidence, NULL, NULL, \'SCHOOL_USER\')'
+           :consent_method, :evidence, :consent_email, :consent_text_version, \'SCHOOL_USER\')'
     );
     $saved = [];
     foreach ($purposes as $purpose) {
@@ -108,6 +109,66 @@ try {
             ':previous_status' => $previous ?: null, ':new_status' => $status,
             ':actor' => $user['id'], ':consent_method' => $consent['consent_method'],
             ':evidence' => $consent['evidence_reference'],
+            ':consent_email' => $consent['consent_email'],
+            ':consent_text_version' => $consent['consent_text_version'],
+        ]);
+
+        // Keep the generic recipient model synchronized with the legacy parent API.
+        $genericPreviousStmt = $pdo->prepare(
+            "SELECT id, status FROM whatsapp_recipient_consents
+             WHERE recipient_type = 'PARENT' AND parent_id = :parent_id AND purpose = :purpose
+             FOR UPDATE"
+        );
+        $genericPreviousStmt->execute([':parent_id' => $parentId, ':purpose' => $purpose]);
+        $genericPrevious = $genericPreviousStmt->fetch(PDO::FETCH_ASSOC);
+
+        $genericUpsert = $pdo->prepare(
+            "INSERT INTO whatsapp_recipient_consents
+                (recipient_type, parent_id, purpose, phone_e164, status, consent_source,
+                 consent_method, consent_email, email_verified_at, consent_text_version,
+                 evidence_reference, consented_at, revoked_at, created_by, updated_by)
+             VALUES ('PARENT', :parent_id, :purpose, :phone, :status, :source,
+                 :method, :email, :email_verified, :text_version, :evidence,
+                 CASE WHEN :is_opted_in = 'OPTED_IN' THEN NOW() ELSE NULL END,
+                 CASE WHEN :is_opted_out = 'OPTED_OUT' THEN NOW() ELSE NULL END,
+                 :created_by, :updated_by)
+             ON CONFLICT (parent_id, purpose) WHERE recipient_type = 'PARENT'
+             DO UPDATE SET
+                 phone_e164 = EXCLUDED.phone_e164, status = EXCLUDED.status,
+                 consent_source = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN whatsapp_recipient_consents.consent_source ELSE EXCLUDED.consent_source END,
+                 consent_method = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN whatsapp_recipient_consents.consent_method ELSE EXCLUDED.consent_method END,
+                 consent_email = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN whatsapp_recipient_consents.consent_email ELSE EXCLUDED.consent_email END,
+                 email_verified_at = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN whatsapp_recipient_consents.email_verified_at ELSE EXCLUDED.email_verified_at END,
+                 consent_text_version = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN whatsapp_recipient_consents.consent_text_version ELSE EXCLUDED.consent_text_version END,
+                 evidence_reference = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN whatsapp_recipient_consents.evidence_reference ELSE EXCLUDED.evidence_reference END,
+                 consented_at = CASE WHEN EXCLUDED.status = 'OPTED_IN' THEN NOW() WHEN EXCLUDED.status = 'OPTED_OUT' THEN whatsapp_recipient_consents.consented_at ELSE NULL END,
+                 revoked_at = CASE WHEN EXCLUDED.status = 'OPTED_OUT' THEN NOW() ELSE NULL END,
+                 updated_by = EXCLUDED.updated_by, updated_at = NOW()
+             RETURNING id, consent_method, consent_email, email_verified_at,
+                       consent_text_version, evidence_reference"
+        );
+        $genericUpsert->execute([
+            ':parent_id' => $parentId, ':purpose' => $purpose, ':phone' => $phone,
+            ':status' => $status, ':source' => $consent['consent_source'],
+            ':method' => $consent['consent_method'], ':email' => $consent['consent_email'],
+            ':email_verified' => $consent['email_verified_at'], ':text_version' => $consent['consent_text_version'],
+            ':evidence' => $consent['evidence_reference'], ':is_opted_in' => $status,
+            ':is_opted_out' => $status, ':created_by' => $user['id'], ':updated_by' => $user['id'],
+        ]);
+        $genericConsent = $genericUpsert->fetch(PDO::FETCH_ASSOC);
+
+        $genericAudit = $pdo->prepare(
+            "INSERT INTO whatsapp_recipient_consent_audit
+                (consent_id, recipient_type, previous_status, new_status, actor_user_id,
+                 consent_method, evidence_reference, consent_email, consent_text_version, actor_type)
+             VALUES (:consent_id, 'PARENT', :previous_status, :new_status, :actor,
+                 :method, :evidence, :email, :text_version, 'SCHOOL_USER')"
+        );
+        $genericAudit->execute([
+            ':consent_id' => $genericConsent['id'], ':previous_status' => $genericPrevious['status'] ?? null,
+            ':new_status' => $status, ':actor' => $user['id'],
+            ':method' => $genericConsent['consent_method'], ':evidence' => $genericConsent['evidence_reference'],
+            ':email' => $genericConsent['consent_email'], ':text_version' => $genericConsent['consent_text_version'],
         ]);
         $saved[] = $consent;
     }
