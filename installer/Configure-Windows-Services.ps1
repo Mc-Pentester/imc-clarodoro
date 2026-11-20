@@ -748,10 +748,13 @@ if ($hasProtectedConfig -or $hasLegacyConfig) {
                 if ($separator -gt 0) {
                     $key = $line.Substring(0, $separator).Trim()
                     $value = $line.Substring($separator + 1).Trim()
-                    if ($value.Length -ge 2 -and
-                        (($value.StartsWith('"') -and $value.EndsWith('"')) -or
-                         ($value.StartsWith("'") -and $value.EndsWith("'")))) {
-                        $value = $value.Substring(1, $value.Length - 2)
+                    if ($value.Length -ge 2) {
+                        $quote = $value.Substring(0, 1)
+                        if (($quote -eq '"') -or ($quote -eq "'")) {
+                            if ($value.EndsWith($quote)) {
+                                $value = $value.Substring(1, $value.Length - 2)
+                            }
+                        }
                     }
                     $databaseConfig[$key] = $value
                 }
