@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../config/auth.php';
+require_once __DIR__ . '/../../config/phone.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, private');
 $pdo = getDatabaseConnection();
@@ -41,7 +42,7 @@ $allowedPurposes = ['ATTENDANCE', 'RESULTS_AVAILABLE', 'PAYMENT_REMINDER', 'GENE
 
 if (!is_string($parentId) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $parentId)) apiError(422, 'parent_id UUID invalide');
 if (!is_array($purposes) || $purposes === [] || count($purposes) > 4 || array_diff($purposes, $allowedPurposes) || count(array_unique($purposes)) !== count($purposes)) apiError(422, 'Choisissez une ou plusieurs finalités WhatsApp valides.');
-if (!is_string($phone) || !preg_match('/^\\+[1-9][0-9]{7,14}$/', $phone)) apiError(422, 'Le téléphone doit être au format international E.164');
+if (!is_string($phone) || ($phone = normalizeE164Phone($phone)) === null) apiError(422, 'Le téléphone doit inclure l’indicatif international au format E.164 (ex. +50937000000)');
 if (!in_array($status, ['PENDING', 'OPTED_IN', 'OPTED_OUT'], true)) apiError(422, 'Statut de consentement invalide');
 foreach (['consent_source' => $source, 'evidence_reference' => $evidence] as $field => $value) {
     if ($value !== null && (!is_string($value) || strlen($value) > 255)) apiError(422, $field . ' invalide');

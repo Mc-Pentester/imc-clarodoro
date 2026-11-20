@@ -73,6 +73,9 @@ jobs:
           print("SENSITIVE PAGE SOURCE SEPARATION: PASS")
           PY
 
+      - name: Verify E.164 phone normalization
+        run: php tests/e164-phone-validation.php
+
       - name: Audit PDG bootstrap first-run safety
         run: python3 scripts/audit-bootstrap-auth-safety.py
 
