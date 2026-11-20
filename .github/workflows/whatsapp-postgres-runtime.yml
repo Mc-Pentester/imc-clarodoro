@@ -42,6 +42,8 @@ jobs:
       DB_USER: postgres
       DB_PASSWORD: postgres
       WHATSAPP_SEND_ENABLED: "false"
+      WHATSAPP_APP_SECRET: "ci-only-webhook-secret"
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "ci-only-webhook-verify-token"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,7 +76,9 @@ jobs:
             database/migrations/20261025120000_whatsapp_manual_preparations.sql \
             database/migrations/20261109170000_f02_l_pdg_payroll_whatsapp_permissions.sql \
             database/migrations/20261117100000_whatsapp_parent_consent_workflow.sql \
-            database/migrations/20261117120000_whatsapp_consent_revocation_timestamp.sql
+            database/migrations/20261117120000_whatsapp_consent_revocation_timestamp.sql \
+            database/migrations/20261115150000_whatsapp_multi_recipient_consents.sql \
+            database/migrations/20261120100000_whatsapp_recipient_consent_compatibility.sql
           do
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
@@ -191,6 +195,71 @@ jobs:
           END $verify$;
           SQL
 
+      - name: Seed isolated multi-recipient WhatsApp fixtures
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO parents (id,last_name,first_name,phone) VALUES
+            ('00000000-0000-4000-8000-000000009101','Parent','One','+50937000101'),
+            ('00000000-0000-4000-8000-000000009102','Parent','Two','+50937000102'),
+            ('00000000-0000-4000-8000-000000009103','Parent','NoConsent','+50937000103')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO students(id,matricule,last_name,first_name,date_of_birth,status) VALUES
+            ('00000000-0000-4000-8000-000000009111','WA-CI-ADULT','Student','Adult','2000-01-01','ACTIVE'),
+            ('00000000-0000-4000-8000-000000009112','WA-CI-MINOR','Student','Minor','2012-01-01','ACTIVE'),
+            ('00000000-0000-4000-8000-000000009113','WA-CI-UNKNOWN','Student','Unknown',NULL,'ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO student_parents(student_id,parent_id,relationship_type,is_primary) VALUES
+            ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009101','MOTHER',TRUE),
+            ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009102','GUARDIAN',FALSE),
+            ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009103','OTHER',FALSE),
+            ('00000000-0000-4000-8000-000000009112','00000000-0000-4000-8000-000000009101','MOTHER',TRUE),
+            ('00000000-0000-4000-8000-000000009112','00000000-0000-4000-8000-000000009102','GUARDIAN',FALSE),
+            ('00000000-0000-4000-8000-000000009112','00000000-0000-4000-8000-000000009103','OTHER',FALSE),
+            ('00000000-0000-4000-8000-000000009113','00000000-0000-4000-8000-000000009101','MOTHER',TRUE),
+            ('00000000-0000-4000-8000-000000009113','00000000-0000-4000-8000-000000009102','GUARDIAN',FALSE),
+            ('00000000-0000-4000-8000-000000009113','00000000-0000-4000-8000-000000009103','OTHER',FALSE)
+          ON CONFLICT (student_id,parent_id) DO NOTHING;
+          INSERT INTO staff(id,first_name,last_name,phone,status)
+          VALUES ('00000000-0000-4000-8000-000000009121','Staff','Recipient','+50937000121','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO teachers(id,first_name,last_name,phone,status)
+          VALUES ('00000000-0000-4000-8000-000000009122','Teacher','Recipient','+50937000122','ACTIVE')
+          ON CONFLICT (id) DO NOTHING;
+          INSERT INTO whatsapp_recipient_consents
+            (recipient_type,parent_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES
+            ('PARENT','00000000-0000-4000-8000-000000009101','GENERAL','+50937000101','OPTED_IN','CI',NOW()),
+            ('PARENT','00000000-0000-4000-8000-000000009102','GENERAL','+50937000102','OPTED_IN','CI',NOW())
+          ON CONFLICT DO NOTHING;
+          INSERT INTO whatsapp_recipient_consents
+            (recipient_type,student_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES ('STUDENT','00000000-0000-4000-8000-000000009111','GENERAL','+50937000111','OPTED_IN','CI',NOW())
+          ON CONFLICT DO NOTHING;
+          INSERT INTO whatsapp_recipient_consents
+            (recipient_type,staff_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES ('STAFF','00000000-0000-4000-8000-000000009121','GENERAL','+50937000121','OPTED_IN','CI',NOW())
+          ON CONFLICT DO NOTHING;
+          INSERT INTO whatsapp_recipient_consents
+            (recipient_type,teacher_id,purpose,phone_e164,status,consent_source,consented_at)
+          VALUES ('TEACHER','00000000-0000-4000-8000-000000009122','GENERAL','+50937000122','OPTED_IN','CI',NOW())
+          ON CONFLICT DO NOTHING;
+          INSERT INTO whatsapp_recipient_consent_audit
+            (consent_id,recipient_type,previous_status,new_status,actor_user_id)
+          SELECT c.id,c.recipient_type,NULL,c.status,u.id
+          FROM whatsapp_recipient_consents c CROSS JOIN users u
+          WHERE u.username='whatsapp-ci-user'
+            AND c.phone_e164 IN ('+50937000101','+50937000102','+50937000111','+50937000121','+50937000122');
+          INSERT INTO whatsapp_recipient_message_log
+            (consent_id,idempotency_key,purpose,status,template_name,payload_sha256,provider_message_id,initiated_by)
+          SELECT c.id,'whatsapp-recipient-ci-key-000001','GENERAL','PROCESSING',
+                 'ci_template',repeat('c',64),'wamid.whatsapp-ci-test',u.id
+          FROM whatsapp_recipient_consents c CROSS JOIN users u
+          WHERE c.recipient_type='STUDENT'
+            AND c.student_id='00000000-0000-4000-8000-000000009111'
+            AND u.username='whatsapp-ci-user'
+          ON CONFLICT (idempotency_key) DO NOTHING;
+          SQL
+
       - name: Verify WhatsApp endpoint PHP syntax
         run: |
           php -l config/email.php
@@ -203,7 +272,16 @@ jobs:
           php -l private-pages/whatsapp-consent.php
           php -l api/whatsapp/send.php
           php -l api/whatsapp/manual-preparations.php
+          php -l api/whatsapp/recipient-consents.php
+          php -l api/whatsapp/recipient-resolver.php
+          php -l api/whatsapp/recipient-search.php
+          php -l api/whatsapp/send-multi.php
+          php -l api/whatsapp/delivery-status.php
+          php -l api/whatsapp/webhook.php
+          php -l api/whatsapp/recipient-message-history.php
+          php -l tests/whatsapp-recipient-routing.php
           php -l private-pages/whatsapp-send.php
+          php -l private-pages/whatsapp-multi-send.php
 
       - name: Verify SMTP encryption and credential policy
         run: |
@@ -276,9 +354,16 @@ jobs:
           check_unauthenticated message_send POST '/api/whatsapp/send.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
           check_unauthenticated manual_preparation POST '/api/whatsapp/manual-preparations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001","purpose":"GENERAL","message":"test"}' 401
           check_unauthenticated class_recipients GET '/api/whatsapp/class-recipients.php' '' 401
+          check_unauthenticated recipient_consents GET '/api/whatsapp/recipient-consents.php?recipient_type=PARENT&recipient_id=00000000-0000-4000-8000-000000000001' '' 401
+          check_unauthenticated recipient_search GET '/api/whatsapp/recipient-search.php?recipient_type=PARENT&q=Pa' '' 401
+          check_unauthenticated recipient_history GET '/api/whatsapp/recipient-message-history.php' '' 401
+          check_unauthenticated multi_send POST '/api/whatsapp/send-multi.php' '{"recipient_type":"STUDENT","recipient_id":"00000000-0000-4000-8000-000000000001","purpose":"GENERAL","template_name":"ci_template","idempotency_key":"unauthenticated-key-000001"}' 401
 
       - name: Smoke-test manual WhatsApp page
         run: node tests/whatsapp-manual-page-smoke.mjs
+
+      - name: Smoke-test multi-recipient WhatsApp page and route
+        run: node tests/whatsapp-multi-send-page-smoke.mjs
 
       - name: Verify authenticated WhatsApp HTTP lifecycle
         shell: bash
@@ -287,3 +372,7 @@ jobs:
       - name: Verify consent row lock serializes concurrent send and revocation
         shell: bash
         run: bash tests/whatsapp-consent-lock-concurrency.sh
+
+      - name: Verify recipient send claim releases locks before network wait
+        shell: bash
+        run: bash tests/whatsapp-recipient-send-lock-concurrency.sh
