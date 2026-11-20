@@ -724,7 +724,12 @@ else {
 # populated database without a migration baseline. No schema replay or reset occurs.
 if ($hasProtectedConfig -or $hasLegacyConfig) {
     Write-Step 'Vérification des migrations de la base existante avant le démarrage de Clarodaro.'
-    $migrationEnvironmentFile = if ($hasProtectedConfig) { $environmentFile } else { $legacyEnvironmentFile }
+    if ($hasProtectedConfig) {
+        $migrationEnvironmentFile = $environmentFile
+    }
+    else {
+        $migrationEnvironmentFile = $legacyEnvironmentFile
+    }
     $env:IMC_CLARODARO_ENV_FILE = $migrationEnvironmentFile
     Push-Location $AppRoot
     try {
@@ -735,8 +740,9 @@ if ($hasProtectedConfig -or $hasLegacyConfig) {
         if ($migrationStatusExitCode -ne 0) {
             throw 'La vérification des migrations de la base existante a échoué.'
         }
-        if ($migrationStatusText -match '(?m)^Migration history\s*:\s*MISSING\s*$' -or
-            $migrationStatusText -match '(?m)^DRIFT\s+') {
+        $missingMigrationHistory = $migrationStatusText.Contains('Migration history: MISSING')
+        $hasMigrationDrift = $migrationStatusText.Contains('DRIFT ')
+        if ($missingMigrationHistory -or $hasMigrationDrift) {
             throw 'Historique de migrations absent ou checksum modifié. Mise à jour bloquée ; aucune migration ni écriture de schéma ne sera tentée.'
         }
 
@@ -808,10 +814,10 @@ if ($hasProtectedConfig -or $hasLegacyConfig) {
         $postMigrationExitCode = $LASTEXITCODE
         $postMigrationText = ($postMigrationStatus | Out-String)
         $postMigrationStatus | ForEach-Object { Write-Step ([string]$_) }
-        if ($postMigrationExitCode -ne 0 -or
-            $postMigrationText -match '(?m)^PENDING\s+' -or
-            $postMigrationText -match '(?m)^DRIFT\s+' -or
-            $postMigrationText -match '(?m)^Migration history\s*:\s*MISSING\s*$') {
+        $postHasPending = $postMigrationText.Contains('PENDING ')
+        $postHasDrift = $postMigrationText.Contains('DRIFT ')
+        $postHistoryMissing = $postMigrationText.Contains('Migration history: MISSING')
+        if ($postMigrationExitCode -ne 0 -or $postHasPending -or $postHasDrift -or $postHistoryMissing) {
             throw 'La validation post-migration a échoué. Le serveur PHP ne sera pas démarré ; consulter la sauvegarde et le journal.'
         }
         Write-Step 'Historique et checksums des migrations validés après mise à niveau.'
