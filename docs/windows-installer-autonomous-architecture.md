@@ -41,7 +41,13 @@ L'option de configuration initiale vérifie si un utilisateur PDG existe. Si auc
 
 - Un `.env` historique à la racine est conservé et priorisé par le chargeur lorsque le chemin ProgramData n'est pas fourni.
 - Un fichier de configuration ProgramData existant n'est jamais remplacé.
-- Aucune initialisation PostgreSQL, création de base, exécution de `schema.sql` ou migration automatique n'est exécutée sur une configuration existante.
+- Aucune initialisation PostgreSQL, création de base ni exécution de `schema.sql` n'est effectuée sur une configuration existante.
+- Avant de modifier le schéma, l'installateur exécute `database/migrate.php --status` avec la configuration existante.
+- Si une migration est en attente, il crée une sauvegarde PostgreSQL au format custom dans `%ProgramData%\IMC-Clarodaro\backups\pre-migration\`, puis vérifie qu'elle est lisible par `pg_restore --list`.
+- Si l'historique manque, si un checksum diffère, si la sauvegarde échoue ou si elle est illisible, la mise à jour s'arrête avant l'application des migrations.
+- Le moteur applique uniquement les migrations absentes, dans l'ordre, avec contrôle SHA-256 et transaction par migration. Aucune table, aucun compte et aucune donnée applicative ne sont réinitialisés.
+- Après application, l'installateur relit le statut et bloque le démarrage PHP si une migration reste en attente ou si un checksum diffère.
+- Si aucune migration n'est en attente, aucune sauvegarde supplémentaire n'est créée.
 - Avant une mise à jour, seuls la tâche PHP et le service PostgreSQL dont les chemins correspondent à cette installation sont arrêtés.
 - Un service ou une tâche homonyme qui ne correspond pas à l'installation Clarodaro provoque un arrêt sûr.
 - Un marqueur bloque le démarrage si l'initialisation de la base neuve a été interrompue.

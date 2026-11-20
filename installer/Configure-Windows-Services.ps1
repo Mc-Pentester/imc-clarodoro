@@ -210,6 +210,8 @@ $pgCtl = Join-Path $pgBin 'pg_ctl.exe'
 $initdb = Join-Path $pgBin 'initdb.exe'
 $psql = Join-Path $pgBin 'psql.exe'
 $pgIsReady = Join-Path $pgBin 'pg_isready.exe'
+$pgDump = Join-Path $pgBin 'pg_dump.exe'
+$pgRestore = Join-Path $pgBin 'pg_restore.exe'
 $postgres = Join-Path $pgBin 'postgres.exe'
 $php = Join-Path $AppRoot 'runtime\php\php.exe'
 
@@ -224,7 +226,7 @@ if (-not (Test-Path -LiteralPath $postgresRuntimeSource -PathType Container)) {
     throw "Payload PostgreSQL absent de l'installation : $postgresRuntimeSource"
 }
 $runtimeSourceBin = Join-Path $postgresRuntimeSource 'bin'
-foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe')) {
+foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe', 'pg_dump.exe', 'pg_restore.exe')) {
     $sourceFile = Join-Path $runtimeSourceBin $runtimeFile
     if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
         throw "Binaire PostgreSQL absent du payload embarqué : $sourceFile"
@@ -247,9 +249,8 @@ foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.e
         throw "Vérification SHA-256 du runtime PostgreSQL échouée après déploiement : $targetFile"
     }
 }
-Write-Step 'Runtime PostgreSQL déployé et vérifié (5 exécutables).'
-
-foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $postgres, $php)) {
+Write-Step 'Runtime PostgreSQL déployé et vérifié (7 exécutables).'
+foreach ($required in @($pgCtl, $initdb, $psql, $pgIsReady, $pgDump, $pgRestore, $postgres, $php)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
         throw "Runtime requis absent après déploiement : $required"
     }
@@ -497,7 +498,6 @@ if (-not $hasProtectedConfig -and -not $hasLegacyConfig) {
                 $startError = $_.Exception.Message
                 Write-Step "Erreur démarrage/attente PostgreSQL: $startError"
             }
-
             $serviceCheck = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
             if ($serviceCheck.Status -ne 'Running') {
                 $serviceDetails = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
@@ -719,24 +719,104 @@ else {
     Write-Step 'Configuration de base existante détectée. PostgreSQL externe ou historique conservé ; aucune instance ni base ne sera créée.'
 }
 
-# Apply only migrations that are pending in the configured database. The migration
-# runner verifies checksums and refuses to replay a populated database without a
-# migration baseline, so existing records are never reset or overwritten.
+# Existing databases are upgraded only after a verified pre-migration backup.
+# The migration runner applies only missing files and rejects checksum drift or a
+# populated database without a migration baseline. No schema replay or reset occurs.
 if ($hasProtectedConfig -or $hasLegacyConfig) {
     Write-Step 'Vérification des migrations de la base existante avant le démarrage de Clarodaro.'
-    $env:IMC_CLARODARO_ENV_FILE = if ($hasProtectedConfig) { $environmentFile } else { $legacyEnvironmentFile }
+    $migrationEnvironmentFile = if ($hasProtectedConfig) { $environmentFile } else { $legacyEnvironmentFile }
+    $env:IMC_CLARODARO_ENV_FILE = $migrationEnvironmentFile
     Push-Location $AppRoot
     try {
-        & $php 'database\migrate.php' '--status'
-        if ($LASTEXITCODE -ne 0) { throw 'La vérification des migrations de la base existante a échoué.' }
+        $migrationStatus = & $php 'database\migrate.php' '--status' 2>&1
+        $migrationStatusExitCode = $LASTEXITCODE
+        $migrationStatusText = ($migrationStatus | Out-String)
+        $migrationStatus | ForEach-Object { Write-Step ([string]$_) }
+        if ($migrationStatusExitCode -ne 0) {
+            throw 'La vérification des migrations de la base existante a échoué.'
+        }
+        if ($migrationStatusText -match '(?m)^Migration history\s*:\s*MISSING\s*$' -or
+            $migrationStatusText -match '(?m)^DRIFT\s+') {
+            throw 'Historique de migrations absent ou checksum modifié. Mise à jour bloquée ; aucune migration ni écriture de schéma ne sera tentée.'
+        }
+
+        if ($migrationStatusText -match '(?m)^PENDING\s+') {
+            Write-Step 'Migrations en attente détectées : création et vérification d’une sauvegarde PostgreSQL avant toute modification.'
+            $databaseConfig = @{}
+            foreach ($line in Get-Content -LiteralPath $migrationEnvironmentFile) {
+                $separator = $line.IndexOf('=')
+                if ($separator -gt 0) {
+                    $key = $line.Substring(0, $separator).Trim()
+                    $value = $line.Substring($separator + 1).Trim()
+                    if ($value.Length -ge 2 -and
+                        (($value.StartsWith('"') -and $value.EndsWith('"')) -or
+                         ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+                        $value = $value.Substring(1, $value.Length - 2)
+                    }
+                    $databaseConfig[$key] = $value
+                }
+            }
+            foreach ($requiredKey in @('DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD')) {
+                if (-not $databaseConfig.ContainsKey($requiredKey) -or
+                    [string]::IsNullOrWhiteSpace([string]$databaseConfig[$requiredKey])) {
+                    throw "Configuration de sauvegarde incomplète : $requiredKey est absent."
+                }
+            }
+            if ($databaseConfig['DB_PORT'] -notmatch '^\d+$' -or
+                [int]$databaseConfig['DB_PORT'] -lt 1 -or [int]$databaseConfig['DB_PORT'] -gt 65535) {
+                throw 'DB_PORT invalide dans la configuration existante.'
+            }
+
+            $backupDirectory = Join-Path $programDataRoot 'backups\pre-migration'
+            New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
+            Set-PrivateAcl $backupDirectory
+            $backupTimestamp = (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss-fffZ')
+            $backupFile = Join-Path $backupDirectory ("imc_clarodoro-$backupTimestamp.dump")
+            $env:PGPASSWORD = [string]$databaseConfig['DB_PASSWORD']
+            try {
+                $dumpOutput = & $pgDump --format=custom --host ([string]$databaseConfig['DB_HOST']) --port ([string]$databaseConfig['DB_PORT']) --username ([string]$databaseConfig['DB_USER']) --dbname ([string]$databaseConfig['DB_NAME']) --file $backupFile 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "Sauvegarde PostgreSQL impossible : $($dumpOutput -join ' ')"
+                }
+                if (-not (Test-Path -LiteralPath $backupFile -PathType Leaf) -or
+                    (Get-Item -LiteralPath $backupFile).Length -le 0) {
+                    throw 'Le fichier de sauvegarde PostgreSQL est absent ou vide.'
+                }
+                $archiveListing = & $pgRestore --list $backupFile 2>&1
+                if ($LASTEXITCODE -ne 0 -or -not ($archiveListing -match 'Archive created at')) {
+                    throw 'La sauvegarde PostgreSQL créée ne peut pas être relue par pg_restore.'
+                }
+                Write-Step "Sauvegarde pré-migration vérifiée : $backupFile"
+            }
+            finally {
+                Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+            }
+        }
+        else {
+            Write-Step 'Aucune migration en attente : aucune sauvegarde supplémentaire nécessaire.'
+        }
+
         & $php 'database\migrate.php' '--apply'
         if ($LASTEXITCODE -ne 0) {
-            throw 'Application des migrations en attente impossible. Les données existantes sont conservées ; consulter le journal pour établir un baseline ou corriger la migration.'
+            throw 'Application des migrations en attente impossible. La base et la sauvegarde pré-migration sont conservées ; consulter le journal.'
         }
+
+        $postMigrationStatus = & $php 'database\migrate.php' '--status' 2>&1
+        $postMigrationExitCode = $LASTEXITCODE
+        $postMigrationText = ($postMigrationStatus | Out-String)
+        $postMigrationStatus | ForEach-Object { Write-Step ([string]$_) }
+        if ($postMigrationExitCode -ne 0 -or
+            $postMigrationText -match '(?m)^PENDING\s+' -or
+            $postMigrationText -match '(?m)^DRIFT\s+' -or
+            $postMigrationText -match '(?m)^Migration history\s*:\s*MISSING\s*$') {
+            throw 'La validation post-migration a échoué. Le serveur PHP ne sera pas démarré ; consulter la sauvegarde et le journal.'
+        }
+        Write-Step 'Historique et checksums des migrations validés après mise à niveau.'
     }
     finally {
         Pop-Location
         Remove-Item Env:\IMC_CLARODARO_ENV_FILE -ErrorAction SilentlyContinue
+        Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     }
 }
 
@@ -747,7 +827,6 @@ if ($hasProtectedConfig) {
     & icacls.exe $environmentFile /grant '*S-1-5-19:R' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Impossible de donner un accès en lecture au fichier .env du service PHP.' }
 }
-
 $taskEnvironmentFile = if (Test-Path -LiteralPath $environmentFile -PathType Leaf) { $environmentFile } else { '' }
 if ($task) {
     Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
