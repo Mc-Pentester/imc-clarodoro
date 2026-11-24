@@ -19,6 +19,7 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <body>
 <header><h1>WhatsApp — Clarodaro</h1><p>Choisissez l’envoi manuel ou l’envoi réel via Meta</p></header>
 <main>
+<div class="notice" id="studentContextNotice" hidden aria-live="polite"></div>
 <div class="notice"><strong>Deux modes disponibles :</strong> l’envoi manuel ouvre WhatsApp avec le numéro et le texte préremplis ; vous vérifiez puis appuyez vous-même sur Envoyer. L’envoi Meta transmet un modèle approuvé depuis le serveur Clarodaro. Les deux modes vérifient le consentement actif et sont journalisés. Une préparation manuelle n’est pas une preuve d’envoi.</div>
 <section class="card">
 <h2>Destinataire et autorisation</h2>
@@ -30,11 +31,11 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 </section>
 <section class="card">
 <div class="mode">Diffusion à une classe</div>
-<h2>Envoyer un message aux parents d’une classe</h2>
-<p class="hint">Clarodaro récupère les élèves inscrits dans la classe et l’année scolaire sélectionnées, puis déduplique les parents. Seuls les parents ayant un consentement actif pour la finalité choisie sont proposés. Les autres sont exclus.</p>
-<div class="grid">
+<h2 id="broadcastTitle">Envoyer un message aux parents d’une ou plusieurs classes</h2>
+<p class="hint" id="broadcastDescription">Clarodaro récupère les élèves inscrits dans les classes et l’année scolaire sélectionnées, puis déduplique les parents. Seuls les parents ayant un consentement actif pour la finalité choisie sont proposés. Les autres sont exclus.</p>
+<div class="grid" id="classBroadcastControls">
 <div><label for="broadcastSchoolYear">Année scolaire active</label><select id="broadcastSchoolYear"><option value="">Chargement…</option></select></div>
-<div><label for="broadcastClass">Classe active</label><select id="broadcastClass"><option value="">Choisir une classe</option></select></div>
+<div><label>Classe(s) active(s)</label><div id="broadcastClassOptions" class="result" aria-describedby="classSelectionHint">Chargement des classes…</div><p class="hint" id="classSelectionHint">Cochez une ou plusieurs classes.</p></div>
 <div class="wide actions"><button type="button" id="loadClassParents">Charger les parents autorisés</button><label style="display:flex;align-items:center;gap:8px;font-weight:normal"><input id="selectAllClassParents" type="checkbox" checked style="width:auto"> Sélectionner tous les parents autorisés</label></div>
 </div>
 <div id="classRecipientsSummary" class="result" hidden aria-live="polite"></div>
@@ -73,6 +74,8 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 </main>
 <script>
 const csrf=document.querySelector('meta[name="csrf-token"]').content,$=id=>document.getElementById(id);
+const requestedStudentId=new URLSearchParams(window.location.search).get('student_id')||'';
+let studentMode=false;
 let configReady=false;
 function show(node,text,error=false){node.hidden=false;node.textContent=text;node.classList.toggle('error',error)}
 function validParent(){const value=$('parent_id').value.trim();if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error('Recherchez puis sélectionnez un parent dans la liste.');return value}
@@ -181,10 +184,11 @@ $('sendButton').addEventListener('click',async()=>{
 });
 let classParents=[];
 let classExcludedCount=0;
+let selectedStudentName='';
 function selectedClassParents(){
   return classParents.filter(parent=>{
     const checkbox=document.querySelector('[data-class-parent="'+parent.parent_id+'"]');
-    return checkbox&&checkbox.checked;
+    return parent.eligible!==false&&checkbox&&checkbox.checked;
   });
 }
 function updateClassBatchButtons(){
@@ -194,44 +198,61 @@ function updateClassBatchButtons(){
 }
 function setClassBatchBusy(busy){
   $('purpose').disabled=busy;
-  $('broadcastClass').disabled=busy;
+  document.querySelectorAll('[data-broadcast-class]').forEach(node=>node.disabled=busy);
   $('broadcastSchoolYear').disabled=busy;
   $('loadClassParents').disabled=busy;
-  $('selectAllClassParents').disabled=busy;
-  document.querySelectorAll('[data-class-parent]').forEach(node=>node.disabled=busy);
+  $('selectAllClassParents').disabled=busy||(studentMode&&!classParents.some(parent=>parent.eligible===true));
+  document.querySelectorAll('[data-class-parent]').forEach(node=>node.disabled=busy||node.dataset.eligible==='false');
   $('manualBatchButton').disabled=busy||selectedClassParents().length===0;
   $('metaBatchButton').disabled=busy||!configReady||selectedClassParents().length===0;
 }
 async function loadClassOptions(){
-  const yearSelect=$('broadcastSchoolYear'),classSelect=$('broadcastClass');
+  const yearSelect=$('broadcastSchoolYear'),classOptions=$('broadcastClassOptions');
   try{
     const response=await fetch('/api/whatsapp/class-recipients.php',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
     const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
     if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
     yearSelect.replaceChildren(new Option('Choisir une année scolaire',''));
     (data.school_years||[]).forEach(year=>yearSelect.add(new Option(year.label,year.id)));
-    classSelect.replaceChildren(new Option('Choisir une classe',''));
-    (data.classes||[]).forEach(item=>classSelect.add(new Option(item.name+' ('+item.code+')',item.id)));
+    classOptions.replaceChildren();
+    (data.classes||[]).forEach(item=>{
+      const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:9px;padding:7px 2px;font-weight:normal';
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.value=item.id;checkbox.dataset.broadcastClass='true';checkbox.style.width='auto';
+      checkbox.addEventListener('change',()=>{if(!studentMode){if(checkbox.checked&&document.querySelectorAll('[data-broadcast-class]:checked').length>20){checkbox.checked=false;show($('classRecipientsSummary'),'Vous pouvez sélectionner au maximum vingt classes à la fois.',true);return}classParents=[];$('classParentList').replaceChildren();$('classParentList').hidden=true;show($('classRecipientsSummary'),'Sélection de classes modifiée. Rechargez les destinataires avant de préparer ou envoyer un message.');updateClassBatchButtons()}});
+      const text=document.createElement('span');text.textContent=item.name+' ('+item.code+')';label.append(checkbox,text);classOptions.appendChild(label);
+    });
     if((data.school_years||[]).length===1)yearSelect.value=data.school_years[0].id;
     if(!(data.school_years||[]).length||!(data.classes||[]).length){
       show($('classRecipientsSummary'),'Aucune année scolaire active ou aucune classe active disponible.',true);
     }
+    if(requestedStudentId){
+      studentMode=true;
+      $('classBroadcastControls').hidden=true;
+      $('broadcastTitle').textContent='Contacter les parents et responsables de l’élève';
+      $('broadcastDescription').textContent='Les responsables sont chargés depuis le dossier de cet élève. Vous pouvez en sélectionner un ou plusieurs; seuls les consentements actifs pour la finalité choisie sont admissibles.';
+      document.querySelector('main > section.card').hidden=true;
+      $('manualButton').closest('section').hidden=true;
+      $('sendButton').hidden=true;
+      $('manualBatchButton').textContent='Préparer les liens WhatsApp sélectionnés';
+      $('metaBatchButton').textContent='Envoyer aux responsables sélectionnés via Meta';
+      await loadStudentParents();
+    }
   }catch(error){show($('classRecipientsSummary'),'Chargement des classes impossible : '+error.message,true)}
 }
 async function loadClassParents(){
-  const classId=$('broadcastClass').value,schoolYearId=$('broadcastSchoolYear').value;
-  if(!classId||!schoolYearId){show($('classRecipientsSummary'),'Choisissez une année scolaire et une classe.',true);return}
+  const classIds=Array.from(document.querySelectorAll('[data-broadcast-class]:checked')).map(option=>option.value).filter(Boolean),schoolYearId=$('broadcastSchoolYear').value;
+  if(!classIds.length||!schoolYearId){show($('classRecipientsSummary'),'Choisissez une année scolaire et au moins une classe.',true);return}
   $('loadClassParents').disabled=true;
   show($('classRecipientsSummary'),'Recherche des parents ayant un consentement actif…');
   $('classParentList').hidden=true;
   classParents=[];
   updateClassBatchButtons();
   try{
-    const url='/api/whatsapp/class-recipients.php?class_id='+encodeURIComponent(classId)+'&school_year_id='+encodeURIComponent(schoolYearId)+'&purpose='+encodeURIComponent($('purpose').value);
+    const url='/api/whatsapp/class-recipients.php?class_ids='+encodeURIComponent(classIds.join(','))+'&school_year_id='+encodeURIComponent(schoolYearId)+'&purpose='+encodeURIComponent($('purpose').value);
     const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
     const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
     if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
-    classParents=Array.isArray(data.parents)?data.parents:[];
+    classParents=Array.isArray(data.parents)?data.parents.map(parent=>({...parent,eligible:true})):[];
     const list=$('classParentList');list.replaceChildren();
     if(!classParents.length){
       show($('classRecipientsSummary'),'Aucun parent avec consentement actif pour cette classe, cette année et cette finalité.');
@@ -240,23 +261,29 @@ async function loadClassParents(){
     classParents.forEach(parent=>{
       const label=document.createElement('label');
       label.style.cssText='display:flex;align-items:flex-start;gap:10px;padding:9px;border-bottom:1px solid #dce4e8;font-weight:normal';
-      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=true;checkbox.style.width='auto';checkbox.dataset.classParent=parent.parent_id;
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=true;checkbox.disabled=parent.eligible===false;checkbox.style.width='auto';checkbox.dataset.classParent=parent.parent_id;checkbox.dataset.eligible=String(parent.eligible!==false);
       checkbox.addEventListener('change',updateClassBatchButtons);
       const text=document.createElement('span');
-      text.textContent=[parent.first_name,parent.last_name].filter(Boolean).join(' ')+' — '+parent.phone_e164+' · Élève(s) : '+parent.student_names;
+      text.textContent=[parent.first_name,parent.last_name].filter(Boolean).join(' ')+' — '+(parent.phone_e164||'Aucun numéro WhatsApp autorisé')+(parent.student_names?' · Élève(s) : '+parent.student_names:'')+(parent.class_names?' · Classe(s) : '+parent.class_names:'')+(parent.eligible===false?' · Consentement non actif':'');
       label.append(checkbox,text);list.appendChild(label);
     });
     list.hidden=false;
     $('selectAllClassParents').checked=true;
-    show($('classRecipientsSummary'),classParents.length+' parent(s) autorisé(s) et sélectionné(s) sur '+(data.total_linked_parents||classParents.length)+' parent(s) lié(s) à la classe. '+(data.excluded_without_active_consent||0)+' parent(s) exclu(s) faute de consentement actif. Un parent lié à plusieurs élèves de cette classe ne sera compté qu’une seule fois.');
+    show($('classRecipientsSummary'),classParents.length+' parent(s) autorisé(s) et sélectionné(s) sur '+(data.total_linked_parents||classParents.length)+' parent(s) lié(s) aux classes sélectionnées. '+(data.excluded_without_active_consent||0)+' parent(s) exclu(s) faute de consentement actif. Un même parent lié à plusieurs élèves ou classes ne sera compté qu’une seule fois.');
     updateClassBatchButtons();
   }catch(error){show($('classRecipientsSummary'),'Chargement des parents impossible : '+error.message,true)}
   finally{$('loadClassParents').disabled=false}
 }
 $('loadClassParents').addEventListener('click',loadClassParents);
-$('purpose').addEventListener('change',()=>{if($('broadcastClass').value&&$('broadcastSchoolYear').value)loadClassParents()});
+$('broadcastSchoolYear').addEventListener('change',()=>{
+  if(studentMode)return;
+  classParents=[];$('classParentList').replaceChildren();$('classParentList').hidden=true;
+  show($('classRecipientsSummary'),'Année scolaire modifiée. Rechargez les destinataires avant de préparer ou envoyer un message.');
+  updateClassBatchButtons();
+});
+$('purpose').addEventListener('change',()=>{if(studentMode)loadStudentParents();else if(document.querySelector('[data-broadcast-class]:checked')&&$('broadcastSchoolYear').value)loadClassParents()});
 $('selectAllClassParents').addEventListener('change',()=>{
-  document.querySelectorAll('[data-class-parent]').forEach(node=>node.checked=$('selectAllClassParents').checked);
+  document.querySelectorAll('[data-class-parent]').forEach(node=>{if(!node.disabled)node.checked=$('selectAllClassParents').checked});
   updateClassBatchButtons();
 });
 $('manualBatchButton').addEventListener('click',async()=>{
@@ -317,6 +344,33 @@ $('metaBatchButton').addEventListener('click',async()=>{
   failed.forEach(item=>{const line=document.createElement('p');line.textContent='Échec : '+item;out.appendChild(line)});
   out.hidden=false;setClassBatchBusy(false);updateClassBatchButtons();
 });
+async function loadStudentParents(){
+  const out=$('classRecipientsSummary'),list=$('classParentList');
+  classParents=[];list.replaceChildren();list.hidden=true;updateClassBatchButtons();
+  show(out,'Chargement des responsables liés à l’élève et vérification des consentements…');
+  try{
+    const url='/api/whatsapp/student-recipients.php?student_id='+encodeURIComponent(requestedStudentId)+'&purpose='+encodeURIComponent($('purpose').value);
+    const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
+    const data=await response.json().catch(()=>({success:false,error:'Réponse serveur invalide'}));
+    if(!response.ok||data.success!==true)throw Error(data.error||('Erreur HTTP '+response.status));
+    selectedStudentName=[data.student.first_name,data.student.last_name].filter(Boolean).join(' ');
+    const matricule=data.student.matricule?' · Matricule '+data.student.matricule:'';
+    show($('studentContextNotice'),'Élève sélectionné : '+selectedStudentName+matricule+'. Choisissez un ou plusieurs responsables ci-dessous. Aucun message ne part avant votre confirmation.');
+    classParents=(Array.isArray(data.parents)?data.parents:[]).map(parent=>({...parent,student_names:selectedStudentName,student_count:1}));
+    classParents.forEach(parent=>{
+      const label=document.createElement('label');label.style.cssText='display:flex;align-items:flex-start;gap:10px;padding:9px;border-bottom:1px solid #dce4e8;font-weight:normal';
+      const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=parent.eligible===true;checkbox.disabled=parent.eligible!==true;checkbox.style.width='auto';checkbox.dataset.classParent=parent.parent_id;checkbox.dataset.eligible=String(parent.eligible===true);checkbox.addEventListener('change',updateClassBatchButtons);
+      const relationship={FATHER:'Père',MOTHER:'Mère',GUARDIAN:'Tuteur',OTHER:'Autre'}[parent.relationship_type]||'Responsable';
+      const text=document.createElement('span');text.textContent=relationship+' — '+[parent.first_name,parent.last_name].filter(Boolean).join(' ')+' · '+(parent.phone_e164||'Aucun numéro WhatsApp autorisé')+(parent.is_primary?' · Responsable principal':'')+(parent.eligible!==true?' · Consentement ou numéro non admissible pour cette finalité':'');
+      label.append(checkbox,text);list.appendChild(label);
+    });
+    list.hidden=classParents.length===0;
+    $('selectAllClassParents').checked=true;
+    $('selectAllClassParents').disabled=!classParents.some(parent=>parent.eligible===true);
+    show(out,classParents.length+' responsable(s) associé(s) : '+(data.eligible_parent_count||0)+' admissible(s), '+(data.excluded_without_active_consent||0)+' exclu(s) faute de consentement actif.');
+    updateClassBatchButtons();
+  }catch(error){show(out,'Chargement des responsables impossible : '+error.message,true)}
+}
 loadClassOptions();
 loadConfig();
 </script>

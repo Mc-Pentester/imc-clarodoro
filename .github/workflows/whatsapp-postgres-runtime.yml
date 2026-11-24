@@ -269,6 +269,7 @@ jobs:
           php -l api/whatsapp/consent-parents-search.php
           php -l api/whatsapp/parents-search.php
           php -l api/whatsapp/class-recipients.php
+          php -l api/whatsapp/student-recipients.php
           php -l private-pages/whatsapp-consent.php
           php -l api/whatsapp/send.php
           php -l api/whatsapp/manual-preparations.php
@@ -354,6 +355,7 @@ jobs:
           check_unauthenticated message_send POST '/api/whatsapp/send.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
           check_unauthenticated manual_preparation POST '/api/whatsapp/manual-preparations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001","purpose":"GENERAL","message":"test"}' 401
           check_unauthenticated class_recipients GET '/api/whatsapp/class-recipients.php' '' 401
+          check_unauthenticated student_recipients GET '/api/whatsapp/student-recipients.php?student_id=00000000-0000-4000-8000-000000000001&purpose=GENERAL' '' 401
           check_unauthenticated recipient_consents GET '/api/whatsapp/recipient-consents.php?recipient_type=PARENT&recipient_id=00000000-0000-4000-8000-000000000001' '' 401
           check_unauthenticated recipient_search GET '/api/whatsapp/recipient-search.php?recipient_type=PARENT&q=Pa' '' 401
           check_unauthenticated recipient_history GET '/api/whatsapp/recipient-message-history.php' '' 401

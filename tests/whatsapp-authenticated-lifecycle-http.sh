@@ -103,11 +103,30 @@ DENIED_SEARCH_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-parent
 test "$DENIED_SEARCH_STATUS" = "403"
 echo "PASS parent search permission enforcement HTTP 403"
 
+STUDENT_RECIPIENT_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-student-recipients.json --write-out '%{http_code}' \
+  -H "Cookie: IMC_SESSION=$ALLOWED_SID" \
+  "http://127.0.0.1:8100/api/whatsapp/student-recipients.php?student_id=$STUDENT_ID&purpose=GENERAL")"
+test "$STUDENT_RECIPIENT_STATUS" = "200"
+php -r '
+  $d=json_decode(file_get_contents($argv[1]),true);
+  $expectedParent=$argv[2];
+  if (($d["success"]??false)!==true || ($d["total_linked_parents"]??-1)!==1 || ($d["eligible_parent_count"]??-1)!==1) exit(1);
+  $p=$d["parents"][0]??[];
+  if (($p["parent_id"]??"")!==$expectedParent || ($p["eligible"]??false)!==true || ($p["phone_e164"]??"")!=="+50937000000") exit(1);
+' /tmp/whatsapp-student-recipients.json "$PARENT_ID"
+echo "PASS student-linked responsible lookup returns only the associated opted-in parent"
+DENIED_STUDENT_RECIPIENT_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-student-recipients-denied.json --write-out '%{http_code}' \
+  -H "Cookie: IMC_SESSION=$DENIED_SID" \
+  "http://127.0.0.1:8100/api/whatsapp/student-recipients.php?student_id=$STUDENT_ID&purpose=GENERAL")"
+test "$DENIED_STUDENT_RECIPIENT_STATUS" = "403"
+echo "PASS student responsible lookup permission enforcement HTTP 403"
+
 # Seed one class with two siblings for the same opted-in parent and one
 # additional linked parent without consent. The class endpoint must deduplicate
 # the first parent and exclude the second one.
 LEVEL_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO levels (code,name) VALUES ('WHATSAPP-CLASS-LVL','WhatsApp class level') RETURNING id")"
 CLASS_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO classes (code,name,level_id,status) VALUES ('WHATSAPP-CLASS-A','WhatsApp test class','$LEVEL_ID','ACTIVE') RETURNING id")"
+CLASS_B_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO classes (code,name,level_id,status) VALUES ('WHATSAPP-CLASS-B','WhatsApp second test class','$LEVEL_ID','ACTIVE') RETURNING id")"
 SCHOOL_YEAR_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO school_years (label,start_date,end_date,status) VALUES ('WhatsApp CI 2026-2027','2026-09-01','2027-06-30','ACTIVE') RETURNING id")"
 SIBLING_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name) VALUES ('WHATSAPP-SIBLING-001','Search','Sibling') RETURNING id")"
 EXCLUDED_PARENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO parents (last_name,first_name) VALUES ('NoConsent','Parent') RETURNING id")"
@@ -137,6 +156,28 @@ php -r '
   if (!str_contains((string)($p["student_names"]??""),"Student Search") || !str_contains((string)($p["student_names"]??""),"Sibling Search")) exit(1);
 ' /tmp/whatsapp-class-recipients.json "$PARENT_ID"
 echo "PASS class parent lookup: deduplicates siblings and excludes parents without active consent"
+
+SECOND_CLASS_STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name) VALUES ('WHATSAPP-SECOND-CLASS-001','Search','SecondClass') RETURNING id")"
+psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v student="$SECOND_CLASS_STUDENT_ID" -v class_b="$CLASS_B_ID" -v year="$SCHOOL_YEAR_ID" <<'SQL'
+INSERT INTO student_parents (student_id,parent_id,relationship_type,is_primary)
+VALUES (:'student',:'parent','MOTHER',FALSE);
+INSERT INTO enrollments (student_id,class_id,school_year_id,status)
+VALUES (:'student',:'class_b',:'year','ACTIVE');
+SQL
+MULTI_CLASS_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-multi-class-recipients.json --write-out '%{http_code}' \
+  -H "Cookie: IMC_SESSION=$ALLOWED_SID" \
+  "http://127.0.0.1:8100/api/whatsapp/class-recipients.php?class_ids=$CLASS_ID%2C$CLASS_B_ID&school_year_id=$SCHOOL_YEAR_ID&purpose=GENERAL")"
+test "$MULTI_CLASS_STATUS" = "200"
+php -r '
+  $d=json_decode(file_get_contents($argv[1]),true);
+  $expectedParent=$argv[2];
+  if (($d["success"]??false)!==true || ($d["count"]??-1)!==1 || ($d["total_linked_parents"]??-1)!==2 || ($d["excluded_without_active_consent"]??-1)!==1) exit(1);
+  $p=$d["parents"][0]??[];
+  if (($p["parent_id"]??"")!==$expectedParent || ($p["student_count"]??-1)!==3) exit(1);
+  if (!str_contains((string)($p["class_names"]??""),"WhatsApp test class") || !str_contains((string)($p["class_names"]??""),"WhatsApp second test class")) exit(1);
+  if (!str_contains((string)($p["student_names"]??""),"SecondClass Search")) exit(1);
+' /tmp/whatsapp-multi-class-recipients.json "$PARENT_ID"
+echo "PASS multi-class lookup deduplicates one parent across classes and aggregates linked students"
 DENIED_CLASS_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-class-recipients-denied.json --write-out '%{http_code}' \
   -H "Cookie: IMC_SESSION=$DENIED_SID" \
   "http://127.0.0.1:8100/api/whatsapp/class-recipients.php?class_id=$CLASS_ID&school_year_id=$SCHOOL_YEAR_ID&purpose=GENERAL")"
