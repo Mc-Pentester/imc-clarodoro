@@ -50,9 +50,53 @@ try {
             c.status AS consent_status,
             CASE
                 WHEN c.status = 'OPTED_IN'
-                 AND left(c.phone_e164, 1) = '+'
-                 AND length(c.phone_e164) BETWEEN 9 AND 16
-                 AND substring(c.phone_e164 FROM 2) !~ '[^0-9]'
+                 AND c.phone_e164 ~ '^[+][1-9][0-9]{7,14}
+                THEN TRUE ELSE FALSE
+            END AS eligible
+         FROM student_parents sp
+         INNER JOIN parents p ON p.id = sp.parent_id
+         LEFT JOIN whatsapp_consents c
+           ON c.parent_id = p.id
+          AND c.purpose = :purpose
+         WHERE sp.student_id = :student_id
+         ORDER BY sp.is_primary DESC, p.last_name, p.first_name, p.id"
+    );
+    $stmt->execute([':purpose' => $purpose, ':student_id' => $studentId]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $parents = array_map(static function (array $row): array {
+        $eligible = in_array($row['eligible'], [true, 1, '1', 't', 'true'], true);
+        return [
+            'parent_id' => (string) $row['parent_id'],
+            'first_name' => (string) $row['first_name'],
+            'last_name' => (string) $row['last_name'],
+            'relationship_type' => (string) $row['relationship_type'],
+            'is_primary' => in_array($row['is_primary'], [true, 1, '1', 't', 'true'], true),
+            'phone_e164' => $eligible ? (string) $row['phone_e164'] : null,
+            'consent_status' => (string) ($row['consent_status'] ?? 'NOT_RECORDED'),
+            'eligible' => $eligible,
+        ];
+    }, $rows);
+
+    $eligibleCount = count(array_filter($parents, static fn(array $parent): bool => $parent['eligible']));
+    echo json_encode([
+        'success' => true,
+        'student' => [
+            'id' => (string) $student['id'],
+            'first_name' => (string) $student['first_name'],
+            'last_name' => (string) $student['last_name'],
+            'matricule' => (string) ($student['matricule'] ?? ''),
+        ],
+        'parents' => $parents,
+        'total_linked_parents' => count($parents),
+        'eligible_parent_count' => $eligibleCount,
+        'excluded_without_active_consent' => count($parents) - $eligibleCount,
+    ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+} catch (Throwable $e) {
+    error_log('WhatsApp student recipients lookup failed: ' . $e->getMessage());
+    apiError(503, 'Impossible de charger les responsables de cet élève.');
+}
+
                 THEN TRUE ELSE FALSE
             END AS eligible
          FROM student_parents sp
