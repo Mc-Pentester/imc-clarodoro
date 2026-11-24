@@ -7,6 +7,12 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'api/whatsapp/**'
+      - 'private-pages/index.php'
+      - 'private-pages/whatsapp-send.php'
+      - 'tests/whatsapp-student-flow-e2e.mjs'
+      - '.github/workflows/whatsapp-postgres-runtime.yml'
   workflow_dispatch:
 
 permissions:
@@ -363,6 +369,14 @@ jobs:
 
       - name: Smoke-test manual WhatsApp page
         run: node tests/whatsapp-manual-page-smoke.mjs
+
+      - name: Install Chromium for student communication browser E2E
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Verify student-to-multiple-responsible WhatsApp browser flow
+        run: node tests/whatsapp-student-flow-e2e.mjs
 
       - name: Smoke-test multi-recipient WhatsApp page and route
         run: node tests/whatsapp-multi-send-page-smoke.mjs
