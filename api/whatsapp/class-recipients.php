@@ -110,7 +110,7 @@ try {
            ON c.parent_id = p.id
           AND c.purpose = :purpose
           AND c.status = 'OPTED_IN'
-          AND c.phone_e164 ~ '^[+][1-9][0-9]{7,14}
+          AND c.phone_e164 ~ '^[+][1-9][0-9]{7,14}$'
          WHERE e.class_id = ANY(CAST(:class_ids AS uuid[]))
            AND e.school_year_id = :school_year_id
            AND e.status = 'ACTIVE'
