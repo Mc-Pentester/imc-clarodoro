@@ -12,6 +12,7 @@ const parents = [
 const studentListSource = fs.readFileSync('private-pages/index.php', 'utf8');
 assert.ok(studentListSource.includes('/whatsapp-send.html?student_id='), 'The real student list must generate a student-specific WhatsApp link.');
 assert.ok(studentListSource.includes('data-whatsapp-send='), 'Student WhatsApp links must remain permission-gated.');
+assert.ok(studentListSource.includes('document.body.dataset.whatsappSend === "true"'), 'The real student list must hide the WhatsApp link without permission.');
 
 let pageHtml = fs.readFileSync('private-pages/whatsapp-send.php', 'utf8');
 pageHtml = pageHtml.replace(/<\?php[\s\S]*?\?>/, '');
@@ -102,7 +103,7 @@ try {
   const recipientCheckboxes = page.locator('[data-class-parent]');
   await recipientCheckboxes.first().waitFor();
   assert.equal(await recipientCheckboxes.count(), 2, 'Both linked responsible adults must be listed.');
-  assert.equal(await recipientCheckboxes.filter({ checked: true }).count(), 2, 'Both eligible responsible adults must be selected initially.');
+  assert.equal(await page.locator('[data-class-parent]:checked').count(), 2, 'Both eligible responsible adults must be selected initially.');
 
   await page.locator('#manual_message').fill('Réunion des parents vendredi.');
   const prepareButton = page.locator('#manualBatchButton');
