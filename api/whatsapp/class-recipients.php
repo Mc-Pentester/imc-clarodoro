@@ -127,3 +127,40 @@ try {
         "SELECT count(DISTINCT sp.parent_id)
          FROM enrollments e
          INNER JOIN student_parents sp ON sp.student_id = e.student_id
+         WHERE e.class_id = ANY(CAST(:class_ids AS uuid[]))
+           AND e.school_year_id = :school_year_id
+           AND e.status = 'ACTIVE'"
+    );
+    $totalStmt->execute([
+        ':class_ids' => $classArray,
+        ':school_year_id' => $schoolYearId,
+    ]);
+    $totalParentCount = (int) $totalStmt->fetchColumn();
+
+    $parents = array_map(static function (array $row): array {
+        return [
+            'parent_id' => (string) $row['parent_id'],
+            'first_name' => (string) $row['first_name'],
+            'last_name' => (string) $row['last_name'],
+            'phone_e164' => (string) $row['phone_e164'],
+            'student_names' => (string) ($row['student_names'] ?? ''),
+            'student_count' => (int) $row['student_count'],
+            'class_names' => (string) ($row['class_names'] ?? ''),
+        ];
+    }, $stmt->fetchAll());
+
+    echo json_encode([
+        'success' => true,
+        'class_ids' => $classIds,
+        'classes' => $classes,
+        'school_year_id' => $schoolYearId,
+        'purpose' => $purpose,
+        'parents' => $parents,
+        'count' => count($parents),
+        'total_linked_parents' => $totalParentCount,
+        'excluded_without_active_consent' => max(0, $totalParentCount - count($parents)),
+    ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+} catch (Throwable $e) {
+    error_log('WhatsApp class recipients lookup failed: ' . $e->getMessage());
+    apiError(503, 'Impossible de charger les parents autorisés des classes sélectionnées.');
+}
