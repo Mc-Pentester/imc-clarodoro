@@ -231,7 +231,11 @@ async function loadClassOptions(){
       $('broadcastTitle').textContent='Contacter les parents et responsables de l’élève';
       $('broadcastDescription').textContent='Les responsables sont chargés depuis le dossier de cet élève. Vous pouvez en sélectionner un ou plusieurs; seuls les consentements actifs pour la finalité choisie sont admissibles.';
       document.querySelector('main > section.card').hidden=true;
-      $('manualButton').closest('section').hidden=true;
+      $('manualButton').hidden=true;
+      $('manualButton').closest('.actions').hidden=true;
+      $('manualButton').closest('section').querySelector('.mode').textContent='Mode manuel · Message aux responsables sélectionnés';
+      $('manualButton').closest('section').querySelector('h2').textContent='Rédiger le message à préparer';
+      $('manualResult').hidden=true;
       $('sendButton').hidden=true;
       $('manualBatchButton').textContent='Préparer les liens WhatsApp sélectionnés';
       $('metaBatchButton').textContent='Envoyer aux responsables sélectionnés via Meta';
