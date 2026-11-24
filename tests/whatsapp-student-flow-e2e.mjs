@@ -97,7 +97,7 @@ try {
 
   await page.goto(baseUrl + '/eleves.html');
   await page.getByRole('link', { name: /Contacter les parents ou responsables de Alex Student/ }).click();
-  await page.waitForURL('**/whatsapp-send.html?student_id=' + studentId);
+  await page.waitForURL(url => url.pathname === '/whatsapp-send.html' && url.searchParams.get('student_id') === studentId);
 
   await page.getByText('Élève sélectionné : Alex Student · Matricule CI-STUDENT-01.').waitFor();
   const recipientCheckboxes = page.locator('[data-class-parent]');
