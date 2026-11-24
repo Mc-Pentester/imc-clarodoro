@@ -50,7 +50,7 @@ try {
             c.status AS consent_status,
             CASE
                 WHEN c.status = 'OPTED_IN'
-                 AND c.phone_e164 ~ '^[+][1-9][0-9]{7,14}
+                 AND c.phone_e164 ~ '^[+][1-9][0-9]{7,14}$'
                 THEN TRUE ELSE FALSE
             END AS eligible
          FROM student_parents sp
