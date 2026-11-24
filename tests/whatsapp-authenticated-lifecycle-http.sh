@@ -179,21 +179,18 @@ php -r '
 ' /tmp/whatsapp-multi-class-recipients.json "$PARENT_ID"
 echo "PASS multi-class lookup deduplicates one parent across classes and aggregates linked students"
 
-# A consented number must still satisfy E.164: +0 prefixes are never eligible.
-psql -X -v ON_ERROR_STOP=1 -c "UPDATE whatsapp_consents SET phone_e164='+05093700000' WHERE parent_id='$PARENT_ID' AND purpose='GENERAL'"
-INVALID_STUDENT_NUMBER_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-student-invalid-number.json --write-out '%{http_code}' \
-  -H "Cookie: IMC_SESSION=$ALLOWED_SID" \
-  "http://127.0.0.1:8100/api/whatsapp/student-recipients.php?student_id=$STUDENT_ID&purpose=GENERAL")"
-test "$INVALID_STUDENT_NUMBER_STATUS" = "200"
-php -r '$d=json_decode(file_get_contents($argv[1]),true); $p=$d["parents"][0]??[]; if (($p["eligible"]??true)!==false || ($p["phone_e164"]??null)!==null || ($d["eligible_parent_count"]??-1)!==0) exit(1);' /tmp/whatsapp-student-invalid-number.json
-echo "PASS student lookup excludes a consented number with an invalid +0 country-code prefix"
-INVALID_CLASS_NUMBER_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-class-invalid-number.json --write-out '%{http_code}' \
-  -H "Cookie: IMC_SESSION=$ALLOWED_SID" \
-  "http://127.0.0.1:8100/api/whatsapp/class-recipients.php?class_ids=$CLASS_ID%2C$CLASS_B_ID&school_year_id=$SCHOOL_YEAR_ID&purpose=GENERAL")"
-test "$INVALID_CLASS_NUMBER_STATUS" = "200"
-php -r '$d=json_decode(file_get_contents($argv[1]),true); if (($d["count"]??-1)!==0 || ($d["excluded_without_active_consent"]??-1)!==2) exit(1);' /tmp/whatsapp-class-invalid-number.json
-echo "PASS multi-class lookup excludes consented numbers that fail E.164 validation"
-psql -X -v ON_ERROR_STOP=1 -c "UPDATE whatsapp_consents SET phone_e164='+50937000000' WHERE parent_id='$PARENT_ID' AND purpose='GENERAL'"
+# PostgreSQL must reject a +0 country-code prefix at the storage boundary.
+# The API endpoints also validate E.164 defensively, but invalid values cannot
+# be persisted in this schema, so prove the database constraint directly.
+if psql -X -v ON_ERROR_STOP=1 -c "UPDATE whatsapp_consents SET phone_e164='+05093700000' WHERE parent_id='$PARENT_ID' AND purpose='GENERAL'" >/tmp/whatsapp-invalid-e164.log 2>&1; then
+  echo "FAIL database accepted an invalid +0 E.164 prefix"
+  exit 1
+fi
+grep -q "whatsapp_consents_phone_e164_check" /tmp/whatsapp-invalid-e164.log
+echo "PASS PostgreSQL rejects consented phone numbers with an invalid +0 country-code prefix"
+# The rejected update must leave the original valid consented number unchanged.
+VALID_PHONE="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT phone_e164 FROM whatsapp_consents WHERE parent_id='$PARENT_ID' AND purpose='GENERAL'")"
+test "$VALID_PHONE" = "+50937000000"
 DENIED_CLASS_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-class-recipients-denied.json --write-out '%{http_code}' \
   -H "Cookie: IMC_SESSION=$DENIED_SID" \
   "http://127.0.0.1:8100/api/whatsapp/class-recipients.php?class_id=$CLASS_ID&school_year_id=$SCHOOL_YEAR_ID&purpose=GENERAL")"
