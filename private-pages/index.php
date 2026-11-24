@@ -1,6 +1,16 @@
 <?php
 require_once __DIR__ . '/../config/page_auth.php';
-imcRequirePageAccess('eleves.read', null, $pdo ?? null);
+$pdo = getDatabaseConnection();
+imcRequirePageAccess('eleves.read', null, $pdo);
+$whatsappCommunicationAllowed = false;
+if (!empty($_SESSION['user_id'])) {
+    $pageUserStmt = $pdo->prepare("SELECT u.id, u.role_id, r.name AS role_name FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE u.id = :user_id AND u.status = 'ACTIVE' LIMIT 1");
+    $pageUserStmt->execute([':user_id' => $_SESSION['user_id']]);
+    $pageUser = $pageUserStmt->fetch(PDO::FETCH_ASSOC);
+    if (is_array($pageUser)) {
+        $whatsappCommunicationAllowed = userHasPermission($pdo, $pageUser, 'whatsapp.message.send');
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -368,7 +378,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
     </style>
 </head>
 
-<body>
+<body data-whatsapp-send="<?= $whatsappCommunicationAllowed ? 'true' : 'false' ?>">
 
 
 <header class="entete-ecole">
@@ -432,6 +442,8 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
         <div class="toolbar">
 
             <select id="anneeScolaire"></select>
+
+            <select id="filterClass" aria-label="Filtrer par classe"><option value="">Toutes les classes</option></select>
 
             <input
                 type="text"
@@ -1083,6 +1095,7 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
 
             document.getElementById("searchStudent").addEventListener("input", afficherEleves);
             document.getElementById("anneeScolaire").addEventListener("change", afficherEleves);
+            document.getElementById("filterClass").addEventListener("change", afficherEleves);
             document.getElementById("photoGallery").addEventListener("change", chargerPhotoGalerie);
 
     });
@@ -1106,6 +1119,14 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
             const option = document.createElement("option");
             option.value = item.id; option.textContent = item.name;
             classSelect.appendChild(option);
+        });
+
+        const filterClassSelect = document.getElementById("filterClass");
+        filterClassSelect.innerHTML = '<option value="">Toutes les classes</option>';
+        (Array.isArray(data.classes) ? data.classes : []).forEach(item => {
+            const option = document.createElement("option");
+            option.value = item.id; option.textContent = item.name;
+            filterClassSelect.appendChild(option);
         });
 
         const yearSelect = document.getElementById("anneeScolaire");
@@ -1284,6 +1305,10 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                         return false;
                     }
 
+                    const classFilter = document.getElementById("filterClass").value;
+                    if (classFilter && student.classId !== classFilter) {
+                        return false;
+                    }
 
                     const nom =
                         String(
@@ -1387,9 +1412,17 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                     student.classe || "",
                     student.nisu || "",
                     student.contact || ""
-                ].forEach(function (value) {
+                ].forEach(function (value, cellIndex) {
                     const td = document.createElement("td");
-                    td.textContent = String(value);
+                    if (document.body.dataset.whatsappSend === "true" && (cellIndex === 0 || cellIndex === 1)) {
+                        const link = document.createElement("a");
+                        link.href = "/whatsapp-send.html?student_id=" + encodeURIComponent(student.id);
+                        link.textContent = String(value);
+                        link.setAttribute("aria-label", "Contacter les parents ou responsables de " + [student.prenom, student.nom].filter(Boolean).join(" "));
+                        td.appendChild(link);
+                    } else {
+                        td.textContent = String(value);
+                    }
                     row.appendChild(td);
                 });
 
@@ -2093,6 +2126,10 @@ imcRequirePageAccess('eleves.read', null, $pdo ?? null);
                         return false;
                     }
 
+                    const classFilter = document.getElementById("filterClass").value;
+                    if (classFilter && student.classId !== classFilter) {
+                        return false;
+                    }
 
                     const nom =
                         String(

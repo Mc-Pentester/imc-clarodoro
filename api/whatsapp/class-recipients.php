@@ -16,11 +16,12 @@ $pdo = getDatabaseConnection();
 requirePermission($pdo, 'whatsapp.message.send');
 
 $uuidPattern = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
-$classId = trim((string) ($_GET['class_id'] ?? ''));
+$classIdsRaw = trim((string) ($_GET['class_ids'] ?? ''));
+$legacyClassId = trim((string) ($_GET['class_id'] ?? ''));
 $schoolYearId = trim((string) ($_GET['school_year_id'] ?? ''));
 $purpose = $_GET['purpose'] ?? '';
 
-if ($classId === '' && $schoolYearId === '') {
+if ($classIdsRaw === '' && $legacyClassId === '' && $schoolYearId === '') {
     $classes = $pdo->query(
         "SELECT id, code, name
          FROM classes
@@ -43,20 +44,35 @@ if ($classId === '' && $schoolYearId === '') {
     exit;
 }
 
-if (!preg_match($uuidPattern, $classId) || !preg_match($uuidPattern, $schoolYearId)) {
-    apiError(422, 'Sélectionnez une classe et une année scolaire valides.');
+$classIds = $classIdsRaw !== ''
+    ? array_values(array_unique(array_filter(array_map('trim', explode(',', $classIdsRaw)), static fn(string $id): bool => $id !== '')))
+    : ($legacyClassId !== '' ? [$legacyClassId] : []);
+
+if ($classIds === [] || count($classIds) > 20 || !preg_match($uuidPattern, $schoolYearId)) {
+    apiError(422, 'Sélectionnez une à vingt classes et une année scolaire valides.');
+}
+foreach ($classIds as $classId) {
+    if (!preg_match($uuidPattern, $classId)) {
+        apiError(422, 'Identifiant de classe invalide.');
+    }
 }
 if (!is_string($purpose) || !in_array($purpose, ['ATTENDANCE', 'RESULTS_AVAILABLE', 'PAYMENT_REMINDER', 'GENERAL'], true)) {
     apiError(422, 'Finalité WhatsApp invalide.');
 }
 
 try {
+    $classArray = '{' . implode(',', $classIds) . '}';
     $classCheck = $pdo->prepare(
-        "SELECT 1 FROM classes WHERE id = :class_id AND status = 'ACTIVE'"
+        "SELECT id, name, code
+         FROM classes
+         WHERE id = ANY(CAST(:class_ids AS uuid[]))
+           AND status = 'ACTIVE'
+         ORDER BY name, code, id"
     );
-    $classCheck->execute([':class_id' => $classId]);
-    if (!$classCheck->fetchColumn()) {
-        apiError(404, 'Classe active introuvable.');
+    $classCheck->execute([':class_ids' => $classArray]);
+    $classes = $classCheck->fetchAll(PDO::FETCH_ASSOC);
+    if (count($classes) !== count($classIds)) {
+        apiError(404, 'Une ou plusieurs classes sont introuvables ou inactives.');
     }
 
     $yearCheck = $pdo->prepare(
@@ -67,8 +83,8 @@ try {
         apiError(404, 'Année scolaire active introuvable.');
     }
 
-    // One row per parent/consent, even when several siblings are enrolled
-    // in the same class. Only an active, purpose-specific opt-in is eligible.
+    // One row per parent/consent across every selected class. A parent with
+    // siblings in multiple selected classes is returned once.
     $stmt = $pdo->prepare(
         "SELECT
             p.id AS parent_id,
@@ -79,7 +95,11 @@ try {
                 DISTINCT concat_ws(' ', s.first_name, s.last_name),
                 ', ' ORDER BY concat_ws(' ', s.first_name, s.last_name)
             ) AS student_names,
-            count(DISTINCT s.id)::integer AS student_count
+            count(DISTINCT s.id)::integer AS student_count,
+            string_agg(
+                DISTINCT cl.name,
+                ', ' ORDER BY cl.name
+            ) AS class_names
          FROM enrollments e
          INNER JOIN students s ON s.id = e.student_id
          INNER JOIN classes cl ON cl.id = e.class_id AND cl.status = 'ACTIVE'
@@ -90,7 +110,8 @@ try {
            ON c.parent_id = p.id
           AND c.purpose = :purpose
           AND c.status = 'OPTED_IN'
-         WHERE e.class_id = :class_id
+          AND c.phone_e164 ~ '^[+][1-9][0-9]{7,14}$'
+         WHERE e.class_id = ANY(CAST(:class_ids AS uuid[]))
            AND e.school_year_id = :school_year_id
            AND e.status = 'ACTIVE'
          GROUP BY p.id, p.first_name, p.last_name, c.id, c.phone_e164
@@ -98,7 +119,7 @@ try {
     );
     $stmt->execute([
         ':purpose' => $purpose,
-        ':class_id' => $classId,
+        ':class_ids' => $classArray,
         ':school_year_id' => $schoolYearId,
     ]);
 
@@ -106,12 +127,12 @@ try {
         "SELECT count(DISTINCT sp.parent_id)
          FROM enrollments e
          INNER JOIN student_parents sp ON sp.student_id = e.student_id
-         WHERE e.class_id = :class_id
+         WHERE e.class_id = ANY(CAST(:class_ids AS uuid[]))
            AND e.school_year_id = :school_year_id
            AND e.status = 'ACTIVE'"
     );
     $totalStmt->execute([
-        ':class_id' => $classId,
+        ':class_ids' => $classArray,
         ':school_year_id' => $schoolYearId,
     ]);
     $totalParentCount = (int) $totalStmt->fetchColumn();
@@ -124,12 +145,14 @@ try {
             'phone_e164' => (string) $row['phone_e164'],
             'student_names' => (string) ($row['student_names'] ?? ''),
             'student_count' => (int) $row['student_count'],
+            'class_names' => (string) ($row['class_names'] ?? ''),
         ];
     }, $stmt->fetchAll());
 
     echo json_encode([
         'success' => true,
-        'class_id' => $classId,
+        'class_ids' => $classIds,
+        'classes' => $classes,
         'school_year_id' => $schoolYearId,
         'purpose' => $purpose,
         'parents' => $parents,
@@ -139,5 +162,5 @@ try {
     ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 } catch (Throwable $e) {
     error_log('WhatsApp class recipients lookup failed: ' . $e->getMessage());
-    apiError(503, 'Impossible de charger les parents autorisés de cette classe.');
+    apiError(503, 'Impossible de charger les parents autorisés des classes sélectionnées.');
 }

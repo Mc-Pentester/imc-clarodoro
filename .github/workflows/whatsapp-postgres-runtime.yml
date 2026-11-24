@@ -7,6 +7,12 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'api/whatsapp/**'
+      - 'private-pages/index.php'
+      - 'private-pages/whatsapp-send.php'
+      - 'tests/whatsapp-student-flow-e2e.mjs'
+      - '.github/workflows/whatsapp-postgres-runtime.yml'
   workflow_dispatch:
 
 permissions:
@@ -269,6 +275,7 @@ jobs:
           php -l api/whatsapp/consent-parents-search.php
           php -l api/whatsapp/parents-search.php
           php -l api/whatsapp/class-recipients.php
+          php -l api/whatsapp/student-recipients.php
           php -l private-pages/whatsapp-consent.php
           php -l api/whatsapp/send.php
           php -l api/whatsapp/manual-preparations.php
@@ -354,6 +361,7 @@ jobs:
           check_unauthenticated message_send POST '/api/whatsapp/send.php' '{"parent_id":"00000000-0000-4000-8000-000000000001"}' 401
           check_unauthenticated manual_preparation POST '/api/whatsapp/manual-preparations.php' '{"parent_id":"00000000-0000-4000-8000-000000000001","purpose":"GENERAL","message":"test"}' 401
           check_unauthenticated class_recipients GET '/api/whatsapp/class-recipients.php' '' 401
+          check_unauthenticated student_recipients GET '/api/whatsapp/student-recipients.php?student_id=00000000-0000-4000-8000-000000000001&purpose=GENERAL' '' 401
           check_unauthenticated recipient_consents GET '/api/whatsapp/recipient-consents.php?recipient_type=PARENT&recipient_id=00000000-0000-4000-8000-000000000001' '' 401
           check_unauthenticated recipient_search GET '/api/whatsapp/recipient-search.php?recipient_type=PARENT&q=Pa' '' 401
           check_unauthenticated recipient_history GET '/api/whatsapp/recipient-message-history.php' '' 401
@@ -361,6 +369,14 @@ jobs:
 
       - name: Smoke-test manual WhatsApp page
         run: node tests/whatsapp-manual-page-smoke.mjs
+
+      - name: Install Chromium for student communication browser E2E
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Verify student-to-multiple-responsible WhatsApp browser flow
+        run: node tests/whatsapp-student-flow-e2e.mjs
 
       - name: Smoke-test multi-recipient WhatsApp page and route
         run: node tests/whatsapp-multi-send-page-smoke.mjs

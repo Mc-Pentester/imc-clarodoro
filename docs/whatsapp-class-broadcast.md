@@ -1,15 +1,34 @@
-# WhatsApp — diffusion aux parents d'une classe
+# WhatsApp — communication individuelle, par classe et multi-classes
 
 ## Fonctionnement commun
 
-1. L'utilisateur choisit une année scolaire active, une classe active et une finalité de consentement.
+1. L'utilisateur choisit une année scolaire active, une ou plusieurs classes actives (maximum 20) et une finalité de consentement.
 2. Clarodaro récupère les inscriptions actives de cette classe pour cette année.
 3. Les parents sont retrouvés exclusivement via les relations existantes `student_parents`.
 4. Un parent lié à plusieurs élèves de la même classe n'est présenté qu'une seule fois.
 5. Seuls les parents avec un consentement `OPTED_IN` pour la finalité choisie sont proposés. Les autres sont exclus et comptabilisés.
 6. Chaque destinataire est revalidé par le serveur juste avant sa préparation ou son envoi.
 
-La sélection de classe ne crée aucune association parent-élève et ne modifie aucune inscription.
+La sélection de classe ne crée aucune association parent-élève et ne modifie aucune inscription. Lorsqu'un parent a plusieurs enfants répartis dans plusieurs classes sélectionnées, il apparaît une seule fois.
+
+
+## Mode 0 — depuis le nom d'un élève
+
+- Les cellules Nom et Prénom de la liste des élèves ouvrent `/whatsapp-send.html?student_id=<uuid>`.
+- L'API authentifiée recharge l'élève et les responsables depuis `student_parents`; le navigateur ne fournit jamais les numéros ni les associations comme source de vérité.
+- La page présente chaque responsable lié, sa relation et son statut de consentement pour la finalité sélectionnée.
+- Seuls les responsables avec un consentement actif et un numéro E.164 valide sont sélectionnables.
+- L'utilisateur peut sélectionner un responsable ou plusieurs, puis préparer des liens WhatsApp ou lancer l'envoi Meta après confirmation.
+- Un responsable sans consentement actif reste visible comme non admissible; il n'est jamais sélectionné automatiquement ni contacté.
+
+## Mode 3 — diffusion à plusieurs classes
+
+- Le sélecteur permet de cocher une à vingt classes pour une même année scolaire active.
+- Le serveur vérifie que toutes les classes sélectionnées sont actives.
+- Les parents sont dédupliqués sur l'ensemble des classes sélectionnées, pas seulement à l'intérieur d'une classe.
+- Le récapitulatif indique le nombre de parents admissibles et le nombre de parents exclus faute de consentement actif.
+- Modifier la sélection des classes invalide la liste des destinataires précédemment chargée; il faut recharger les destinataires avant un envoi.
+- Le filtre de classe de la liste des élèves est alimenté par les classes actives de PostgreSQL et s'applique également à l'export Word.
 
 ## Mode 1 — préparation manuelle WhatsApp
 
