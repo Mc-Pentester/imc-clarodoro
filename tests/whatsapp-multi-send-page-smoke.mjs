@@ -23,7 +23,7 @@ for (const endpoint of [
 }
 assert.ok(router.includes("'/whatsapp-multi-send.html' => 'whatsapp-multi-send.html'"), 'HTTP router route missing');
 assert.ok(securePage.includes("'whatsapp-multi-send.html' => ['public' => 'whatsapp-multi-send.html', 'file' => 'whatsapp-multi-send.php'"), 'secure page mapping missing');
-const menuButtonCreation = (menu.match(/menu\\.appendChild\\(button\\)/g) || []).length;
+const menuButtonCreation = menu.split("menu.appendChild(button)").length - 1;
 assert.equal(menuButtonCreation, 1, 'The navigation menu must expose exactly one WhatsApp communication entry.');
 assert.ok(menu.includes('button.textContent = "Communication WhatsApp"'), 'The single menu entry must be named Communication WhatsApp.');
 assert.ok(menu.includes('window.location.href = "/whatsapp-send.html"'), 'The communication menu entry must open the main module.');
