@@ -57,6 +57,7 @@ assert.ok(studentList.includes('student.classId !== classFilter'), 'Student list
 
 const studentRecipientsApi = fs.readFileSync('api/whatsapp/student-recipients.php', 'utf8');
 assert.ok(studentRecipientsApi.includes("requirePermission($pdo, 'whatsapp.message.send')"), 'Student responsible lookup must require WhatsApp permission');
+assert.ok(studentRecipientsApi.includes("requirePermission($pdo, 'eleves.read')"), 'Student responsible lookup must also require permission to read student records');
 assert.ok(studentRecipientsApi.includes('student_parents'), 'Student responsible lookup must use the persisted student-parent relationship');
 assert.ok(studentRecipientsApi.includes("c.status = 'OPTED_IN'"), 'Student responsible lookup must require active consent');
 
