@@ -15,7 +15,7 @@ assert.ok(studentListSource.includes('data-whatsapp-send='), 'Student WhatsApp l
 assert.ok(studentListSource.includes('document.body.dataset.whatsappSend === "true"'), 'The real student list must hide the WhatsApp link without permission.');
 
 let pageHtml = fs.readFileSync('private-pages/whatsapp-send.php', 'utf8');
-pageHtml = pageHtml.replace(/<\?php[\s\S]*?\?>/, '');
+pageHtml = pageHtml.replace(/<\?php[\s\S]*?\?>/g, '');
 pageHtml = pageHtml.replace('<?= $csrfToken ?>', 'ci-csrf-token');
 assert.ok(!pageHtml.includes('<?php') && !pageHtml.includes('<?=') , 'The browser fixture must not contain unrendered PHP.');
 
