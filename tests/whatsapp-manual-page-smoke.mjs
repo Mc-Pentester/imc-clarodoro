@@ -15,6 +15,11 @@ for (const match of script.matchAll(/\$\('([^']+)'\)/g)) {
   assert.ok(ids.includes(match[1]), 'Missing DOM element referenced by script: ' + match[1]);
 }
 assert.ok(page.includes('Envoyer manuellement'), 'Manual WhatsApp mode missing');
+const manualSectionStart = page.indexOf('<h2>Envoyer manuellement</h2>');
+const manualSectionEnd = page.indexOf('</section>', manualSectionStart);
+const manualLinksPosition = page.indexOf('id="manualLinks"');
+assert.ok(manualSectionStart >= 0 && manualLinksPosition > manualSectionStart && manualLinksPosition < manualSectionEnd, 'Prepared WhatsApp links must appear at the bottom of the message preparation section');
+assert.ok(script.includes("const links=$('manualLinks')") && script.includes('links.appendChild(link)'), 'Prepared recipient links must render in the message preparation section');
 assert.ok(page.includes('Rechercher un parent par nom, téléphone ou nom de son élève'), 'Parent search by student name missing');
 assert.ok(script.includes('parent.student_names'), 'Matching student names must be shown with parent results');
 assert.ok(script.includes("fetch(url,{credentials:'same-origin'"), 'Authorized parent search request missing');
