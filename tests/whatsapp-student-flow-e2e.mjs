@@ -111,7 +111,8 @@ try {
   await page.getByText('2 lien(s) préparé(s), 0 échec(s). Aucun message n’a été envoyé automatiquement.').waitFor();
   assert.equal(requests.length, 2, 'A separate audited preparation must be requested for each selected responsible adult.');
   assert.deepEqual(new Set(requests.map(item => item.parent_id)), new Set(parents.map(item => item.parent_id)));
-  assert.equal(await page.locator('#classBatchResult a[href^="https://wa.me/"]').count(), 2, 'The result must expose two manual WhatsApp links.');
+  assert.equal(await page.locator('#manualLinks a[href^="https://wa.me/"]').count(), 2, 'The message preparation section must expose two manual WhatsApp links.');
+  assert.equal(await page.locator('#manualLinks').isVisible(), true, 'Prepared WhatsApp links must be visible below the message field.');
   assert.equal(requests.some(item => Object.hasOwn(item, 'template_name')), false, 'No Meta template request may be made.');
   console.log('PASS browser E2E: student list link → selected student → multiple linked responsible adults → audited manual preparations');
   console.log('PASS safety: Meta send endpoint was not called; no WhatsApp message was sent by the test.');
