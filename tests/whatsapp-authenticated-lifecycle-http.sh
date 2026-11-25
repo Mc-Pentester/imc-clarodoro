@@ -19,7 +19,7 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r CROSS JOIN permissions p
 WHERE r.name = 'WhatsApp CI'
-  AND p.name IN ('whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send', 'whatsapp.recipient.read', 'whatsapp.recipient.manage', 'whatsapp.message.audit')
+  AND p.name IN ('eleves.read', 'whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send', 'whatsapp.recipient.read', 'whatsapp.recipient.manage', 'whatsapp.message.audit')
 ON CONFLICT DO NOTHING;
 SQL
 
