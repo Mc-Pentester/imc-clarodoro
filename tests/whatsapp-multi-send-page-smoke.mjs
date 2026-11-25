@@ -27,7 +27,7 @@ const menuButtonCreation = menu.split("menu.appendChild(button)").length - 1;
 assert.equal(menuButtonCreation, 1, 'The navigation menu must expose exactly one WhatsApp communication entry.');
 assert.ok(menu.includes('button.textContent = "Communication WhatsApp"'), 'The single menu entry must be named Communication WhatsApp.');
 assert.ok(menu.includes('window.location.href = "/whatsapp-send.html"'), 'The communication menu entry must open the main module.');
-assert.ok(menu.includes('data-imc-whatsapp-tools'), 'The main communication module must expose its internal tools navigation.');
+assert.ok(menu.includes('imcWhatsappTools'), 'The main communication module must expose its internal tools navigation.');
 assert.ok(menu.includes('/whatsapp-multi-send.html'), 'Multi-recipient communication must remain accessible inside the module.');
 assert.ok(menu.includes('/whatsapp-consent-management.html'), 'Consent management must remain accessible inside the module.');
 assert.ok(!menu.includes('menu.appendChild(multiButton)') && !menu.includes('menu.appendChild(consentButton)'), 'Secondary WhatsApp features must not create additional navigation menu buttons.');
