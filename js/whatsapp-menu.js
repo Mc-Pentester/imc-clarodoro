@@ -1,5 +1,6 @@
 /* IMC-Clarodaro — point d'entrée unique du module de communication WhatsApp.
  * Le serveur reste l'autorité finale: ce bouton ne contourne jamais RBAC.
+ * L'ancien libellé « Envoyer un message WhatsApp » est remplacé par l'entrée unique ci-dessous.
  */
 (function () {
   "use strict";
