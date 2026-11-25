@@ -10,6 +10,9 @@ on:
     paths:
       - 'api/whatsapp/**'
       - 'router.php'
+      - '.htaccess'
+      - 'secure-page.php'
+      - 'config/auth.php'
       - 'js/whatsapp-menu.js'
       - 'tests/whatsapp-multi-send-page-smoke.mjs'
       - 'tests/whatsapp-manual-page-smoke.mjs'
@@ -91,6 +94,7 @@ jobs:
             database/migrations/20261023110000_whatsapp_message_log.sql \
             database/migrations/20261025120000_whatsapp_manual_preparations.sql \
             database/migrations/20261109170000_f02_l_pdg_payroll_whatsapp_permissions.sql \
+            database/migrations/20261112100000_f02_n_pdg_full_access.sql \
             database/migrations/20261117100000_whatsapp_parent_consent_workflow.sql \
             database/migrations/20261117120000_whatsapp_consent_revocation_timestamp.sql \
             database/migrations/20261115150000_whatsapp_multi_recipient_consents.sql \
@@ -100,7 +104,7 @@ jobs:
             psql -X -v ON_ERROR_STOP=1 -f "$migration"
           done
 
-      - name: Verify PDG permissions are least-privilege
+      - name: Verify PDG receives complete application permissions
         run: |
           psql -X -v ON_ERROR_STOP=1 <<'SQL'
           DO $pdg$
@@ -116,10 +120,10 @@ jobs:
               SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
               WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.consent.read'
             ) THEN RAISE EXCEPTION 'PDG lacks whatsapp.consent.read'; END IF;
-            IF EXISTS (
+            IF NOT EXISTS (
               SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
               WHERE rp.role_id = pdg_role_id AND p.name = 'whatsapp.consent.manage'
-            ) THEN RAISE EXCEPTION 'PDG unexpectedly has whatsapp.consent.manage'; END IF;
+            ) THEN RAISE EXCEPTION 'PDG lacks whatsapp.consent.manage'; END IF;
             IF (
               SELECT count(*) FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
               WHERE rp.role_id = pdg_role_id AND p.name IN ('paies.read','paies.create','paies.update')
