@@ -16,7 +16,9 @@
     }
 
     if (!window.IMCAuth.isAuthenticated()) return;
-    if (!window.IMCAuth.hasPermission("whatsapp.message.send")) return;
+    var canSend = window.IMCAuth.hasPermission("whatsapp.message.send");
+    var canReadConsent = window.IMCAuth.hasPermission("whatsapp.consent.read");
+    if (!canSend && !canReadConsent) return;
 
     document.querySelectorAll(".menu-principal").forEach(function (menu) {
       // Un seul bouton de navigation ouvre le module de communication.
@@ -28,7 +30,11 @@
         button.textContent = "Communication WhatsApp";
         button.setAttribute("aria-label", "Ouvrir le module de communication WhatsApp");
         button.addEventListener("click", function () {
-          window.location.href = "/whatsapp-send.html";
+          if (canSend) {
+            window.location.href = "/whatsapp-send.html";
+          } else {
+            window.location.href = "/whatsapp-consent-management.html";
+          }
         });
         menu.appendChild(button);
       }
@@ -49,7 +55,7 @@
         multi.style.cssText = "display:inline-block;padding:10px 14px;border-radius:7px;background:#e5f3ed;color:#075e54;font-weight:700;text-decoration:none";
         tools.appendChild(multi);
 
-        if (window.IMCAuth.hasPermission("whatsapp.consent.read")) {
+        if (canReadConsent) {
           var consent = document.createElement("a");
           consent.href = "/whatsapp-consent-management.html";
           consent.textContent = "Gestion des consentements";
