@@ -31,6 +31,7 @@ $protected = [
     '/vacations.html' => 'vacations.html',
     '/vacances.html' => 'vacations.html',
     '/whatsapp-send.html' => 'whatsapp-send.html',
+    '/whatsapp-multi-send.html' => 'whatsapp-multi-send.html',
     '/whatsapp-consent-management.html' => 'whatsapp-consent-management.html',
 ];
 

@@ -9,6 +9,10 @@ on:
       - main
     paths:
       - 'api/whatsapp/**'
+      - 'router.php'
+      - 'js/whatsapp-menu.js'
+      - 'tests/whatsapp-multi-send-page-smoke.mjs'
+      - 'tests/whatsapp-manual-page-smoke.mjs'
       - 'private-pages/index.php'
       - 'private-pages/whatsapp-send.php'
       - 'tests/whatsapp-student-flow-e2e.mjs'
@@ -68,6 +72,12 @@ jobs:
         run: |
           psql -X -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (name, description) VALUES ('PDG', 'WhatsApp CI role fixture')
+          ON CONFLICT (name) DO NOTHING;
+          -- The isolated schema starts without the application's general RBAC catalog.
+          -- Seed the existing student-read permission so the endpoint can test its
+          -- intended two-permission authorization contract.
+          INSERT INTO permissions (name, description)
+          VALUES ('eleves.read', 'Lire les dossiers des élèves')
           ON CONFLICT (name) DO NOTHING;
           SQL
 

@@ -15,6 +15,11 @@ for (const match of script.matchAll(/\$\('([^']+)'\)/g)) {
   assert.ok(ids.includes(match[1]), 'Missing DOM element referenced by script: ' + match[1]);
 }
 assert.ok(page.includes('Envoyer manuellement'), 'Manual WhatsApp mode missing');
+const manualSectionStart = page.indexOf('<h2>Envoyer manuellement</h2>');
+const manualSectionEnd = page.indexOf('</section>', manualSectionStart);
+const manualLinksPosition = page.indexOf('id="manualLinks"');
+assert.ok(manualSectionStart >= 0 && manualLinksPosition > manualSectionStart && manualLinksPosition < manualSectionEnd, 'Prepared WhatsApp links must appear at the bottom of the message preparation section');
+assert.ok(script.includes("const links=$('manualLinks')") && script.includes('links.appendChild(link)'), 'Prepared recipient links must render in the message preparation section');
 assert.ok(page.includes('Rechercher un parent par nom, téléphone ou nom de son élève'), 'Parent search by student name missing');
 assert.ok(script.includes('parent.student_names'), 'Matching student names must be shown with parent results');
 assert.ok(script.includes("fetch(url,{credentials:'same-origin'"), 'Authorized parent search request missing');
@@ -55,8 +60,15 @@ assert.ok(studentList.includes('document.body.dataset.whatsappSend === "true"'),
 assert.ok(studentList.includes('id="filterClass"'), 'Student list class filter missing');
 assert.ok(studentList.includes('student.classId !== classFilter'), 'Student list must filter by persisted class ID');
 
+const legacySendApi = fs.readFileSync('api/whatsapp/send.php', 'utf8');
+const idempotencyCommit = legacySendApi.indexOf('$pdo->commit();', legacySendApi.indexOf('INSERT INTO whatsapp_message_log'));
+const providerCall = legacySendApi.indexOf('$ch = curl_init($url)');
+assert.ok(idempotencyCommit > -1 && providerCall > idempotencyCommit, 'Legacy Meta send must commit its idempotency reservation before network I/O');
+assert.ok(legacySendApi.includes("$finalStatus = $curlError !== 0 ? 'PROCESSING' : 'FAILED'"), 'An uncertain network outcome must remain non-replayable and visibly PROCESSING');
+
 const studentRecipientsApi = fs.readFileSync('api/whatsapp/student-recipients.php', 'utf8');
 assert.ok(studentRecipientsApi.includes("requirePermission($pdo, 'whatsapp.message.send')"), 'Student responsible lookup must require WhatsApp permission');
+assert.ok(studentRecipientsApi.includes("requirePermission($pdo, 'eleves.read')"), 'Student responsible lookup must also require permission to read student records');
 assert.ok(studentRecipientsApi.includes('student_parents'), 'Student responsible lookup must use the persisted student-parent relationship');
 assert.ok(studentRecipientsApi.includes("c.status = 'OPTED_IN'"), 'Student responsible lookup must require active consent');
 

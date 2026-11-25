@@ -14,6 +14,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
 
 $pdo = getDatabaseConnection();
 requirePermission($pdo, 'whatsapp.message.send');
+// Reading linked student and guardian records also requires the school-record permission.
+requirePermission($pdo, 'eleves.read');
 
 $uuidPattern = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
 $studentId = trim((string) ($_GET['student_id'] ?? ''));

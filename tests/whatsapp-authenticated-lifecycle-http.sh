@@ -19,7 +19,7 @@ INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r CROSS JOIN permissions p
 WHERE r.name = 'WhatsApp CI'
-  AND p.name IN ('whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send', 'whatsapp.recipient.read', 'whatsapp.recipient.manage', 'whatsapp.message.audit')
+  AND p.name IN ('eleves.read', 'whatsapp.consent.read', 'whatsapp.consent.manage', 'whatsapp.message.send', 'whatsapp.recipient.read', 'whatsapp.recipient.manage', 'whatsapp.message.audit')
 ON CONFLICT DO NOTHING;
 SQL
 
@@ -28,7 +28,7 @@ DENIED_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM users WHERE usern
 PARENT_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM parents WHERE last_name='Runtime' AND first_name='Fixture' ORDER BY created_at LIMIT 1")"
 test -n "$USER_ID" && test -n "$DENIED_ID" && test -n "$PARENT_ID"
 
-STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule, last_name, first_name) VALUES ('WHATSAPP-SEARCH-STUDENT-001', 'Search', 'Student') RETURNING id")"
+STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule, last_name, first_name, status) VALUES ('WHATSAPP-SEARCH-STUDENT-001', 'Search', 'Student', 'ACTIVE') RETURNING id")"
 psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v student="$STUDENT_ID" <<'SQL'
 INSERT INTO student_parents (student_id, parent_id, relationship_type, is_primary)
 VALUES (:'student', :'parent', 'MOTHER', TRUE);
@@ -128,9 +128,9 @@ LEVEL_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO levels (code,name)
 CLASS_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO classes (code,name,level_id,status) VALUES ('WHATSAPP-CLASS-A','WhatsApp test class','$LEVEL_ID','ACTIVE') RETURNING id")"
 CLASS_B_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO classes (code,name,level_id,status) VALUES ('WHATSAPP-CLASS-B','WhatsApp second test class','$LEVEL_ID','ACTIVE') RETURNING id")"
 SCHOOL_YEAR_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO school_years (label,start_date,end_date,status) VALUES ('WhatsApp CI 2026-2027','2026-09-01','2027-06-30','ACTIVE') RETURNING id")"
-SIBLING_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name) VALUES ('WHATSAPP-SIBLING-001','Search','Sibling') RETURNING id")"
+SIBLING_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name,status) VALUES ('WHATSAPP-SIBLING-001','Search','Sibling','ACTIVE') RETURNING id")"
 EXCLUDED_PARENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO parents (last_name,first_name) VALUES ('NoConsent','Parent') RETURNING id")"
-EXCLUDED_STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name) VALUES ('WHATSAPP-NOCONSENT-001','NoConsent','Student') RETURNING id")"
+EXCLUDED_STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name,status) VALUES ('WHATSAPP-NOCONSENT-001','NoConsent','Student','ACTIVE') RETURNING id")"
 psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v sibling="$SIBLING_ID" -v excluded_parent="$EXCLUDED_PARENT_ID" -v excluded_student="$EXCLUDED_STUDENT_ID" -v class="$CLASS_ID" -v year="$SCHOOL_YEAR_ID" <<'SQL'
 INSERT INTO student_parents (student_id,parent_id,relationship_type,is_primary)
 VALUES (:'sibling',:'parent','MOTHER',FALSE), (:'excluded_student',:'excluded_parent','FATHER',TRUE);
@@ -157,7 +157,7 @@ php -r '
 ' /tmp/whatsapp-class-recipients.json "$PARENT_ID"
 echo "PASS class parent lookup: deduplicates siblings and excludes parents without active consent"
 
-SECOND_CLASS_STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name) VALUES ('WHATSAPP-SECOND-CLASS-001','Search','SecondClass') RETURNING id")"
+SECOND_CLASS_STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule,last_name,first_name,status) VALUES ('WHATSAPP-SECOND-CLASS-001','Search','SecondClass','ACTIVE') RETURNING id")"
 psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v student="$SECOND_CLASS_STUDENT_ID" -v class_b="$CLASS_B_ID" -v year="$SCHOOL_YEAR_ID" <<'SQL'
 INSERT INTO student_parents (student_id,parent_id,relationship_type,is_primary)
 VALUES (:'student',:'parent','MOTHER',FALSE);

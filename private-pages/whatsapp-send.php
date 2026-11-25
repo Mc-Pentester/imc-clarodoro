@@ -56,6 +56,7 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 </div>
 <div id="manualResult" class="result" hidden aria-live="polite"></div>
 <p class="hint">Clarodaro vérifie à nouveau le consentement et journalise la préparation avant d’ouvrir WhatsApp. Le message prérempli figure dans l’URL WhatsApp : évitez les informations scolaires, médicales, disciplinaires ou financières sensibles.</p>
+<div id="manualLinks" class="result" hidden aria-live="polite"></div>
 </section>
 <section class="card">
 <div class="mode">Mode 2 · Envoi serveur Meta</div>
@@ -309,12 +310,14 @@ $('manualBatchButton').addEventListener('click',async()=>{
     }catch(error){failed.push([parent.first_name+' '+parent.last_name,error.message])}
   }
   out.replaceChildren();
+  const links=$('manualLinks');links.replaceChildren();links.hidden=true;
   const summary=document.createElement('p');summary.textContent=prepared.length+' lien(s) préparé(s), '+failed.length+' échec(s). Aucun message n’a été envoyé automatiquement.';out.appendChild(summary);
   prepared.forEach(({parent,data})=>{
     const link=document.createElement('a');link.href='https://wa.me/'+data.phone_e164.replace(/\D/g,'')+'?text='+encodeURIComponent(message);
     link.target='_blank';link.rel='noopener noreferrer';link.textContent='Ouvrir WhatsApp — '+parent.first_name+' '+parent.last_name+' ('+parent.student_names+')';
-    link.style.cssText='display:block;padding:8px 0;color:#075e54;font-weight:bold';out.appendChild(link);
+    link.style.cssText='display:block;padding:8px 0;color:#075e54;font-weight:bold';links.appendChild(link);
   });
+  if(prepared.length){links.hidden=false}
   failed.forEach(([name,error])=>{const line=document.createElement('p');line.textContent='Échec pour '+name+' : '+error;out.appendChild(line)});
   out.hidden=false;setClassBatchBusy(false);updateClassBatchButtons();
 });
