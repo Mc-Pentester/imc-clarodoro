@@ -9,6 +9,8 @@ on:
       - main
     paths:
       - 'api/whatsapp/**'
+      - 'router.php'
+      - 'tests/whatsapp-manual-page-smoke.mjs'
       - 'private-pages/index.php'
       - 'private-pages/whatsapp-send.php'
       - 'tests/whatsapp-student-flow-e2e.mjs'
