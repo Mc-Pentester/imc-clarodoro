@@ -83,9 +83,8 @@ foreach ($parameters as $parameter) {
     $bodyParameters[] = ['type' => 'text', 'text' => $parameter];
 }
 
-// Keep the consent row locked until the provider has accepted/rejected the request.
- // The consent-update endpoint takes the same row lock, so revocation and send start
- // are serialized. This transaction intentionally spans the bounded provider call.
+// Serialize consent validation and idempotency reservation with revocation.
+// Commit before network I/O so a slow Meta request never holds PostgreSQL locks.
 $pdo->beginTransaction();
 $stmt = $pdo->prepare(
     "SELECT id, phone_e164, status
@@ -152,6 +151,10 @@ try {
     apiError(503, 'Journal WhatsApp indisponible; aucun envoi lancé');
 }
 
+// The unique idempotency reservation is durable before contacting Meta.
+// Revocation may proceed after this point; the already-reserved request is in flight.
+$pdo->commit();
+
 $url = 'https://graph.facebook.com/' . $apiVersion . '/' . $phoneNumberId . '/messages';
 $ch = curl_init($url);
 curl_setopt_array($ch, [
@@ -173,6 +176,7 @@ curl_close($ch);
 $response = is_string($responseBody) ? json_decode($responseBody, true) : null;
 $providerMessageId = is_array($response) ? ($response['messages'][0]['id'] ?? null) : null;
 if ($curlError === 0 && $httpCode >= 200 && $httpCode < 300 && is_string($providerMessageId)) {
+    $pdo->beginTransaction();
     $pdo->prepare("UPDATE whatsapp_message_log SET status = 'SENT', provider_message_id = :message_id, updated_at = NOW() WHERE id = :id")
         ->execute([':message_id' => $providerMessageId, ':id' => $logId]);
     $pdo->commit();
@@ -186,7 +190,8 @@ if ($curlError === 0 && $httpCode >= 200 && $httpCode < 300 && is_string($provid
     exit;
 }
 
-$errorCode = is_array($response) ? (string) ($response['error']['code'] ?? 'PROVIDER_ERROR') : 'PROVIDER_ERROR';
+$errorCode = is_array($response) ? (string) ($response['error']['code'] ?? 'PROVIDER_ERROR') : ($curlError ? 'NETWORK_UNCERTAIN' : 'PROVIDER_ERROR');
+$pdo->beginTransaction();
 $pdo->prepare("UPDATE whatsapp_message_log SET status = 'FAILED', provider_error_code = :error_code, updated_at = NOW() WHERE id = :id")
     ->execute([':error_code' => substr($errorCode, 0, 80), ':id' => $logId]);
 $pdo->commit();
