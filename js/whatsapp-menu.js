@@ -35,7 +35,7 @@
 
     // Les fonctions complémentaires restent accessibles depuis la page
     // principale du module, jamais comme entrées supplémentaires du menu.
-    if (window.location.pathname.replace(/\\/$/, "") === "/whatsapp-send.html") {
+    if (window.location.pathname === "/whatsapp-send.html" || window.location.pathname === "/whatsapp-send.html/") {
       var main = document.querySelector("main");
       if (main && !document.querySelector("[data-imc-whatsapp-tools]")) {
         var tools = document.createElement("nav");
