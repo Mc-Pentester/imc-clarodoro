@@ -239,7 +239,7 @@ $robocopyExitCode = $LASTEXITCODE
 if ($robocopyExitCode -ge 8) {
     throw "Copie du runtime PostgreSQL vers ProgramData échouée (robocopy $robocopyExitCode) : $($robocopyOutput -join ' ')"
 }
-foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe')) {
+foreach ($runtimeFile in @('pg_ctl.exe', 'initdb.exe', 'psql.exe', 'pg_isready.exe', 'postgres.exe', 'pg_dump.exe', 'pg_restore.exe')) {
     $sourceFile = Join-Path $runtimeSourceBin $runtimeFile
     $targetFile = Join-Path $pgBin $runtimeFile
     if (-not (Test-Path -LiteralPath $targetFile -PathType Leaf)) {
@@ -800,8 +800,7 @@ if ($hasProtectedConfig -or $hasLegacyConfig) {
             finally {
                 Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
             }
-        }
-        else {
+        } else {
             Write-Step 'Aucune migration en attente : aucune sauvegarde supplémentaire nécessaire.'
         }
 
