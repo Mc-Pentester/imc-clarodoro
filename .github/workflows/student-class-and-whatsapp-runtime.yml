@@ -257,8 +257,8 @@ jobs:
               "window.IMCAuth.verifySession()",
               "window.IMCAuth.isAuthenticated()",
               'window.IMCAuth.hasPermission("whatsapp.message.send")',
-              'button.dataset.imcWhatsappSend = "true"',
-              "Envoyer un message WhatsApp",
+              'button.dataset.imcWhatsappModule = "true"',
+              "Communication WhatsApp",
           ]:
               if marker not in menu:
                   raise SystemExit(f"WhatsApp menu contract missing: {marker}")
@@ -293,15 +293,15 @@ jobs:
               };
             });
             await page.addScriptTag({ path: 'js/whatsapp-menu.js' });
-            if (await page.locator('[data-imc-whatsapp-send="true"]').count() !== 0) {
+            if (await page.locator('[data-imc-whatsapp-module="true"]').count() !== 0) {
               throw new Error('Le bouton est apparu avant la restauration de session.');
             }
-            const button = page.locator('.menu-principal [data-imc-whatsapp-send="true"]');
+            const button = page.locator('.menu-principal [data-imc-whatsapp-module="true"]');
             await button.waitFor({ state: 'visible', timeout: 5000 });
-            if (await button.innerText() !== 'Envoyer un message WhatsApp') {
+            if (await button.innerText() !== 'Communication WhatsApp') {
               throw new Error('Libellé incorrect du bouton WhatsApp.');
             }
-            if (await page.locator('[data-imc-whatsapp-send="true"]').count() !== 1) {
+            if (await page.locator('[data-imc-whatsapp-module="true"]').count() !== 1) {
               throw new Error('Le menu contient un nombre inattendu de boutons WhatsApp.');
             }
             // This browser proof targets delayed session restoration and button
@@ -332,7 +332,7 @@ jobs:
             });
             await page.addScriptTag({ path: 'js/whatsapp-menu.js' });
             await page.waitForTimeout(150);
-            if (await page.locator('[data-imc-whatsapp-send="true"]').count() !== 0) {
+            if (await page.locator('[data-imc-whatsapp-module="true"]').count() !== 0) {
               throw new Error('Le bouton WhatsApp est visible sans permission.');
             }
             console.log('BROWSER WHATSAPP MENU — RBAC deny: PASS');
