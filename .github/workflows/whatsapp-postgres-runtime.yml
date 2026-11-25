@@ -71,6 +71,12 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO roles (name, description) VALUES ('PDG', 'WhatsApp CI role fixture')
           ON CONFLICT (name) DO NOTHING;
+          -- The isolated schema starts without the application's general RBAC catalog.
+          -- Seed the existing student-read permission so the endpoint can test its
+          -- intended two-permission authorization contract.
+          INSERT INTO permissions (name, description)
+          VALUES ('eleves.read', 'Lire les dossiers des élèves')
+          ON CONFLICT (name) DO NOTHING;
           SQL
 
       - name: Apply WhatsApp migrations twice (idempotency proof)
