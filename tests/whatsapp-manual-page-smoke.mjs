@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
 const routes = fs.readFileSync('.htaccess', 'utf8');
-assert.match(routes, /RewriteRule \\^\\(whatsapp-multi-send\\|whatsapp-consent-management\\)\\\\?\.html\$ secure-page\.php\\?page=\$1\.html/i, 'WhatsApp consent and multi-send URLs must be routed through the protected page controller');
+assert.ok(routes.includes('RewriteRule ^(whatsapp-multi-send|whatsapp-consent-management)\\.html$ secure-page.php?page=$1.html'), 'WhatsApp consent and multi-send URLs must be routed through the protected page controller');
 const securePage = fs.readFileSync('secure-page.php', 'utf8');
 assert.ok(securePage.includes("'whatsapp-consent-management.html' => ['public' => 'whatsapp-consent-management.html', 'file' => 'whatsapp-consent.php', 'permission' => 'whatsapp.consent.read'"), 'Consent management must map to its protected PHP page');
 const auth = fs.readFileSync('config/auth.php', 'utf8');
