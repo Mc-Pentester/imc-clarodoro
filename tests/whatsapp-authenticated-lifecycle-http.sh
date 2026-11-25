@@ -15,6 +15,12 @@ SELECT 'whatsapp-http-denied', 'not-a-real-login', id
 FROM roles WHERE name = 'WhatsApp HTTP Denied'
 ON CONFLICT (username) DO NOTHING;
 
+INSERT INTO roles (name, description) VALUES ('PDG', 'PDG full access runtime fixture')
+ON CONFLICT (name) DO NOTHING;
+INSERT INTO users (username, password_hash, role_id)
+SELECT 'whatsapp-http-pdg', 'not-a-real-login', id FROM roles WHERE name = 'PDG'
+ON CONFLICT (username) DO NOTHING;
+
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id
 FROM roles r CROSS JOIN permissions p
@@ -25,8 +31,9 @@ SQL
 
 USER_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM users WHERE username='whatsapp-ci-user'")"
 DENIED_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM users WHERE username='whatsapp-http-denied'")"
+PDG_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM users WHERE username='whatsapp-http-pdg'")"
 PARENT_ID="$(psql -X -At -v ON_ERROR_STOP=1 -c "SELECT id FROM parents WHERE last_name='Runtime' AND first_name='Fixture' ORDER BY created_at LIMIT 1")"
-test -n "$USER_ID" && test -n "$DENIED_ID" && test -n "$PARENT_ID"
+test -n "$USER_ID" && test -n "$DENIED_ID" && test -n "$PDG_ID" && test -n "$PARENT_ID"
 
 STUDENT_ID="$(psql -X -q -At -v ON_ERROR_STOP=1 -c "INSERT INTO students (matricule, last_name, first_name, status) VALUES ('WHATSAPP-SEARCH-STUDENT-001', 'Search', 'Student', 'ACTIVE') RETURNING id")"
 psql -X -v ON_ERROR_STOP=1 -v parent="$PARENT_ID" -v student="$STUDENT_ID" <<'SQL'
@@ -49,8 +56,10 @@ make_session() {
 
 ALLOWED_SID=aa11223344556677889900aabbccddee
 DENIED_SID=bb11223344556677889900aabbccddee
+PDG_SID=cc11223344556677889900aabbccddee
 make_session "$ALLOWED_SID" "$USER_ID"
 make_session "$DENIED_SID" "$DENIED_ID"
+make_session "$PDG_SID" "$PDG_ID"
 
 php -d session.save_path="$SESSIONS" -S 127.0.0.1:8100 -t . >/tmp/whatsapp-http-auth.log 2>&1 &
 SERVER_PID=$!
@@ -80,6 +89,13 @@ call_api() {
 CONSENT="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\",\"evidence_reference\":\"CI signed consent fixture\"}"
 SEND="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"template_name\":\"ci_template\",\"language\":\"fr\",\"idempotency_key\":\"whatsapp-http-key-000001\",\"parameters\":[\"CI\"]}"
 
+# Le PDG doit pouvoir lire et administrer les consentements même si la matrice
+# role_permissions ne contient pas encore une permission ajoutée ultérieurement.
+PDG_READ_STATUS="$(curl --silent --show-error --output /tmp/whatsapp-pdg-consents.json --write-out '%{http_code}' -H "Cookie: IMC_SESSION=$PDG_SID" "http://127.0.0.1:8100/api/whatsapp/consents.php?parent_id=$PARENT_ID")"
+test "$PDG_READ_STATUS" = "200"
+echo "PASS PDG consent read permission override HTTP 200"
+PDG_CONSENT="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_OUT\",\"consent_source\":\"CI PDG administration\",\"consent_method\":\"PAPER\",\"evidence_reference\":\"CI PDG consent management test\"}"
+call_api pdg_consent_manage 200 "$PDG_SID" POST /api/whatsapp/consents.php "$PDG_CONSENT" whatsapp-ci-csrf-token
 call_api no_permission 403 "$DENIED_SID" POST /api/whatsapp/consents.php "$CONSENT" whatsapp-ci-csrf-token
 call_api no_csrf 403 "$ALLOWED_SID" POST /api/whatsapp/consents.php "$CONSENT" ''
 NO_EVIDENCE="{\"parent_id\":\"$PARENT_ID\",\"purpose\":\"GENERAL\",\"phone_e164\":\"+50937000000\",\"status\":\"OPTED_IN\",\"consent_source\":\"PAPER\",\"consent_method\":\"PAPER\"}"
