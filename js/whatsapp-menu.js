@@ -20,25 +20,24 @@
     var canReadConsent = window.IMCAuth.hasPermission("whatsapp.consent.read");
     if (!canSend && !canReadConsent) return;
 
-    document.querySelectorAll(".menu-principal").forEach(function (menu) {
-      // Un seul bouton de navigation ouvre le module de communication.
-      if (!menu.querySelector('[data-imc-whatsapp-module="true"]')) {
-        var button = document.createElement("button");
-        button.type = "button";
-        button.dataset.imcWhatsappModule = "true";
-        button.className = "pdg";
-        button.textContent = "Communication WhatsApp";
-        button.setAttribute("aria-label", "Ouvrir le module de communication WhatsApp");
-        button.addEventListener("click", function () {
-          if (canSend) {
-            window.location.href = "/whatsapp-send.html";
-          } else {
-            window.location.href = "/whatsapp-consent-management.html";
-          }
-        });
-        menu.appendChild(button);
-      }
-    });
+    // Un seul bouton au total, même si la page possède plusieurs variantes de navigation.
+    var menu = document.querySelector(".menu-principal");
+    if (menu && !document.querySelector('[data-imc-whatsapp-module="true"]')) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.dataset.imcWhatsappModule = "true";
+      button.className = "pdg";
+      button.textContent = "Communication WhatsApp";
+      button.setAttribute("aria-label", "Ouvrir le module de communication WhatsApp");
+      button.addEventListener("click", function () {
+        if (canSend) {
+          window.location.href = "/whatsapp-send.html";
+        } else {
+          window.location.href = "/whatsapp-consent-management.html";
+        }
+      });
+      menu.appendChild(button);
+    }
 
     // Les fonctions complémentaires restent accessibles depuis la page
     // principale du module, jamais comme entrées supplémentaires du menu.
