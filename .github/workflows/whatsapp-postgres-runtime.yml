@@ -10,6 +10,8 @@ on:
     paths:
       - 'api/whatsapp/**'
       - 'router.php'
+      - 'js/whatsapp-menu.js'
+      - 'tests/whatsapp-multi-send-page-smoke.mjs'
       - 'tests/whatsapp-manual-page-smoke.mjs'
       - 'private-pages/index.php'
       - 'private-pages/whatsapp-send.php'
