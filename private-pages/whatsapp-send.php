@@ -4,6 +4,7 @@ require_once __DIR__ . '/../config/page_auth.php';
 require_once __DIR__ . '/../config/auth.php';
 $pdo = getDatabaseConnection();
 imcRequirePageAccess('whatsapp.message.send', null, $pdo);
+$consentManagementAccess = imcPageAccess($pdo, 'whatsapp.consent.read');
 $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 ?>
 <!doctype html>
@@ -19,6 +20,12 @@ $csrfToken = htmlspecialchars(generateCsrfToken(), ENT_QUOTES, 'UTF-8');
 <body>
 <header><h1>WhatsApp — Clarodaro</h1><p>Choisissez l’envoi manuel ou l’envoi réel via Meta</p></header>
 <main>
+<nav data-imc-whatsapp-tools aria-label="Outils du module de communication WhatsApp" style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px">
+<a href="/whatsapp-multi-send.html" style="display:inline-block;padding:10px 14px;border-radius:7px;background:#e5f3ed;color:#075e54;font-weight:700;text-decoration:none">Communication multi-destinataires</a>
+<?php if ($consentManagementAccess['allowed']): ?>
+<a href="/whatsapp-consent-management.html" style="display:inline-block;padding:10px 14px;border-radius:7px;background:#e5f3ed;color:#075e54;font-weight:700;text-decoration:none">Gestion des consentements</a>
+<?php endif; ?>
+</nav>
 <div class="notice" id="studentContextNotice" hidden aria-live="polite"></div>
 <div class="notice"><strong>Deux modes disponibles :</strong> l’envoi manuel ouvre WhatsApp avec le numéro et le texte préremplis ; vous vérifiez puis appuyez vous-même sur Envoyer. L’envoi Meta transmet un modèle approuvé depuis le serveur Clarodaro. Les deux modes vérifient le consentement actif et sont journalisés. Une préparation manuelle n’est pas une preuve d’envoi.</div>
 <section class="card">
