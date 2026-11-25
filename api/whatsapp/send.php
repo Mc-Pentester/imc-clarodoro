@@ -192,8 +192,9 @@ if ($curlError === 0 && $httpCode >= 200 && $httpCode < 300 && is_string($provid
 
 $errorCode = is_array($response) ? (string) ($response['error']['code'] ?? 'PROVIDER_ERROR') : ($curlError ? 'NETWORK_UNCERTAIN' : 'PROVIDER_ERROR');
 $pdo->beginTransaction();
-$pdo->prepare("UPDATE whatsapp_message_log SET status = 'FAILED', provider_error_code = :error_code, updated_at = NOW() WHERE id = :id")
-    ->execute([':error_code' => substr($errorCode, 0, 80), ':id' => $logId]);
+$finalStatus = $curlError !== 0 ? 'PROCESSING' : 'FAILED';
+$pdo->prepare("UPDATE whatsapp_message_log SET status = :status, provider_error_code = :error_code, updated_at = NOW() WHERE id = :id")
+    ->execute([':status' => $finalStatus, ':error_code' => substr($errorCode, 0, 80), ':id' => $logId]);
 $pdo->commit();
 http_response_code(502);
 echo json_encode([
