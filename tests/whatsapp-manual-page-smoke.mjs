@@ -55,6 +55,12 @@ assert.ok(studentList.includes('document.body.dataset.whatsappSend === "true"'),
 assert.ok(studentList.includes('id="filterClass"'), 'Student list class filter missing');
 assert.ok(studentList.includes('student.classId !== classFilter'), 'Student list must filter by persisted class ID');
 
+const legacySendApi = fs.readFileSync('api/whatsapp/send.php', 'utf8');
+const idempotencyCommit = legacySendApi.indexOf('$pdo->commit();', legacySendApi.indexOf('INSERT INTO whatsapp_message_log'));
+const providerCall = legacySendApi.indexOf('$ch = curl_init($url)');
+assert.ok(idempotencyCommit > -1 && providerCall > idempotencyCommit, 'Legacy Meta send must commit its idempotency reservation before network I/O');
+assert.ok(legacySendApi.includes("$finalStatus = $curlError !== 0 ? 'PROCESSING' : 'FAILED'"), 'An uncertain network outcome must remain non-replayable and visibly PROCESSING');
+
 const studentRecipientsApi = fs.readFileSync('api/whatsapp/student-recipients.php', 'utf8');
 assert.ok(studentRecipientsApi.includes("requirePermission($pdo, 'whatsapp.message.send')"), 'Student responsible lookup must require WhatsApp permission');
 assert.ok(studentRecipientsApi.includes("requirePermission($pdo, 'eleves.read')"), 'Student responsible lookup must also require permission to read student records');
